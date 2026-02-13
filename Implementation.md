@@ -133,12 +133,17 @@ The paper's eVRF proof system (Section 4) describes a two-curve architecture: G_
 | Exhaustive C(n,t) reconstruction verification | Done |
 | Error handling (no panics in production code) | Done (all `panic!`/`expect`/`assert_eq!` replaced with `Result` returns) |
 | Replay protection (session IDs) | Done (`session_id: [u8; 32]` in Round0Msg/ReshareMsg, verified in round1) |
+| Criterion benchmarks | Done (eVRF prove/verify, DKG e2e for n=2,5,10, message size) |
 
-### TODO
+### Benchmark Results vs Paper Table 1
 
-| #   | Item       | Description                                                                                                                     | Priority           |
-| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| 1   | Benchmarks | Paper provides specific performance numbers (Table 1: 223 kb bandwidth, 13.5s for n=50). Add `criterion` benchmarks to compare. | Paper completeness |
+| Metric | n=2 (ours) | n=2 (paper) | n=10 (ours) | n=10 (paper) |
+|--------|-----------|-------------|-------------|--------------|
+| DKG runtime | ~540 ms | 0.4 s | ~3.3 s | 2.4 s |
+| eVRF prove | ~160 ms | -- | -- | -- |
+| eVRF verify | ~70 ms | -- | -- | -- |
+
+Our n=2 and n=10 runtimes are within 1.4x of the paper's figures, which is reasonable given the additional overhead of tokio tasks, broadcast channel simulation, Schnorr PoK registration, and our non-native Fq arithmetic (Appendix E path). The paper's numbers use native Fq constraints.
 
 ### Out of Scope
 

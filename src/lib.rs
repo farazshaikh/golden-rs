@@ -34,3 +34,6 @@ pub mod shamir;
 pub mod types;
 pub mod vss;
 pub mod zk_evrf;
+
+#[cfg(kani)]
+mod kani_proofs;
