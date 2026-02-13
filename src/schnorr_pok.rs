@@ -1,3 +1,13 @@
+//! Schnorr Proof of Knowledge for PKI registration per Appendix F of the Golden paper.
+//!
+//! Per Appendix F of the Golden paper (IACR 2025/1924):
+//! > "F_pki: KeyGen, Register (with proof of knowledge), Query.
+//! > Must prove knowledge of sk_i^I when registering."
+//!
+//! Each DKG participant must register their identity public key with the PKI
+//! and prove they know the corresponding secret key. This prevents rogue-key
+//! attacks where an adversary registers a public key they cannot use.
+
 use ark_bls12_381::{Fr, G1Affine};
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::PrimeField;
@@ -9,8 +19,13 @@ use sha2::{Digest, Sha256};
 
 use crate::types::Scalar;
 
-/// A Schnorr proof of knowledge of discrete log: proves knowledge of sk such that PK = g^sk.
-/// Per Golden paper Appendix F (F_pki functionality).
+/// A Schnorr proof of knowledge of discrete log: proves knowledge of `sk` such
+/// that `PK = g^sk`.
+///
+/// Per Appendix F of the Golden paper (IACR 2025/1924), this proof is required
+/// when registering an identity public key with the PKI functionality `F_pki`.
+/// The proof consists of a commitment `R = g^nonce` and a response
+/// `s = nonce + challenge * sk` using the Fiat-Shamir heuristic.
 #[derive(Clone, Debug)]
 pub struct SchnorrPoK {
     /// Commitment: R = g^nonce
@@ -21,13 +36,13 @@ pub struct SchnorrPoK {
 
 /// Generate a Schnorr proof of knowledge.
 ///
-/// Proves: "I know sk such that pk = g^sk"
-/// Protocol (Fiat-Shamir):
-///   1. Sample nonce k <- Zp
-///   2. R = g^k
-///   3. c = H(g || pk || R)    (Fiat-Shamir challenge)
-///   4. s = k + c * sk
-///   5. Output (R, s)
+/// Proves: "I know `sk` such that `pk = g^sk`" using the Sigma protocol
+/// made non-interactive via the Fiat-Shamir transform:
+///   1. Sample nonce `k <- Z_p`
+///   2. `R = g^k`
+///   3. `c = H(g || pk || R)` (Fiat-Shamir challenge)
+///   4. `s = k + c * sk`
+///   5. Output `(R, s)`
 pub fn prove(sk: Scalar, pk: G1Affine, rng: &mut impl Rng) -> SchnorrPoK {
     // 1. Sample random nonce
     let nonce = Scalar::rand(rng);
@@ -49,8 +64,11 @@ pub fn prove(sk: Scalar, pk: G1Affine, rng: &mut impl Rng) -> SchnorrPoK {
 
 /// Verify a Schnorr proof of knowledge.
 ///
-/// Checks: g^s == R + c * PK
-/// Where c = H(g || pk || R)
+/// Checks the verification equation: `g^s == R + c * PK`
+/// where `c = H(g || pk || R)`.
+///
+/// This ensures the prover knows `sk` such that `PK = g^sk` without
+/// revealing `sk`.
 pub fn verify(pk: G1Affine, proof: &SchnorrPoK) -> bool {
     // Recompute challenge
     let challenge = compute_challenge(pk, proof.commitment);
@@ -62,7 +80,11 @@ pub fn verify(pk: G1Affine, proof: &SchnorrPoK) -> bool {
     lhs == rhs
 }
 
-/// Compute Fiat-Shamir challenge: c = H(g || pk || R) mod r
+/// Compute the Fiat-Shamir challenge: `c = H(g || pk || R) mod r`.
+///
+/// Uses SHA-256 with domain separator `"golden-schnorr-pok"` to hash the
+/// generator, public key, and commitment into a challenge scalar. This
+/// converts the interactive Sigma protocol into a non-interactive proof.
 fn compute_challenge(pk: G1Affine, commitment: G1Affine) -> Scalar {
     let mut hasher = Sha256::new();
     hasher.update(b"golden-schnorr-pok");

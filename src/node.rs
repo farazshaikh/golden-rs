@@ -1,3 +1,12 @@
+//! DKG participant abstraction.
+//!
+//! Per Section 5.1 of the Golden paper (IACR 2025/1924):
+//! > "Each party i maintains (sk_i^I, PK_i^I)"
+//!
+//! The [`Node`] struct encapsulates a single DKG participant, managing its
+//! identity keypair, network handle, and protocol execution. It provides
+//! high-level methods for running the full DKG and key refresh protocols.
+
 use std::collections::HashMap;
 
 use ark_bls12_381::G1Affine;
@@ -12,29 +21,34 @@ use crate::schnorr_pok;
 use crate::types::{DkgOutput, NodeId, Round0Msg, Scalar};
 
 /// A participant in the Golden DKG protocol.
+///
+/// Holds the node's identity keypair `(sk_i^I, PK_i^I)`, protocol parameters
+/// `(n, t, beta)`, and the network handle for broadcast communication.
 pub struct Node {
-    /// This node's unique identifier (1-indexed)
+    /// This node's unique identifier (1-indexed).
     pub id: NodeId,
-    /// Total number of participants
+    /// Total number of participants `n`.
     pub n: u32,
-    /// Threshold parameter
+    /// Threshold parameter `t` (minimum shares needed to reconstruct).
     pub t: u32,
-    /// Identity secret key
+    /// Identity secret key `sk_i^I` per Section 5.1.
     sk: Scalar,
-    /// Identity public key
+    /// Identity public key `PK_i^I = g^{sk_i^I}` per Section 5.1.
     pub pk: G1Affine,
-    /// Public beta parameter for the leftover hash lemma
+    /// Public `beta` parameter for the leftover hash lemma (Appendix C).
     beta: Scalar,
-    /// Network handle for broadcast and peer discovery
+    /// Network handle for broadcast and peer discovery.
     network: Network,
-    /// Broadcast receiver for incoming Round0 messages
+    /// Broadcast receiver for incoming Round 0 messages.
     receiver: broadcast::Receiver<Round0Msg>,
 }
 
 impl Node {
     /// Create a new node and register it with the network.
     ///
-    /// Generates an identity keypair and registers the public key.
+    /// Per Section 5.1 of the Golden paper (IACR 2025/1924), generates an
+    /// identity keypair `(sk_i^I, PK_i^I)` and registers the public key with
+    /// the PKI via a Schnorr proof of knowledge (Appendix F).
     pub async fn new(id: NodeId, n: u32, t: u32, beta: Scalar, network: Network) -> Self {
         let mut rng = OsRng;
         let sk = Scalar::rand(&mut rng);
@@ -58,13 +72,13 @@ impl Node {
         }
     }
 
-    /// Run the full DKG protocol.
+    /// Run the full DKG protocol (Round 0 + Round 1 per Figure 4).
     ///
     /// 1. Wait for all nodes to register
     /// 2. Execute Round 0: generate and broadcast
-    /// 3. Collect n-1 Round 0 messages from peers
+    /// 3. Collect `n-1` Round 0 messages from peers
     /// 4. Execute Round 1: verify, decrypt, aggregate
-    /// 5. Return DKG output
+    /// 5. Return [`DkgOutput`] containing `(PK, {PK_j}, sk_i)`
     pub async fn run(mut self) -> DkgOutput {
         // Wait for all peers to register
         self.network.wait_ready().await;
@@ -121,8 +135,9 @@ impl Node {
 
     /// Run the key refresh protocol (zero secret sharing).
     ///
-    /// Per paper Section 5.2: rotates secret shares while keeping sk and PK unchanged.
-    /// Each node uses omega = 0 and the zero-sharing deltas update existing shares.
+    /// Per Section 5.2 of the Golden paper (IACR 2025/1924): rotates secret
+    /// shares while keeping `sk` and `PK` unchanged. Each node uses `omega = 0`
+    /// and the zero-sharing deltas update existing shares.
     pub async fn run_refresh(mut self, existing_output: DkgOutput) -> DkgOutput {
         // Wait for all peers to register
         self.network.wait_ready().await;

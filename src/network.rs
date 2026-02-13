@@ -1,3 +1,11 @@
+//! Simulated broadcast network for the Golden DKG protocol.
+//!
+//! Per Section 5.1 of the Golden paper (IACR 2025/1924), the protocol requires
+//! a PKI and a broadcast channel. This module simulates both:
+//! - A peer registry where nodes register their identity public keys with
+//!   proof of knowledge (preventing rogue-key attacks per Appendix F)
+//! - A broadcast channel for disseminating Round 0 messages to all participants
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -9,20 +17,24 @@ use crate::types::{NodeId, Round0Msg};
 
 /// Simulated broadcast channel with peer discovery.
 ///
+/// Per Section 5.1 of the Golden paper (IACR 2025/1924):
+/// > "Each party i maintains (sk_i^I, PK_i^I) where PK_i^I = g^{sk_i^I} in G_in."
+///
 /// All nodes register their identity public key, then use a shared broadcast
-/// channel to send Round0 messages to every other participant.
+/// channel to send Round 0 messages to every other participant.
 #[derive(Clone)]
 pub struct Network {
-    /// Broadcast channel sender -- all nodes send Round0 messages here
+    /// Broadcast channel sender -- all nodes send Round0 messages here.
     sender: broadcast::Sender<Round0Msg>,
-    /// Peer identity public keys: NodeId -> PK_i
+    /// Peer identity public keys: `NodeId -> PK_i`.
     peers: Arc<RwLock<HashMap<NodeId, G1Affine>>>,
-    /// Barrier to synchronize: all nodes must register before Round 0 starts
+    /// Barrier to synchronize: all nodes must register before Round 0 starts.
     barrier: Arc<Barrier>,
 }
 
 impl Network {
     /// Create a new network for `n` participants.
+    ///
     /// The broadcast channel capacity is `n * 2` to avoid dropped messages.
     pub fn new(n: u32) -> Self {
         let (sender, _) = broadcast::channel((n * 2) as usize);
@@ -34,7 +46,11 @@ impl Network {
     }
 
     /// Register a node's identity public key with proof of knowledge.
-    /// SECURITY: Rejects registration if the Schnorr PoK is invalid (prevents rogue-key attacks).
+    ///
+    /// Per Appendix F of the Golden paper (IACR 2025/1924), registration
+    /// requires proving knowledge of the secret key to prevent rogue-key attacks.
+    /// Returns a broadcast receiver on success, or an error if the Schnorr PoK
+    /// is invalid.
     pub async fn register(
         &self,
         id: NodeId,
@@ -55,17 +71,26 @@ impl Network {
     }
 
     /// Wait for all nodes to finish registration.
+    ///
+    /// Blocks until all `n` participants have registered, ensuring the peer
+    /// directory is complete before Round 0 begins.
     pub async fn wait_ready(&self) {
         self.barrier.wait().await;
     }
 
-    /// Broadcast a Round0 message to all participants.
+    /// Broadcast a Round 0 message to all participants.
+    ///
+    /// Sends the message on the shared broadcast channel. All registered
+    /// receivers will obtain a copy.
     pub fn broadcast(&self, msg: Round0Msg) {
         // Ignore the error (only fails if no receivers, shouldn't happen)
         let _ = self.sender.send(msg);
     }
 
     /// Get a snapshot of all registered peer public keys.
+    ///
+    /// Returns a clone of the current peer directory mapping `NodeId` to
+    /// identity public key.
     pub async fn get_peers(&self) -> HashMap<NodeId, G1Affine> {
         self.peers.read().await.clone()
     }

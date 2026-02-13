@@ -1,3 +1,10 @@
+//! Network layer for the membership-change resharing protocol.
+//!
+//! Provides a two-group broadcast network where old-group members deal
+//! encrypted shares to new-group members. Both groups register their
+//! identity public keys with proof of knowledge, and old members broadcast
+//! [`ReshareMsg`](crate::types::ReshareMsg) messages that new members receive.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -7,22 +14,27 @@ use tokio::sync::{broadcast, Barrier, RwLock};
 use crate::schnorr_pok::{self, SchnorrPoK};
 use crate::types::{NodeId, ReshareMsg};
 
-/// Network for resharing protocol with two groups: old members broadcast, new members receive.
+/// Network for the resharing protocol with two groups: old members broadcast,
+/// new members receive.
+///
+/// Maintains separate registries for old-group and new-group identity keys,
+/// and a shared broadcast channel for reshare messages.
 #[derive(Clone)]
 pub struct ReshareNetwork {
-    /// Broadcast channel for ReshareMsg (old -> new)
+    /// Broadcast channel for `ReshareMsg` (old -> new).
     sender: broadcast::Sender<ReshareMsg>,
-    /// Old group member identity keys: NodeId -> PK
+    /// Old group member identity keys: `NodeId -> PK`.
     old_members: Arc<RwLock<HashMap<NodeId, G1Affine>>>,
-    /// New group member identity keys: NodeId -> PK
+    /// New group member identity keys: `NodeId -> PK`.
     new_members: Arc<RwLock<HashMap<NodeId, G1Affine>>>,
-    /// Barrier: waits for all participants (old + new) to register
+    /// Barrier: waits for all participants (old + new) to register.
     barrier: Arc<Barrier>,
 }
 
 impl ReshareNetwork {
     /// Create a new reshare network.
-    /// `total_participants` = n_old + n_new (or less if groups overlap -- caller decides).
+    ///
+    /// `total_participants` is `n_old + n_new` (or fewer if groups overlap).
     pub fn new(total_participants: u32) -> Self {
         let (sender, _) = broadcast::channel((total_participants * 2) as usize);
         Self {
@@ -34,7 +46,8 @@ impl ReshareNetwork {
     }
 
     /// Register an old group member with proof of knowledge.
-    /// SECURITY: Rejects registration if the Schnorr PoK is invalid (prevents rogue-key attacks).
+    ///
+    /// Rejects registration if the Schnorr PoK is invalid (prevents rogue-key attacks).
     pub async fn register_old(
         &self,
         id: NodeId,
@@ -50,7 +63,8 @@ impl ReshareNetwork {
     }
 
     /// Register a new group member with proof of knowledge.
-    /// SECURITY: Rejects registration if the Schnorr PoK is invalid (prevents rogue-key attacks).
+    ///
+    /// Rejects registration if the Schnorr PoK is invalid (prevents rogue-key attacks).
     pub async fn register_new(
         &self,
         id: NodeId,
@@ -65,7 +79,7 @@ impl ReshareNetwork {
         Ok(self.sender.subscribe())
     }
 
-    /// Wait for all participants to register.
+    /// Wait for all participants (old + new) to register.
     pub async fn wait_ready(&self) {
         self.barrier.wait().await;
     }

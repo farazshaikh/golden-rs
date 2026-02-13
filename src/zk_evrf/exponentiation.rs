@@ -1,10 +1,13 @@
-//! Exponentiation gadget for the Golden DKG eVRF ZK proof (Section 4.3).
+//! Exponentiation gadget for the Golden DKG eVRF ZK proof per Section 4.3.
+//!
+//! Per Section 4.4 of the Golden paper (IACR 2025/1924):
+//! > "Exponentiation gadget: 3*lambda + 2 constraints per exponentiation"
 //!
 //! Implements elliptic curve point arithmetic (addition and doubling) using
-//! arkworks' EmulatedFpVar for Fq-in-Fr non-native field arithmetic.
+//! arkworks' `EmulatedFpVar` for Fq-in-Fr non-native field arithmetic.
 //!
 //! The key idea: our R1CS is over Fr (the BLS12-381 scalar field), but point
-//! coordinates live in Fq (the base field). EmulatedFpVar<Fq, Fr> handles
+//! coordinates live in Fq (the base field). `EmulatedFpVar<Fq, Fr>` handles
 //! the non-native arithmetic automatically, generating the necessary limb
 //! decomposition and range check constraints.
 
@@ -17,8 +20,14 @@ use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 type FqVar = EmulatedFpVar<Fq, Fr>;
 
 /// A G1 point represented in the circuit using emulated Fq coordinates.
+///
+/// Wraps two `EmulatedFpVar<Fq, Fr>` for the x and y affine coordinates.
+/// Non-native arithmetic constraints are generated automatically by arkworks
+/// when operations are performed on these variables.
 pub struct PointVar {
+    /// Emulated x-coordinate in Fq.
     pub x: FqVar,
+    /// Emulated y-coordinate in Fq.
     pub y: FqVar,
 }
 
@@ -60,17 +69,17 @@ impl PointVar {
     }
 }
 
-/// Point addition using the chord rule (P1 != P2, P1 != -P2).
+/// Point addition using the chord rule (`P1 != P2`, `P1 != -P2`).
 ///
-/// Given P1 = (x1, y1) and P2 = (x2, y2) with x1 != x2:
-///   s = (y2 - y1) / (x2 - x1)
-///   x3 = s^2 - x1 - x2
-///   y3 = s * (x1 - x3) - y1
+/// Given `P1 = (x1, y1)` and `P2 = (x2, y2)` with `x1 != x2`:
+///   `s = (y2 - y1) / (x2 - x1)`
+///   `x3 = s^2 - x1 - x2`
+///   `y3 = s * (x1 - x3) - y1`
 ///
-/// The prover supplies the slope s as a witness; the circuit constrains:
-///   1. s * (x2 - x1) = y2 - y1
-///   2. x3 = s^2 - x1 - x2
-///   3. y3 = s * (x1 - x3) - y1
+/// The prover supplies the slope `s` as a witness; the circuit constrains:
+///   1. `s * (x2 - x1) = y2 - y1`
+///   2. `x3 = s^2 - x1 - x2`
+///   3. `y3 = s * (x1 - x3) - y1`
 pub fn point_add(
     cs: ConstraintSystemRef<Fr>,
     p1: &PointVar,
@@ -113,15 +122,15 @@ pub fn point_add(
 
 /// Point doubling using the tangent rule.
 ///
-/// For BLS12-381 G1: y^2 = x^3 + 4, so the curve parameter a = 0.
-///   s = 3*x1^2 / (2*y1)
-///   x3 = s^2 - 2*x1
-///   y3 = s * (x1 - x3) - y1
+/// For BLS12-381 G1: `y^2 = x^3 + 4`, so the curve parameter `a = 0`.
+///   `s = 3*x1^2 / (2*y1)`
+///   `x3 = s^2 - 2*x1`
+///   `y3 = s * (x1 - x3) - y1`
 ///
-/// The prover supplies s as a witness; the circuit constrains:
-///   1. s * (2 * y1) = 3 * x1^2
-///   2. x3 = s^2 - 2*x1
-///   3. y3 = s * (x1 - x3) - y1
+/// The prover supplies `s` as a witness; the circuit constrains:
+///   1. `s * (2 * y1) = 3 * x1^2`
+///   2. `x3 = s^2 - 2*x1`
+///   3. `y3 = s * (x1 - x3) - y1`
 pub fn point_double(
     cs: ConstraintSystemRef<Fr>,
     p: &PointVar,

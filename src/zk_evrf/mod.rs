@@ -1,3 +1,13 @@
+//! Zero-knowledge eVRF proof system per Section 4 of the Golden paper.
+//!
+//! Proves the R_eVRF relation from Figure 3 of the Golden paper (IACR 2025/1924):
+//! the prover demonstrates that an eVRF pad was correctly derived from a DH shared
+//! secret without revealing the secret key. The circuit captures the R_eVRF relation
+//! (Section 4.3) and produces a Bulletproofs IPA proof over BLS12-381 G1.
+//!
+//! Per Section 5.3/4.6, batch optimization allows proving `n-1` eVRF evaluations
+//! in a single proof by sharing the `sk_1` bit-decomposition across all statements.
+
 pub mod adapter;
 pub mod bit_decompose;
 pub mod circuit;
@@ -16,15 +26,19 @@ use crate::bulletproofs::{generators::BulletproofGens, ipa, transcript::Transcri
 use crate::types::NodeId;
 
 /// An eVRF proof (Bulletproofs IPA proof + auxiliary data).
+///
+/// Contains the inner product argument proof, the Pedersen commitment it opens,
+/// and metadata needed for verification. Supports both single-statement and
+/// batch proofs (Section 5.3).
 #[derive(Clone, Debug)]
 pub struct EVRFProof {
-    /// The Bulletproofs IPA proof
+    /// The Bulletproofs IPA proof demonstrating the R_eVRF relation.
     pub ipa_proof: crate::bulletproofs::types::IPAProof,
-    /// Number of constraints (needed for verification)
+    /// Number of R1CS constraints in the circuit (needed to reconstruct generators).
     pub num_constraints: usize,
-    /// The Pedersen commitment P that the IPA proof opens to
+    /// The Pedersen commitment `P` that the IPA proof opens to.
     pub commitment: G1Affine,
-    /// Whether this proof was generated via batch proving
+    /// Whether this proof was generated via batch proving (Section 5.3).
     pub is_batch: bool,
 }
 
@@ -110,10 +124,15 @@ impl BorshDeserialize for EVRFProof {
     }
 }
 
-/// Generate an eVRF proof.
+/// Generate an eVRF proof for a single statement.
 ///
-/// Proves that the eVRF pad (r_value, r_commitment) was correctly derived from
-/// (sk1, pk1, pk2, msg, beta) according to the R_eVRF relation.
+/// Proves the R_eVRF relation (Figure 3, Section 4.3 of the Golden paper):
+/// given public inputs `(PK_1, PK_2, R, beta)` and private witness `sk_1`,
+/// demonstrates that the eVRF pad `(r_value, r_commitment)` was correctly
+/// derived via the DH-based eVRF construction.
+///
+/// The circuit is synthesized via arkworks, captured into R1CS form, and the
+/// resulting witness assignment is used as the IPA `a`-vector.
 pub fn prove_evrf(
     sk1: Fr,
     pk1: G1Affine,
@@ -165,10 +184,10 @@ pub fn prove_evrf(
 
 /// Generate a single batched eVRF proof for all peers at once.
 ///
-/// Per paper Section 5.3: instead of n-1 separate proofs, generate one proof
-/// that covers all n-1 eVRF evaluations. The sk_1 bit-decomposition and
-/// g^{sk_1} exponentiation are shared across all statements, reducing total
-/// constraint count.
+/// Per Section 5.3/4.6 of the Golden paper (IACR 2025/1924): instead of `n-1`
+/// separate proofs, generates one proof that covers all `n-1` eVRF evaluations.
+/// The `sk_1` bit-decomposition and `g^{sk_1}` exponentiation are shared across
+/// all statements, reducing total constraint count by ~29%.
 pub fn prove_evrf_batch(
     sk1: Fr,
     my_pk: G1Affine,
@@ -207,8 +226,8 @@ pub fn prove_evrf_batch(
 
 /// Verify an eVRF proof.
 ///
-/// The verifier checks the proof natively by running the Bulletproofs IPA
-/// verification algorithm on BLS12-381 G1 against the commitment stored in the
+/// Per Appendix E of the Golden paper (IACR 2025/1924): native verification
+/// runs the IPA verifier on BLS12-381 G1 against the commitment stored in the
 /// proof. The Fiat-Shamir transcript is replayed with the matching domain
 /// separator (single or batch) so that the challenge sequence is identical to
 /// what the prover used.

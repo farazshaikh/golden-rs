@@ -1,3 +1,15 @@
+//! Non-native field arithmetic constraint system per Appendix E of the Golden paper.
+//!
+//! Per Appendix E of the Golden paper (IACR 2025/1924), when `G_in = G_out`
+//! (i.e., the eVRF operates entirely on BLS12-381), point coordinates live in
+//! Fq (381 bits) while the R1CS is over Fr (255 bits). This module provides a
+//! low-level constraint system that represents Fq values as Fr witness variables
+//! with explicit reduction.
+//!
+//! For the arkworks-based circuit (see [`super::circuit`] and
+//! [`super::exponentiation`]), non-native arithmetic is handled automatically by
+//! `EmulatedFpVar<Fq, Fr>`.
+
 use ark_bls12_381::{Fq, Fr};
 use ark_ff::{BigInteger, PrimeField};
 
@@ -5,25 +17,31 @@ use ark_ff::{BigInteger, PrimeField};
 /// Index 0 is always the constant "1".
 pub type VarIndex = usize;
 
-/// A single R1CS constraint: <a, z> * <b, z> = <c, z>
-/// Stored as sparse vectors of (variable_index, coefficient).
+/// A single R1CS constraint: `<a, z> * <b, z> = <c, z>`
+/// Stored as sparse vectors of `(variable_index, coefficient)`.
 #[derive(Clone, Debug)]
 pub struct Constraint {
+    /// Left-hand linear combination `a`.
     pub a: Vec<(VarIndex, Fr)>,
+    /// Right-hand linear combination `b`.
     pub b: Vec<(VarIndex, Fr)>,
+    /// Output linear combination `c`.
     pub c: Vec<(VarIndex, Fr)>,
 }
 
 /// Constraint system that accumulates R1CS constraints.
-/// Variables are indexed starting from 0 (constant 1), then public inputs, then witnesses.
+///
+/// Variables are indexed starting from 0 (constant 1), then public inputs,
+/// then witnesses. The system supports both constraint generation (for circuit
+/// definition) and satisfaction checking (for testing).
 pub struct ConstraintSystem {
-    /// Total number of variables allocated (including the constant)
+    /// Total number of variables allocated (including the constant).
     pub num_vars: usize,
-    /// Number of public input variables
+    /// Number of public input variables.
     pub num_inputs: usize,
-    /// Accumulated constraints
+    /// Accumulated constraints.
     pub constraints: Vec<Constraint>,
-    /// Witness values (for the prover; None for the verifier)
+    /// Witness values (for the prover; `None` for the verifier).
     pub witness: Vec<Fr>,
 }
 
@@ -61,7 +79,7 @@ impl ConstraintSystem {
         idx
     }
 
-    /// Add a constraint: <a, z> * <b, z> = <c, z>
+    /// Add a constraint: `<a, z> * <b, z> = <c, z>`.
     pub fn constrain(
         &mut self,
         a: Vec<(VarIndex, Fr)>,
@@ -72,7 +90,8 @@ impl ConstraintSystem {
     }
 
     /// Enforce that variable `var` equals a known constant value.
-    /// Constraint: var * 1 = constant
+    ///
+    /// Constraint: `var * 1 = constant`.
     pub fn enforce_equal_constant(&mut self, var: VarIndex, constant: Fr) {
         self.constrain(
             vec![(var, Fr::from(1u64))],
@@ -81,7 +100,7 @@ impl ConstraintSystem {
         );
     }
 
-    /// Enforce multiplication: a * b = c (all are variable indices)
+    /// Enforce multiplication: `a * b = c` (all are variable indices).
     pub fn enforce_mul(&mut self, a: VarIndex, b: VarIndex, c: VarIndex) {
         self.constrain(
             vec![(a, Fr::from(1u64))],
@@ -90,8 +109,9 @@ impl ConstraintSystem {
         );
     }
 
-    /// Enforce addition: a + b = c
-    /// Implemented as: (a + b) * 1 = c
+    /// Enforce addition: `a + b = c`.
+    ///
+    /// Implemented as: `(a + b) * 1 = c`.
     pub fn enforce_add(&mut self, a: VarIndex, b: VarIndex, c: VarIndex) {
         self.constrain(
             vec![(a, Fr::from(1u64)), (b, Fr::from(1u64))],
@@ -100,7 +120,7 @@ impl ConstraintSystem {
         );
     }
 
-    /// Enforce linear combination: sum(coeff_i * var_i) = result
+    /// Enforce linear combination: `sum(coeff_i * var_i) = result`.
     pub fn enforce_lc_equals(&mut self, terms: Vec<(VarIndex, Fr)>, result: VarIndex) {
         self.constrain(
             terms,
@@ -109,7 +129,8 @@ impl ConstraintSystem {
         );
     }
 
-    /// Allocate a witness variable for a * b and enforce the multiplication constraint.
+    /// Allocate a witness variable for `a * b` and enforce the multiplication constraint.
+    ///
     /// Returns the index of the product variable.
     pub fn mul(&mut self, a: VarIndex, b: VarIndex) -> VarIndex {
         let a_val = self.witness[a];
@@ -147,13 +168,11 @@ fn eval_lc(lc: &[(VarIndex, Fr)], witness: &[Fr]) -> Fr {
 }
 
 /// Convert an Fq element to Fr (reduce mod r).
-/// This is lossy but works for our circuit where Fq values are treated as
-/// field elements in the R1CS. For the eVRF circuit, we represent Fq coordinates
-/// directly as Fr witness variables (since we're doing native verification,
-/// the verifier checks the proof over Fr and the values are consistent).
 ///
-/// For large Fq values (>Fr), the reduction mod r means we lose information.
-/// The circuit compensates by having enough constraints to uniquely determine
+/// Per Appendix E of the Golden paper (IACR 2025/1924), when the eVRF operates
+/// on a single curve (`G_in = G_out`), point coordinates in Fq must be represented
+/// as Fr witness variables. This conversion is lossy for large Fq values (> Fr modulus)
+/// but the circuit compensates with sufficient constraints to uniquely determine
 /// the correct values.
 pub fn fq_to_fr(val: Fq) -> Fr {
     let bytes = val.into_bigint().to_bytes_le();

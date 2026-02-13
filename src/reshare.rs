@@ -1,3 +1,14 @@
+//! Membership-change resharing protocol.
+//!
+//! Transfers the secret from an old group `(n_old, t_old)` to a new group
+//! `(n_new, t_new)` while preserving `sk` and `PK`. Each old member creates
+//! a polynomial `g_i` with `g_i(0) = old_share` and deals encrypted evaluations
+//! to the new group. New members combine sub-shares via Lagrange interpolation
+//! over the old member indices.
+//!
+//! This is distinct from the key refresh protocol in [`crate::protocol`] (Section 5.2),
+//! which rotates shares within the same group without changing membership.
+
 use std::collections::HashMap;
 
 use ark_bls12_381::{G1Affine, G1Projective};
@@ -10,11 +21,32 @@ use crate::shamir::Polynomial;
 use crate::types::{Ciphertext, DkgOutput, NodeId, ReshareMsg, Scalar};
 use crate::vss;
 
+/// Error type for resharing protocol failures.
 #[derive(Debug)]
 pub enum ReshareError {
-    CiphertextVerificationFailed { sender: NodeId, recipient: NodeId },
-    MissingCiphertext { sender: NodeId, recipient: NodeId },
-    InsufficientDealers { needed: u32, got: u32 },
+    /// A ciphertext failed the VSS consistency check, indicating the dealer
+    /// sent a malformed or inconsistent encrypted share.
+    CiphertextVerificationFailed {
+        /// The old-group dealer that sent the bad ciphertext.
+        sender: NodeId,
+        /// The new-group member the ciphertext was intended for.
+        recipient: NodeId,
+    },
+    /// An expected ciphertext for this node was missing from a dealer's message.
+    MissingCiphertext {
+        /// The dealer whose message lacked the ciphertext.
+        sender: NodeId,
+        /// The new-group member that was expecting a ciphertext.
+        recipient: NodeId,
+    },
+    /// Fewer than `t_old` dealers participated, which is insufficient to
+    /// reconstruct the secret via Lagrange interpolation.
+    InsufficientDealers {
+        /// Minimum number of dealers required (= `t_old`).
+        needed: u32,
+        /// Actual number of dealers received.
+        got: u32,
+    },
 }
 
 impl std::fmt::Display for ReshareError {
@@ -27,8 +59,10 @@ impl std::error::Error for ReshareError {}
 
 /// Old node deals its existing share to the new group.
 ///
-/// Creates a polynomial g_i of degree (t_new - 1) with g_i(0) = old_share,
-/// encrypts g_i(j) for each new member j using eVRF pads.
+/// Creates a polynomial `g_i` of degree `(t_new - 1)` with `g_i(0) = old_share`,
+/// encrypts `g_i(j)` for each new member `j` using eVRF pads. The VSS commitment
+/// allows new members to verify that `g_i(0)` equals the dealer's known public
+/// key share `g^{sk_i}`.
 pub fn reshare_deal(
     old_id: NodeId,
     old_share: Scalar,
@@ -73,11 +107,12 @@ pub fn reshare_deal(
 
 /// New node receives resharing messages from old group and computes new share.
 ///
-/// Each old member i dealt their share sk_i under polynomial g_i.
-/// New member j decrypts g_i(j) from each old member, then computes:
-///   new_sk_j = sum_{i in S} g_i(j) * L_i(0)
-/// where S is the set of old members used and L_i(0) are Lagrange coefficients
-/// for the old members' indices.
+/// Each old member `i` dealt their share `sk_i` under polynomial `g_i`.
+/// New member `j` decrypts `g_i(j)` from each old member, then computes:
+///   `new_sk_j = sum_{i in S} g_i(j) * L_i(0)`
+/// where `S` is the set of old members used and `L_i(0)` are Lagrange coefficients
+/// for the old members' indices. This reconstructs a valid Shamir share of the
+/// original secret under the new group's polynomial structure.
 #[allow(clippy::too_many_arguments)]
 pub fn reshare_receive(
     new_id: NodeId,

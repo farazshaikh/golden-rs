@@ -1,3 +1,15 @@
+//! eVRF (exponent Verifiable Random Function) per Section 4 of the Golden paper.
+//!
+//! Per Section 4 of the Golden paper (IACR 2025/1924):
+//! > "Uses a non-interactive key exchange (NIKE) to derive a Diffie-Hellman
+//! > shared secret key, proving correctness with respect to the corresponding
+//! > DH public keys."
+//!
+//! The eVRF enables each pair of DKG participants to derive a common pseudorandom
+//! pad from their identity keypairs. This pad encrypts Shamir shares in transit,
+//! while ZK proofs (see [`crate::zk_evrf`]) ensure correctness. The pad is
+//! symmetric by the DH key exchange property.
+
 use ark_bls12_381::{g1::Config as G1Config, Fr, G1Affine, G1Projective};
 use ark_ec::{
     hashing::{curve_maps::wb::WBMap, map_to_curve_hasher::MapToCurveBasedHasher, HashToCurve},
@@ -10,8 +22,12 @@ use crate::types::Scalar;
 
 /// Extract the x-coordinate of an affine point as a scalar in Fr.
 ///
+/// Per Section 4.2, Evaluate steps 2-3 of the Golden paper (IACR 2025/1924):
+/// > "k_0 = S.X -- x-coordinate of S"
+/// > "k = int(k_0) -- cast to integer"
+///
 /// Converts the Fq x-coordinate (381 bits) to bytes, then reduces mod r
-/// into the scalar field. Returns Fr::zero() for the identity point.
+/// into the scalar field. Returns `Fr::zero()` for the identity point.
 fn extract_x_as_scalar(point: G1Affine) -> Scalar {
     if point.infinity {
         return Scalar::ZERO;
@@ -22,8 +38,12 @@ fn extract_x_as_scalar(point: G1Affine) -> Scalar {
 
 /// RFC 9380 compliant hash-to-curve for BLS12-381 G1.
 ///
-/// Implements the BLS12381G1_XMD:SHA-256_SSWU_RO_ suite using arkworks'
-/// MapToCurveBasedHasher with the Wahby-Boneh (WB) map. This produces
+/// Corresponds to the random oracles `H_{G_in,1}` and `H_{G_in,2}` from
+/// Section 4.1 of the Golden paper (IACR 2025/1924). The `domain` parameter
+/// provides domain separation between the two hash functions.
+///
+/// Implements the `BLS12381G1_XMD:SHA-256_SSWU_RO_` suite using arkworks'
+/// `MapToCurveBasedHasher` with the Wahby-Boneh (WB) map. This produces
 /// uniformly distributed points on the curve per the IETF standard.
 fn hash_to_curve(domain: &[u8], msg: &[u8]) -> G1Affine {
     let hasher =
@@ -37,19 +57,29 @@ fn hash_to_curve(domain: &[u8], msg: &[u8]) -> G1Affine {
 
 /// Derive the eVRF pad that both parties can independently compute.
 ///
+/// Per Section 4.2 of the Golden paper (IACR 2025/1924), Evaluate algorithm:
+/// > "1. S = DH.GetSharedKey(sk, PK') -- DH shared secret
+/// >  2. k_0 = S.X -- x-coordinate of S
+/// >  3. k = int(k_0)
+/// >  4. alpha = beta * (H_1(msg)^k).X + (H_2(msg)^k).X
+/// >  5. R = g^alpha"
+///
+/// Also per Appendix C:
+/// > "r = beta * r1 + r2 is pseudorandom via the leftover hash lemma"
+///
 /// Party i calls: `derive_pad(sk_i, PK_j, msg, beta)`
 /// Party j calls: `derive_pad(sk_j, PK_i, msg, beta)`
 /// Both get the same `(r, R)` output thanks to DH symmetry:
 ///   `PK_j * sk_i == g^{sk_j * sk_i} == PK_i * sk_j`
 ///
-/// Steps:
-///   1. DH shared secret S = peer_pk * sk
-///   2. k = int(S.x) mod r
-///   3. H1 = hash_to_curve("golden-evrf-h1", msg), H2 = hash_to_curve("golden-evrf-h2", msg)
-///   4. T1 = H1^k, T2 = H2^k
-///   5. r1 = int(T1.x) mod r, r2 = int(T2.x) mod r
-///   6. r = beta * r1 + r2  (leftover hash lemma extraction)
-///   7. R = g^r
+/// # Arguments
+/// * `sk` - This party's identity secret key
+/// * `peer_pk` - The peer's identity public key
+/// * `msg` - Domain-separating message (random nonce from Round 0)
+/// * `beta` - Public parameter for the leftover hash lemma extraction
+///
+/// # Returns
+/// `(r, R)` where `r` is the pad scalar and `R = g^r` is its commitment.
 pub fn derive_pad(sk: Scalar, peer_pk: G1Affine, msg: &[u8], beta: Scalar) -> (Scalar, G1Affine) {
     // 1. DH shared secret
     let s = (peer_pk * sk).into_affine();

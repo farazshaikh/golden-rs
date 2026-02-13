@@ -1,11 +1,27 @@
+//! Feldman Verifiable Secret Sharing per Section 3.3 of the Golden paper.
+//!
+//! Per Section 3.2 of the Golden paper (IACR 2025/1924):
+//! > "Commits to polynomial f by publishing C_k = g^{a_k} for each coefficient.
+//! > Verification: g^{f(j)} == product_{k=0}^{t-1} C_k^{j^k}"
+//!
+//! Feldman VSS extends Shamir secret sharing with public commitments that allow
+//! any party to verify the consistency of a received share without learning
+//! the secret. The commitment vector `[C_0, ..., C_{t-1}]` is published
+//! alongside the (encrypted) shares.
+
 use ark_bls12_381::{G1Affine, G1Projective};
 use ark_ec::{AffineRepr, CurveGroup};
 
 use crate::shamir::Polynomial;
 use crate::types::{NodeId, Scalar};
 
-/// Generate Feldman VSS commitment for a polynomial.
-/// Returns a vector of g^{a_k} for each coefficient a_k.
+/// Generate a Feldman VSS commitment for a polynomial.
+///
+/// Per Section 3.2 of the Golden paper (IACR 2025/1924):
+/// > "C_k = g^{a_k} for each coefficient a_k"
+///
+/// Returns a vector of `g^{a_k}` for each coefficient `a_k` in the polynomial.
+/// The first element `C_0 = g^{a_0}` is a commitment to the secret itself.
 pub fn commit(poly: &Polynomial) -> Vec<G1Affine> {
     poly.coefficients
         .iter()
@@ -14,7 +30,13 @@ pub fn commit(poly: &Polynomial) -> Vec<G1Affine> {
 }
 
 /// Verify that a share is consistent with a VSS commitment.
-/// Checks: g^{share} == product_{k=0}^{t-1} C_k^{j^k}
+///
+/// Per Section 3.2 of the Golden paper (IACR 2025/1924), checks the
+/// verification equation:
+/// > "g^{f(j)} == product_{k=0}^{t-1} C_k^{j^k}"
+///
+/// Returns `true` if `g^{share}` equals the product of `C_k^{index^k}` over
+/// all commitment elements, confirming the share lies on the committed polynomial.
 pub fn verify_share(commitment: &[G1Affine], index: NodeId, share: Scalar) -> bool {
     let x = Scalar::from(index as u64);
     let mut expected = G1Projective::default();
@@ -28,7 +50,12 @@ pub fn verify_share(commitment: &[G1Affine], index: NodeId, share: Scalar) -> bo
 }
 
 /// Compute the expected public key share for a given index from the VSS commitment.
-/// Returns g^{f(index)} = product_{k=0}^{t-1} C_k^{index^k}
+///
+/// Per Round 1 line 8 of Figure 4 in the Golden paper (IACR 2025/1924):
+/// > "X_{j,k} = product_{l=0}^{t-1} A_{j,l}^{k^l}"
+///
+/// Returns `g^{f(index)} = product_{k=0}^{t-1} C_k^{index^k}`, which is the
+/// commitment to the share value at `index` without revealing the share itself.
 pub fn expected_share_commitment(commitment: &[G1Affine], index: NodeId) -> G1Affine {
     let x = Scalar::from(index as u64);
     let mut result = G1Projective::default();

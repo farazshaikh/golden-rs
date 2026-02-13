@@ -1,3 +1,20 @@
+//! eVRF proof circuits per Section 4.3 of the Golden paper.
+//!
+//! Per Section 4.3 (R_eVRF relation, Figure 3) of the Golden paper (IACR 2025/1924),
+//! the circuit proves:
+//! > "Given public inputs (PK_1, PK_2, msg, beta, R) and private witness sk_1:
+//! >  0. PK_1 == g_in^{sk_1}
+//! >  1. S = PK_2^{sk_1}
+//! >  2. k_0 = S.X
+//! >  3. k = int(k_0)
+//! >  4-5. T_1 = H_1(msg)^k, T_2 = H_2(msg)^k
+//! >  6-7. r_1 = int(T_1.X), r_2 = int(T_2.X)
+//! >  8. r = beta * r_1 + r_2
+//! >  9. R = g_out^r"
+//!
+//! Per Section 4.4, total circuit size:
+//! > "2*(lambda+2) + 4*(3*lambda+2) + 2 = 14*lambda + 14 = 3598 constraints"
+
 use ark_bls12_381::{Fq, Fr, G1Affine};
 use ark_ec::CurveGroup;
 use ark_ff::Zero;
@@ -8,37 +25,39 @@ use crate::types::NodeId;
 
 type FqVar = EmulatedFpVar<Fq, Fr>;
 
-/// The eVRF proof circuit.
+/// The eVRF proof circuit for a single statement.
 ///
-/// Proves that the eVRF pad r was correctly derived from (sk_1, PK_2, msg, beta).
-/// This is the paper's R_eVRF relation (Figure 3, Section 4.5).
-///
-/// Public inputs: PK_1, PK_2, R (commitment to r), beta
-/// Private witness: sk_1
+/// Per Section 4.3 (Figure 3) of the Golden paper (IACR 2025/1924), proves the
+/// R_eVRF relation: given public inputs `(PK_1, PK_2, R, beta)` and private
+/// witness `sk_1`, demonstrates that `R = g^r` where `r` is correctly derived
+/// from the DH shared secret `PK_2^{sk_1}` via the eVRF Evaluate algorithm.
 pub struct EVRFCircuit {
     // === Public inputs ===
-    /// PK_1 = g^{sk_1} -- the prover's identity public key
+    /// `PK_1 = g^{sk_1}` -- the prover's identity public key.
     pub pk1: G1Affine,
-    /// PK_2 -- the peer's identity public key
+    /// `PK_2` -- the peer's identity public key.
     pub pk2: G1Affine,
-    /// R = g^r -- commitment to the eVRF output
+    /// `R = g^r` -- commitment to the eVRF output.
     pub r_commitment: G1Affine,
-    /// beta -- public parameter for leftover hash lemma
+    /// `beta` -- public parameter for leftover hash lemma.
     pub beta: Fr,
 
     // === Private witness ===
-    /// sk_1 -- the prover's identity secret key
+    /// `sk_1` -- the prover's identity secret key.
     pub sk1: Fr,
 
     // === Intermediate values (prover-computed, provided as witnesses) ===
-    /// S = PK_2^{sk_1} -- the DH shared secret
+    /// `S = PK_2^{sk_1}` -- the DH shared secret.
     pub dh_shared: G1Affine,
-    /// r -- the eVRF pad value
+    /// `r` -- the eVRF pad value.
     pub r_value: Fr,
 }
 
 impl EVRFCircuit {
     /// Create a new eVRF circuit from the prover's knowledge.
+    ///
+    /// Computes intermediate values (DH shared secret) from the provided
+    /// secret key and peer public key.
     pub fn new(
         sk1: Fr,
         pk1: G1Affine,
@@ -160,20 +179,27 @@ impl ConstraintSynthesizer<Fr> for EVRFCircuit {
     }
 }
 
-/// Batched eVRF circuit: proves n-1 eVRF evaluations with shared sk_1.
+/// Batched eVRF circuit: proves `n-1` eVRF evaluations with shared `sk_1`.
 ///
-/// Per paper Section 5.3: the sk_1 bit-decomposition and g^{sk_1} exponentiation
-/// are computed once and reused for all n-1 peer evaluations. This reduces the
-/// total constraint count compared to n-1 separate proofs.
+/// Per Section 5.3 of the Golden paper (IACR 2025/1924): the `sk_1`
+/// bit-decomposition and `g^{sk_1}` exponentiation are computed once and
+/// reused for all `n-1` peer evaluations. This reduces the total constraint
+/// count compared to `n-1` separate proofs (~29% reduction per Section 4.6).
 pub struct BatchEVRFCircuit {
+    /// The prover's identity secret key.
     pub sk1: Fr,
+    /// The prover's identity public key `PK_1 = g^{sk_1}`.
     pub my_pk: G1Affine,
+    /// Peers: `(node_id, PK_peer)` for each of the `n-1` peers.
     pub peers: Vec<(NodeId, G1Affine)>,
+    /// Pads: `(node_id, r_value, R_commitment)` for each peer.
     pub pads: Vec<(NodeId, Fr, G1Affine)>,
+    /// Public `beta` parameter for the leftover hash lemma.
     pub beta: Fr,
 }
 
 impl BatchEVRFCircuit {
+    /// Create a new batched eVRF circuit.
     pub fn new(
         sk1: Fr,
         my_pk: G1Affine,

@@ -1,3 +1,12 @@
+//! Bit-decomposition gadget for the eVRF ZK proof per Section 4.4 of the Golden paper.
+//!
+//! Per Section 4.4 of the Golden paper (IACR 2025/1924):
+//! > "Bit-decomposition gadget: lambda + 2 constraints per decomposition"
+//!
+//! Decomposes a scalar value into its binary representation within the constraint
+//! system, enforcing that each bit is boolean and that the bits recompose to the
+//! original value. This is a core building block for the exponentiation gadget.
+
 use ark_bls12_381::Fr;
 use ark_ec::AdditiveGroup;
 use ark_ff::{BigInteger, One, PrimeField, Zero};
@@ -6,23 +15,23 @@ use super::nonnative::{ConstraintSystem, VarIndex};
 
 /// Result of bit-decomposition: the allocated bit variables.
 pub struct BitDecomposition {
-    /// Variable indices for each bit: bits[0] is the LSB
+    /// Variable indices for each bit: `bits[0]` is the LSB.
     pub bits: Vec<VarIndex>,
-    /// Variable index for the original value (k)
+    /// Variable index for the original value (`k`).
     pub value_var: VarIndex,
 }
 
-/// Decompose a scalar value into lambda+1 bits in the constraint system.
+/// Decompose a scalar value into `lambda+1` bits in the constraint system.
 ///
-/// Per Golden paper Section 4.2:
-/// - Allocates lambda+1 bit variables and the original value
-/// - Constrains each bit: k_i * (k_i - 1) = 0
-/// - Constrains recomposition: k = sum 2^i * k_i
+/// Per Section 4.4 of the Golden paper (IACR 2025/1924):
+/// - Allocates `lambda+1` bit variables and the original value
+/// - Constrains each bit: `k_i * (k_i - 1) = 0` (boolean constraint)
+/// - Constrains recomposition: `k = sum 2^i * k_i`
 ///
-/// Returns the BitDecomposition with variable indices.
+/// Total constraints: `lambda + 2` (one per bit + one recomposition).
 ///
-/// lambda is the bit-length (e.g., 256 for a 256-bit scalar).
-/// The value must fit in lambda+1 bits.
+/// `lambda` is the bit-length (e.g., 256 for a 256-bit scalar).
+/// The value must fit in `lambda+1` bits.
 pub fn bit_decompose(cs: &mut ConstraintSystem, value: Fr, lambda: usize) -> BitDecomposition {
     // Get the bits of the value
     let value_bits = value.into_bigint().to_bits_le();
@@ -71,7 +80,8 @@ pub fn bit_decompose(cs: &mut ConstraintSystem, value: Fr, lambda: usize) -> Bit
 }
 
 /// Count the number of constraints for a bit decomposition.
-/// lambda + 1 (bit constraints) + 1 (recomposition) = lambda + 2
+///
+/// Per Section 4.4: `lambda + 1` (bit constraints) + 1 (recomposition) = `lambda + 2`.
 pub fn constraint_count(lambda: usize) -> usize {
     lambda + 2
 }

@@ -1,17 +1,41 @@
+//! Shamir Secret Sharing per Section 3.3 of the Golden paper.
+//!
+//! Per Section 3.3 of the Golden paper (IACR 2025/1924):
+//! > "A polynomial f(x) = a_0 + a_1*x + ... + a_{t-1}*x^{t-1} of degree t-1
+//! > can be interpolated by t points."
+//!
+//! This module implements polynomial-based secret sharing where a secret `a_0`
+//! is embedded as the constant term of a random polynomial, and shares are
+//! evaluations of that polynomial at distinct nonzero points.
+
 use ark_ff::{Field, UniformRand};
 use ark_std::rand::Rng;
 
 use crate::types::{NodeId, Scalar};
 
 /// A polynomial over the scalar field, used for Shamir secret sharing.
-/// coefficients[0] is the secret (constant term).
+///
+/// Per Section 3.3 of the Golden paper (IACR 2025/1924), Share(x, n, t):
+/// > "Define polynomial f(Z) = x + a_1*Z + ... + a_{t-1}*Z^{t-1} with random
+/// > a_1,...,a_{t-1}"
+///
+/// `coefficients[0]` is the secret (constant term `a_0`), and subsequent
+/// coefficients are the random blinding terms.
 pub struct Polynomial {
+    /// Polynomial coefficients in ascending degree order: `[a_0, a_1, ..., a_{t-1}]`.
     pub coefficients: Vec<Scalar>,
 }
 
 impl Polynomial {
     /// Create a random polynomial of the given degree whose constant term is `secret`.
-    /// For threshold t, use degree = t - 1.
+    ///
+    /// Per Section 3.3 of the Golden paper (IACR 2025/1924):
+    /// > "Define polynomial f(Z) = x + a_1*Z + ... + a_{t-1}*Z^{t-1} with random
+    /// > a_1,...,a_{t-1}"
+    ///
+    /// For threshold `t`, use `degree = t - 1`. The constant term is fixed to
+    /// `secret`, and the remaining `degree` coefficients are sampled uniformly
+    /// at random from Z_p.
     pub fn new_random(secret: Scalar, degree: usize, rng: &mut impl Rng) -> Self {
         let mut coefficients = Vec::with_capacity(degree + 1);
         coefficients.push(secret);
@@ -22,6 +46,10 @@ impl Polynomial {
     }
 
     /// Evaluate the polynomial at `x` using Horner's method.
+    ///
+    /// Computes `f(x) = a_0 + x*(a_1 + x*(a_2 + ... + x*a_n))` by walking
+    /// coefficients from highest degree down to the constant term. This is
+    /// numerically stable and requires only `degree` multiplications.
     pub fn evaluate(&self, x: Scalar) -> Scalar {
         // Horner's: a_0 + x*(a_1 + x*(a_2 + ... + x*a_n))
         // Walk coefficients from highest degree down.
@@ -38,8 +66,14 @@ impl Polynomial {
     }
 }
 
-/// Generate n shares by evaluating the polynomial at x = 1, 2, ..., n.
-/// Returns (node_id, share_value) pairs with node_id in 1..=n.
+/// Generate `n` shares by evaluating the polynomial at x = 1, 2, ..., n.
+///
+/// Per Section 3.3 of the Golden paper (IACR 2025/1924):
+/// > "Each share x_bar_i = f(i) for i in [n]"
+///
+/// Returns `(node_id, share_value)` pairs with `node_id` in `1..=n`.
+/// The evaluation points are the natural numbers 1 through n, which ensures
+/// they are distinct and nonzero (as required for Lagrange interpolation).
 pub fn generate_shares(poly: &Polynomial, n: u32) -> Vec<(NodeId, Scalar)> {
     (1..=n)
         .map(|i| {
@@ -49,10 +83,14 @@ pub fn generate_shares(poly: &Polynomial, n: u32) -> Vec<(NodeId, Scalar)> {
         .collect()
 }
 
-/// Reconstruct f(0) (the secret) from a set of shares using Lagrange interpolation.
+/// Reconstruct `f(0)` (the secret) from a set of shares using Lagrange interpolation.
 ///
-/// Each share is (node_id, y_i) where x_i = Scalar::from(node_id).
-/// Requires at least t shares for a degree-(t-1) polynomial.
+/// Per Section 3.3 of the Golden paper (IACR 2025/1924), Recover(t, {(i, x_bar_i)}):
+/// > "x = sum_{i in C} x_bar_i * L_i(0)
+/// > where L_i(0) = product_{j in C, j != i} j / (j - i)"
+///
+/// Each share is `(node_id, y_i)` where `x_i = Scalar::from(node_id)`.
+/// Requires at least `t` shares for a degree-`(t-1)` polynomial.
 pub fn lagrange_interpolate_at_zero(shares: &[(NodeId, Scalar)]) -> Scalar {
     let mut result = Scalar::from(0u64);
 

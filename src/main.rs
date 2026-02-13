@@ -6,12 +6,12 @@ use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::UniformRand;
 use rand::rngs::OsRng;
 
-use goldenkeysharing::network::Network;
-use goldenkeysharing::node::Node;
-use goldenkeysharing::reshare_network::ReshareNetwork;
-use goldenkeysharing::reshare_node::{NewReshareNode, OldReshareNode};
-use goldenkeysharing::shamir::lagrange_interpolate_at_zero;
-use goldenkeysharing::types::{DkgOutput, NodeId, Scalar};
+use golden_rs::network::Network;
+use golden_rs::node::Node;
+use golden_rs::reshare_network::ReshareNetwork;
+use golden_rs::reshare_node::{NewReshareNode, OldReshareNode};
+use golden_rs::shamir::lagrange_interpolate_at_zero;
+use golden_rs::types::{DkgOutput, NodeId, Scalar};
 
 /// Generate all C(n, k) combinations of indices.
 fn generate_combinations(

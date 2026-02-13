@@ -2,6 +2,9 @@
 //!
 //! This implements the "Constraint Capture" pattern: we use arkworks as a circuit
 //! compiler that outputs R1CS matrices, which we then feed to our Bulletproofs prover.
+//! The adapter bridges the arkworks `ConstraintSynthesizer` trait with the IPA
+//! proof system by extracting the full variable assignment and constraint matrices
+//! from a synthesized circuit.
 
 use ark_bls12_381::Fr;
 use ark_relations::r1cs::{
@@ -9,16 +12,20 @@ use ark_relations::r1cs::{
 };
 
 /// Result of synthesizing a circuit: the R1CS matrices and witness assignment.
+///
+/// Contains everything needed to produce an IPA proof: the constraint matrices
+/// (for future full R1CS reduction) and the complete variable assignment
+/// (used as the IPA `a`-vector in the current prototype).
 pub struct CapturedR1CS {
-    /// Number of public inputs (instance variables, excluding the constant 1)
+    /// Number of public inputs (instance variables, excluding the constant 1).
     pub num_inputs: usize,
-    /// Number of private witnesses
+    /// Number of private witnesses.
     pub num_witness: usize,
-    /// Number of constraints
+    /// Number of constraints.
     pub num_constraints: usize,
-    /// The constraint matrices (A, B, C in sparse format)
+    /// The constraint matrices (A, B, C in sparse format).
     pub matrices: ConstraintMatrices<Fr>,
-    /// The full assignment: [1, public_inputs..., witnesses...]
+    /// The full assignment: `[1, public_inputs..., witnesses...]`.
     pub assignment: Vec<Fr>,
 }
 
@@ -26,6 +33,7 @@ pub struct CapturedR1CS {
 ///
 /// Creates an arkworks constraint system in proving mode, runs the circuit
 /// synthesizer, checks satisfaction, and extracts the matrices and assignment.
+/// Returns an error if synthesis fails or the circuit is unsatisfied.
 pub fn capture_circuit<C: ConstraintSynthesizer<Fr>>(circuit: C) -> Result<CapturedR1CS, String> {
     let cs = ArkCS::<Fr>::new_ref();
     cs.set_mode(SynthesisMode::Prove {

@@ -1,11 +1,21 @@
+//! Core data types for the Golden DKG protocol.
+//!
+//! Contains the message structures exchanged during protocol rounds, the
+//! DKG output type, and type aliases for the underlying BLS12-381 curve
+//! primitives. All public types implement Borsh serialization for
+//! network transport.
+
 use ark_bls12_381::{Fr, G1Affine, G1Projective};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use borsh::{BorshDeserialize, BorshSerialize};
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
 
+/// Participant identifier (1-indexed).
 pub type NodeId = u32;
+/// BLS12-381 scalar field element (Fr).
 pub type Scalar = Fr;
+/// BLS12-381 G1 projective point.
 pub type G1 = G1Projective;
 
 /// Helper: serialize an arkworks type to bytes via CanonicalSerialize (compressed).
@@ -21,12 +31,18 @@ fn ark_from_bytes<T: CanonicalDeserialize>(bytes: &[u8]) -> T {
     T::deserialize_compressed(bytes).expect("ark deserialization failed")
 }
 
-/// A single encrypted share from node i to node j
+/// A single encrypted share from node i to node j.
+///
+/// Per Round 0 line 7 of Figure 4 in the Golden paper (IACR 2025/1924):
+/// > "sigma_{i,j} = (R_{i,j}, z_{i,j})"
+///
+/// where `R_{i,j} = g^{r_{i,j}}` is the eVRF pad commitment and
+/// `z_{i,j} = r_{i,j} + x_bar_{i,j}` is the encrypted Shamir share.
 #[derive(Clone, Debug)]
 pub struct Ciphertext {
-    /// R_{i,j} = g^{r_{i,j}} -- commitment to the eVRF pad
+    /// `R_{i,j} = g^{r_{i,j}}` -- commitment to the eVRF pad.
     pub r_commitment: G1Affine,
-    /// z_{i,j} = r_{i,j} + share_{i,j} -- encrypted Shamir share
+    /// `z_{i,j} = r_{i,j} + share_{i,j}` -- encrypted Shamir share.
     pub encrypted_share: Scalar,
 }
 
@@ -51,20 +67,26 @@ impl BorshDeserialize for Ciphertext {
     }
 }
 
-/// Round 0 broadcast message from a single node
+/// Round 0 broadcast message from a single node.
+///
+/// Per Round 0 lines 9-10 of Figure 4 in the Golden paper (IACR 2025/1924):
+/// > "bmsg_i = {(msg_i, C_bar_i, sigma_{i,j}, pi_{i,j})} for j != i"
+///
+/// Contains the VSS commitment, encrypted shares for all peers, and eVRF proofs
+/// demonstrating correct pad derivation.
 #[derive(Clone, Debug)]
 pub struct Round0Msg {
-    /// Sender node ID
+    /// Sender node ID.
     pub from: NodeId,
-    /// Random message used for eVRF evaluation
+    /// Random message used for eVRF evaluation (`msg_i` in the paper).
     pub random_msg: [u8; 32],
-    /// Feldman VSS commitment: (A_{i,0}, ..., A_{i,t-1}) where A_{i,k} = g^{a_k}
+    /// Feldman VSS commitment: `(A_{i,0}, ..., A_{i,t-1})` where `A_{i,k} = g^{a_k}`.
     pub vss_commitment: Vec<G1Affine>,
-    /// Encrypted shares: one Ciphertext per peer (keyed by recipient NodeId)
+    /// Encrypted shares: one [`Ciphertext`] per peer (keyed by recipient [`NodeId`]).
     pub ciphertexts: HashMap<NodeId, Ciphertext>,
-    /// eVRF proofs: one per peer, proving the pad was correctly derived (legacy per-peer)
+    /// eVRF proofs: one per peer, proving the pad was correctly derived (legacy per-peer).
     pub evrf_proofs: HashMap<NodeId, crate::zk_evrf::EVRFProof>,
-    /// Batched eVRF proof covering all peers (Section 5.3 optimization)
+    /// Batched eVRF proof covering all peers (Section 5.3 optimization).
     pub batch_evrf_proof: Option<crate::zk_evrf::EVRFProof>,
 }
 
@@ -142,23 +164,37 @@ impl BorshDeserialize for Round0Msg {
     }
 }
 
-/// Reshare broadcast message (same structure as Round0Msg).
+/// Reshare broadcast message from an old-group member to the new group.
+///
+/// Structurally similar to [`Round0Msg`] but without eVRF proofs (the reshare
+/// protocol relies on VSS commitment verification against known public key shares
+/// instead).
 #[derive(Clone, Debug)]
 pub struct ReshareMsg {
+    /// Sender node ID (old-group member).
     pub from: NodeId,
+    /// Random message used for eVRF pad derivation.
     pub random_msg: [u8; 32],
+    /// Feldman VSS commitment to the dealing polynomial `g_i`.
     pub vss_commitment: Vec<G1Affine>,
+    /// Encrypted sub-shares for each new-group member.
     pub ciphertexts: HashMap<NodeId, Ciphertext>,
 }
 
-/// Output of the DKG protocol for a single node
+/// Output of the DKG protocol for a single node.
+///
+/// Per Round 1 line 17 of Figure 4 in the Golden paper (IACR 2025/1924):
+/// > "return (PK, {PK_j}, sk_i)"
+///
+/// Contains the shared public key, per-participant public key shares, and
+/// this node's secret key share.
 #[derive(Clone, Debug)]
 pub struct DkgOutput {
-    /// The shared public key PK = g^{sk}
+    /// The shared public key `PK = g^{sk}`.
     pub public_key: G1Affine,
-    /// Public key share for each participant: PK_j = g^{sk_j}
+    /// Public key share for each participant: `PK_j = g^{sk_j}`.
     pub public_key_shares: HashMap<NodeId, G1Affine>,
-    /// This node's secret key share sk_i
+    /// This node's secret key share `sk_i`.
     pub secret_share: Scalar,
 }
 

@@ -1,3 +1,10 @@
+//! Resharing participant abstractions for old-group and new-group members.
+//!
+//! Provides [`OldReshareNode`] (deals existing shares to the new group) and
+//! [`NewReshareNode`] (receives deals and computes new shares). Both register
+//! identity keypairs with proof of knowledge and communicate via the
+//! [`ReshareNetwork`](crate::reshare_network::ReshareNetwork).
+
 use std::collections::HashMap;
 
 use ark_bls12_381::G1Affine;
@@ -12,20 +19,35 @@ use crate::schnorr_pok;
 use crate::types::{DkgOutput, NodeId, ReshareMsg, Scalar};
 
 /// An old group member participating in resharing.
+///
 /// Deals its existing share to the new group via eVRF-encrypted broadcast.
+/// After dealing, the old node's role is complete -- it does not produce
+/// a [`DkgOutput`].
 pub struct OldReshareNode {
+    /// Old-group node identifier.
     pub id: NodeId,
+    /// Identity secret key for eVRF pad derivation.
     sk_identity: Scalar,
+    /// Identity public key (registered with PKI).
     _pk_identity: G1Affine,
+    /// This node's existing secret key share `sk_i`.
     old_share: Scalar,
+    /// New group's threshold parameter.
     t_new: u32,
+    /// Public `beta` for leftover hash lemma.
     beta: Scalar,
+    /// Reshare network handle.
     network: ReshareNetwork,
+    /// Size of old group (unused but stored for completeness).
     _n_old: u32,
+    /// Broadcast receiver (unused by old nodes, but required for registration).
     _receiver: broadcast::Receiver<ReshareMsg>,
 }
 
 impl OldReshareNode {
+    /// Create a new old-group reshare node and register with the network.
+    ///
+    /// Generates an identity keypair and registers with proof of knowledge.
     pub async fn new(
         id: NodeId,
         old_share: Scalar,
@@ -56,7 +78,9 @@ impl OldReshareNode {
     }
 
     /// Deal old share to new group and return.
-    /// Old nodes don't produce a DkgOutput -- they just broadcast.
+    ///
+    /// Waits for all participants to register, then creates a dealing polynomial
+    /// `g_i(0) = old_share` and broadcasts encrypted evaluations to the new group.
     pub async fn run(self) {
         self.network.wait_ready().await;
         let new_members = self.network.get_new_members().await;
@@ -77,21 +101,37 @@ impl OldReshareNode {
 }
 
 /// A new group member participating in resharing.
-/// Receives deals from old members and computes new share.
+///
+/// Receives deals from old members and computes a new secret key share.
+/// The output preserves the original public key `PK` and produces shares
+/// under the new group's `(n_new, t_new)` parameters.
 pub struct NewReshareNode {
+    /// New-group node identifier.
     pub id: NodeId,
+    /// Identity secret key for eVRF pad derivation.
     sk_identity: Scalar,
+    /// Identity public key (registered with PKI).
     _pk_identity: G1Affine,
+    /// Public `beta` for leftover hash lemma.
     beta: Scalar,
+    /// Original shared public key `PK` (must be preserved).
     original_pk: G1Affine,
+    /// Old-group public key shares: `old_id -> g^{sk_i}` (for verification).
     old_pk_shares: HashMap<NodeId, G1Affine>,
+    /// Old group's threshold parameter `t_old`.
     t_old: u32,
+    /// Number of old-group members.
     n_old: u32,
+    /// Reshare network handle.
     network: ReshareNetwork,
+    /// Broadcast receiver for incoming reshare messages.
     receiver: broadcast::Receiver<ReshareMsg>,
 }
 
 impl NewReshareNode {
+    /// Create a new new-group reshare node and register with the network.
+    ///
+    /// Generates an identity keypair and registers with proof of knowledge.
     pub async fn new(
         id: NodeId,
         beta: Scalar,
@@ -124,6 +164,9 @@ impl NewReshareNode {
     }
 
     /// Collect reshare messages from old nodes and compute new share.
+    ///
+    /// Waits for `n_old` messages, then runs [`reshare::reshare_receive`] to
+    /// verify, decrypt, and aggregate into a new [`DkgOutput`].
     pub async fn run(mut self) -> DkgOutput {
         self.network.wait_ready().await;
         let old_members = self.network.get_old_members().await;

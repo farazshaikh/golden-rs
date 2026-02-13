@@ -1,3 +1,10 @@
+//! Inner Product Argument (IPA) prover and verifier.
+//!
+//! Implements Protocol 2 from Bünz et al. 2018 (Bulletproofs paper): given
+//! generators `(g, h, u)` and a Pedersen vector commitment
+//! `P = <a,g> + <b,h> + <a,b>*u`, proves knowledge of vectors `a` and `b`
+//! in `O(log n)` proof size via recursive halving of generators and vectors.
+
 use ark_bls12_381::{Fr, G1Affine, G1Projective};
 use ark_ec::{CurveGroup, VariableBaseMSM};
 use ark_ff::{Field, Zero};
@@ -7,12 +14,17 @@ use super::generators::BulletproofGens;
 use super::transcript::Transcript;
 use super::types::IPAProof;
 
-/// Multi-scalar multiplication helper: sum(scalars[i] * points[i])
+/// Multi-scalar multiplication helper: `sum(scalars[i] * points[i])`.
+///
+/// Wraps arkworks' variable-base MSM for convenience. Panics if the
+/// lengths of `points` and `scalars` do not match.
 pub fn msm_helper(points: &[G1Affine], scalars: &[Fr]) -> G1Projective {
     G1Projective::msm(points, scalars).expect("MSM failed: length mismatch")
 }
 
-/// Inner product of two scalar vectors: sum(a[i] * b[i])
+/// Inner product of two scalar vectors: `sum(a[i] * b[i])`.
+///
+/// Panics if the vectors have different lengths.
 pub fn inner_product_helper(a: &[Fr], b: &[Fr]) -> Fr {
     assert_eq!(a.len(), b.len());
     a.iter()
@@ -23,11 +35,18 @@ pub fn inner_product_helper(a: &[Fr], b: &[Fr]) -> Fr {
 
 /// Prove an inner product relation.
 ///
-/// Given generators (g, h, u) and vectors a, b such that
-///   P = <a,g> + <b,h> + <a,b>*u,
-/// produce a logarithmic-sized proof that the prover knows a, b.
+/// Implements Protocol 2 from Bünz et al. 2018: recursive halving of
+/// generators and vectors. Given generators `(g, h, u)` and vectors `a, b`
+/// such that `P = <a,g> + <b,h> + <a,b>*u`, produces a proof of size
+/// `2*log2(n)` group elements plus 2 scalars.
 ///
-/// Implements Protocol 2 from Bünz et al. 2018 (Bulletproofs paper).
+/// Each round:
+/// 1. Split vectors and generators into low/high halves
+/// 2. Compute cross-term commitments `L` and `R`
+/// 3. Squeeze a Fiat-Shamir challenge `x`
+/// 4. Fold vectors: `a' = a_lo*x + a_hi*x^{-1}`, `b' = b_lo*x^{-1} + b_hi*x`
+/// 5. Fold generators similarly
+/// 6. Recurse until vectors have length 1
 pub fn prove(transcript: &mut Transcript, gens: &BulletproofGens, a: &[Fr], b: &[Fr]) -> IPAProof {
     let n = a.len();
     assert_eq!(n, b.len());
@@ -114,11 +133,13 @@ pub fn prove(transcript: &mut Transcript, gens: &BulletproofGens, a: &[Fr], b: &
 
 /// Verify an inner product proof.
 ///
-/// Given commitment P (the Pedersen vector commitment), verify the proof
-/// that P = <a,g> + <b,h> + <a,b>*u for some a, b known to the prover.
+/// Uses the efficient verifier from Section 3.1 of Bünz et al. 2018:
+/// recomputes folded generators via challenge scalars rather than performing
+/// the full recursion. This avoids `O(n log n)` group operations by computing
+/// per-generator scalar factors from all challenges in a single pass.
 ///
-/// Uses the efficient verifier from Section 3.1: recompute folded generators
-/// via challenge scalars rather than performing the full recursion.
+/// Given commitment `P` (the Pedersen vector commitment), verifies the proof
+/// that `P = <a,g> + <b,h> + <a,b>*u` for some `a`, `b` known to the prover.
 pub fn verify(
     transcript: &mut Transcript,
     gens: &BulletproofGens,

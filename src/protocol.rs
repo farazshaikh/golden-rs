@@ -1,3 +1,11 @@
+//! Golden DKG protocol rounds per Section 5 (Figure 4) of the paper.
+//!
+//! Per Section 5 of the Golden paper (IACR 2025/1924), the protocol consists of
+//! two rounds. Round 0 generates and broadcasts encrypted shares with eVRF proofs.
+//! Round 1 verifies all broadcasts, decrypts received shares, and aggregates
+//! into the final DKG output. Key refresh (Section 5.2) reuses the same
+//! structure with `omega = 0`.
+
 use std::collections::HashMap;
 
 use ark_bls12_381::G1Affine;
@@ -12,7 +20,15 @@ use crate::vss;
 
 /// Execute Round 0 of the Golden DKG protocol for a single node.
 ///
-/// Returns the broadcast message and this node's own Shamir share.
+/// Per Figure 4 of the Golden paper (IACR 2025/1924), Round0(n, t, i, sk_i^I, {(j, PK_j^I)}):
+/// > "1. omega_i <- random Z_p
+/// >  2. {x_bar_{i,j}}, C_bar_i <- Shamir.Share(omega_i, n, t)
+/// >  3. msg_i <- random {0,1}^lambda
+/// >  4-7. For each peer: eVRF.Evaluate, encrypt share z_{i,j} = r_{i,j} + x_bar_{i,j}
+/// >  8. st_i <- x_bar_{i,i}
+/// >  9-10. Broadcast"
+///
+/// Returns the broadcast message and this node's own Shamir share (`st_i`).
 pub fn round0(
     id: NodeId,
     n: u32,
@@ -94,9 +110,25 @@ pub fn round0(
 /// Error type for protocol verification failures.
 #[derive(Debug)]
 pub enum ProtocolError {
-    CiphertextVerificationFailed { sender: NodeId, recipient: NodeId },
-    MissingCiphertext { sender: NodeId, recipient: NodeId },
-    ZeroSecretViolation { sender: NodeId },
+    /// A ciphertext `g^{z_{j,k}} != R_{j,k} * X_{j,k}` check failed (Round 1 line 9).
+    CiphertextVerificationFailed {
+        /// The node that sent the malformed ciphertext.
+        sender: NodeId,
+        /// The intended recipient of the ciphertext.
+        recipient: NodeId,
+    },
+    /// A ciphertext expected for this node was not found in the sender's message.
+    MissingCiphertext {
+        /// The node whose message lacked the ciphertext.
+        sender: NodeId,
+        /// The node that was expecting a ciphertext.
+        recipient: NodeId,
+    },
+    /// During key refresh, `A_{j,0}` was not the group identity (Section 5.2 violation).
+    ZeroSecretViolation {
+        /// The node that violated the zero-secret invariant.
+        sender: NodeId,
+    },
 }
 
 impl std::fmt::Display for ProtocolError {
@@ -108,6 +140,20 @@ impl std::fmt::Display for ProtocolError {
 impl std::error::Error for ProtocolError {}
 
 /// Execute Round 1 of the Golden DKG protocol for a single node.
+///
+/// Per Figure 4 of the Golden paper (IACR 2025/1924), Round1 verification (lines 5-9):
+/// > "- ABORT if eVRF.Verify fails
+/// >  - X_bar_{j,k} = product A_{j,l}^{k^l} (VSS commitment to g^{f_j(k)})
+/// >  - ABORT if g^{z_{j,k}} != R_{j,k} * X_bar_{j,k}"
+///
+/// Decryption (lines 10-12):
+/// > "x_bar_{j,i} = z_{j,i} - r_{j,i}"
+///
+/// Aggregation (line 13):
+/// > "sk_i = sum x_bar_{j,i}"
+///
+/// PK derivation (line 16):
+/// > "PK = product A_{k,0}"
 ///
 /// Verifies received broadcasts, decrypts shares, and produces the DKG output.
 pub fn round1(
@@ -236,9 +282,12 @@ pub fn round1(
 
 /// Execute Round 0 for key refresh (zero secret sharing).
 ///
-/// Per paper Section 5.2: identical to round0 but with omega = 0.
-/// The polynomial f_i has f_i(0) = 0, so A_{i,0} = g^0 = identity.
-/// The node's existing share is NOT modified here -- the delta is applied in round1_refresh.
+/// Per Section 5.2 of the Golden paper (IACR 2025/1924):
+/// > "Instead of sampling omega_i at random, set omega_i = 0"
+///
+/// Identical to [`round0`] but with `omega = 0`. The polynomial `f_i` has
+/// `f_i(0) = 0`, so `A_{i,0} = g^0 = identity`. The node's existing share
+/// is NOT modified here -- the delta is applied in [`round1_refresh`].
 pub fn round0_refresh(
     id: NodeId,
     n: u32,
@@ -319,11 +368,12 @@ pub fn round0_refresh(
 
 /// Execute Round 1 for key refresh (zero secret sharing).
 ///
-/// Per paper Section 5.2: identical to round1 but with an additional check
-/// that A_{j,0} == identity for all senders (verifying f_j(0) = 0).
+/// Per Section 5.2 of the Golden paper (IACR 2025/1924):
+/// > "Check that A_{j,0} equals the group identity for all j (verifying f_j(0) = 0)"
 ///
-/// The output secret_share = existing_share + sum of zero-sharing deltas.
-/// The output public_key is carried forward from the original DKG (unchanged).
+/// Identical to [`round1`] but with an additional check that `A_{j,0} == identity`
+/// for all senders. The output `secret_share = existing_share + sum of zero-sharing
+/// deltas`. The output `public_key` is carried forward from the original DKG (unchanged).
 #[allow(clippy::too_many_arguments)]
 pub fn round1_refresh(
     id: NodeId,

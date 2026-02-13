@@ -1,24 +1,38 @@
+//! Deterministic generator derivation for Bulletproofs Pedersen vector commitments.
+//!
+//! The IPA protocol requires independent generator vectors `g`, `h`, a blinding
+//! generator, and an inner product generator `u`. All are derived deterministically
+//! from domain-separated SHA-256 hashes, ensuring nothing-up-my-sleeve provenance.
+
 use ark_bls12_381::{Fr, G1Affine};
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::PrimeField;
 use sha2::{Digest, Sha256};
 
 /// A set of generators for Bulletproofs.
-/// Contains two vectors g and h of independent generators, plus a blinding generator.
+///
+/// Provides deterministic generators for Pedersen vector commitments:
+/// `P = <a,g> + <b,h> + <a,b>*u`
+///
+/// Contains two vectors `g` and `h` of independent generators, plus a blinding
+/// generator and an inner product generator `u`.
 pub struct BulletproofGens {
-    /// Generator vector g: g_1, ..., g_n
+    /// Generator vector `g`: `g_1, ..., g_n`.
     pub g: Vec<G1Affine>,
-    /// Generator vector h: h_1, ..., h_n
+    /// Generator vector `h`: `h_1, ..., h_n`.
     pub h: Vec<G1Affine>,
-    /// Blinding generator (independent of g and h)
+    /// Blinding generator (independent of `g` and `h`).
     pub b_blinding: G1Affine,
-    /// Inner product generator u
+    /// Inner product generator `u`.
     pub u: G1Affine,
 }
 
 impl BulletproofGens {
     /// Create a new set of generators for vectors of length `n`.
-    /// Generators are derived deterministically via hash-to-curve.
+    ///
+    /// Generators are derived deterministically via hash-and-multiply using
+    /// domain-separated SHA-256 hashes. This ensures all generators are
+    /// independent (with overwhelming probability) and reproducible.
     pub fn new(n: usize) -> Self {
         let g = (0..n)
             .map(|i| hash_to_generator(b"golden-bp-g", i as u64))
@@ -38,7 +52,10 @@ impl BulletproofGens {
 }
 
 /// Derive a generator deterministically from a domain and index.
-/// Uses hash-and-multiply: SHA-256(domain || index) -> scalar -> generator * scalar.
+///
+/// Uses hash-and-multiply: `SHA-256(domain || index) -> scalar -> g * scalar`,
+/// where `g` is the BLS12-381 G1 generator. This produces a point whose
+/// discrete log relative to `g` is unknown (assuming SHA-256 is a random oracle).
 fn hash_to_generator(domain: &[u8], index: u64) -> G1Affine {
     let mut hasher = Sha256::new();
     hasher.update(domain);
