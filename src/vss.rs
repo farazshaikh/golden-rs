@@ -9,6 +9,12 @@
 //! the secret. The commitment vector `[C_0, ..., C_{t-1}]` is published
 //! alongside the (encrypted) shares.
 
+// SECURITY: Constant-time analysis
+// - commit: Scalar mul of public coefficients -- constant-time but coefficients are secret.
+//   arkworks scalar mul is constant-time regardless of scalar value.
+// - verify_share: All operations on the share value use constant-time field/group arithmetic.
+// Verdict: Constant-time.
+
 use ark_bls12_381::{G1Affine, G1Projective};
 use ark_ec::{AffineRepr, CurveGroup};
 

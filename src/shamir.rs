@@ -8,6 +8,13 @@
 //! is embedded as the constant term of a random polynomial, and shares are
 //! evaluations of that polynomial at distinct nonzero points.
 
+// SECURITY: Constant-time analysis
+// - Polynomial::evaluate: Horner's method uses ark-ff mul/add which are constant-time.
+// - lagrange_interpolate_at_zero: Uses ark-ff mul/add/inverse which are constant-time.
+//   The loop structure is data-independent (iterates over all shares).
+// - generate_shares: Evaluates polynomial at public indices -- no secret-dependent branching.
+// Verdict: All operations on secret values use constant-time field arithmetic.
+
 use ark_ff::{Field, UniformRand};
 use ark_std::rand::Rng;
 

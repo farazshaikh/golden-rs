@@ -47,6 +47,32 @@ pub enum ReshareError {
         /// Actual number of dealers received.
         got: u32,
     },
+    /// Failed to receive a broadcast message.
+    BroadcastReceiveFailed {
+        /// The node that failed to receive.
+        node: NodeId,
+        /// Description of the receive failure.
+        reason: String,
+    },
+    /// PKI registration failed.
+    RegistrationFailed {
+        /// The node whose registration failed.
+        node: NodeId,
+        /// Description of the registration failure.
+        reason: String,
+    },
+    /// Duplicate node indices found during Lagrange interpolation.
+    DuplicateNodeIndex {
+        /// The duplicate node index.
+        index: NodeId,
+    },
+    /// No messages received from old group.
+    NoMessages,
+    /// Session ID mismatch.
+    SessionMismatch {
+        /// The node that sent the mismatched session ID.
+        sender: NodeId,
+    },
 }
 
 impl std::fmt::Display for ReshareError {
@@ -63,6 +89,7 @@ impl std::error::Error for ReshareError {}
 /// encrypts `g_i(j)` for each new member `j` using eVRF pads. The VSS commitment
 /// allows new members to verify that `g_i(0)` equals the dealer's known public
 /// key share `g^{sk_i}`.
+#[allow(clippy::too_many_arguments)]
 pub fn reshare_deal(
     old_id: NodeId,
     old_share: Scalar,
@@ -71,6 +98,7 @@ pub fn reshare_deal(
     t_new: u32,
     beta: Scalar,
     rng: &mut impl Rng,
+    session_id: [u8; 32],
 ) -> ReshareMsg {
     // Polynomial g_i of degree t_new-1 with g_i(0) = old_share
     let poly = Polynomial::new_random(old_share, (t_new - 1) as usize, rng);
@@ -98,6 +126,7 @@ pub fn reshare_deal(
     }
 
     ReshareMsg {
+        session_id,
         from: old_id,
         random_msg,
         vss_commitment,
@@ -123,7 +152,15 @@ pub fn reshare_receive(
     original_pk: G1Affine,
     old_pk_shares: &HashMap<NodeId, G1Affine>, // old NodeId -> g^{sk_i} (for verification)
     t_old: u32,
+    session_id: [u8; 32],
 ) -> Result<DkgOutput, ReshareError> {
+    // === SESSION ID VERIFICATION ===
+    for (&sender_id, msg) in received {
+        if msg.session_id != session_id {
+            return Err(ReshareError::SessionMismatch { sender: sender_id });
+        }
+    }
+
     // Need at least t_old valid messages
     if (received.len() as u32) < t_old {
         return Err(ReshareError::InsufficientDealers {
@@ -194,7 +231,10 @@ pub fn reshare_receive(
                 continue;
             }
             let xj = Scalar::from(xj_id as u64);
-            li *= xj * (xj - xi).inverse().expect("duplicate old node indices");
+            li *= xj
+                * (xj - xi)
+                    .inverse()
+                    .ok_or(ReshareError::DuplicateNodeIndex { index: xi_id })?;
         }
 
         new_secret_share += sub_share * li;
@@ -203,14 +243,8 @@ pub fn reshare_receive(
     // === DERIVE NEW PUBLIC KEY SHARES ===
     // For each new member k, compute PK_k = sum_{i in S} vss::expected_share_commitment(C_i, k) * L_i(0)
     // Collect all new member IDs from the ciphertexts of the first message
-    let new_member_ids: Vec<NodeId> = received
-        .values()
-        .next()
-        .unwrap()
-        .ciphertexts
-        .keys()
-        .copied()
-        .collect();
+    let first_msg = received.values().next().ok_or(ReshareError::NoMessages)?;
+    let new_member_ids: Vec<NodeId> = first_msg.ciphertexts.keys().copied().collect();
 
     let mut public_key_shares = HashMap::new();
     for &k in &new_member_ids {
@@ -223,7 +257,10 @@ pub fn reshare_receive(
                     continue;
                 }
                 let xj = Scalar::from(xj_id as u64);
-                li *= xj * (xj - xi).inverse().expect("duplicate old node indices");
+                li *= xj
+                    * (xj - xi)
+                        .inverse()
+                        .ok_or(ReshareError::DuplicateNodeIndex { index: sender_id })?;
             }
             let msg = &received[&sender_id];
             let share_comm = vss::expected_share_commitment(&msg.vss_commitment, k);
@@ -312,6 +349,7 @@ mod malicious_tests {
             setup_old_group(3, 2, &mut rng);
         let (new_sk_ids, new_pk_ids) = setup_new_group(2, 10, &mut rng);
         let beta = Scalar::rand(&mut rng);
+        let session_id = [0u8; 32];
 
         // Node 1 deals honestly
         let msg1 = reshare_deal(
@@ -322,6 +360,7 @@ mod malicious_tests {
             2,
             beta,
             &mut rng,
+            session_id,
         );
 
         // Node 2 deals with a FAKE share (not its real sk_2)
@@ -334,6 +373,7 @@ mod malicious_tests {
             2,
             beta,
             &mut rng,
+            session_id,
         );
 
         let mut received = HashMap::new();
@@ -349,6 +389,7 @@ mod malicious_tests {
             original_pk,
             &old_pk_shares,
             2,
+            session_id,
         );
 
         match result {
@@ -367,6 +408,7 @@ mod malicious_tests {
             setup_old_group(3, 2, &mut rng);
         let (new_sk_ids, new_pk_ids) = setup_new_group(2, 10, &mut rng);
         let beta = Scalar::rand(&mut rng);
+        let session_id = [0u8; 32];
 
         // Node 1 deals honestly
         let msg1 = reshare_deal(
@@ -377,6 +419,7 @@ mod malicious_tests {
             2,
             beta,
             &mut rng,
+            session_id,
         );
 
         // Node 2 deals honestly, then we tamper the encrypted_share
@@ -388,6 +431,7 @@ mod malicious_tests {
             2,
             beta,
             &mut rng,
+            session_id,
         );
         msg2.ciphertexts.get_mut(&10).unwrap().encrypted_share += Scalar::from(1u64);
 
@@ -404,6 +448,7 @@ mod malicious_tests {
             original_pk,
             &old_pk_shares,
             2,
+            session_id,
         );
 
         match result {
@@ -422,6 +467,7 @@ mod malicious_tests {
             setup_old_group(3, 2, &mut rng);
         let (new_sk_ids, new_pk_ids) = setup_new_group(2, 10, &mut rng);
         let beta = Scalar::rand(&mut rng);
+        let session_id = [0u8; 32];
 
         // Only 1 dealer when t_old=2
         let msg1 = reshare_deal(
@@ -432,6 +478,7 @@ mod malicious_tests {
             2,
             beta,
             &mut rng,
+            session_id,
         );
 
         let mut received = HashMap::new();
@@ -446,6 +493,7 @@ mod malicious_tests {
             original_pk,
             &old_pk_shares,
             2,
+            session_id,
         );
 
         match result {
@@ -468,6 +516,7 @@ mod malicious_tests {
             setup_old_group(3, t_old, &mut rng);
         let (new_sk_ids, new_pk_ids) = setup_new_group(2, 10, &mut rng);
         let beta = Scalar::rand(&mut rng);
+        let session_id = [0u8; 32];
 
         // t_old old nodes deal honestly
         let mut received = HashMap::new();
@@ -480,6 +529,7 @@ mod malicious_tests {
                 t_new,
                 beta,
                 &mut rng,
+                session_id,
             );
             received.insert(id, msg);
         }
@@ -496,6 +546,7 @@ mod malicious_tests {
                 original_pk,
                 &old_pk_shares,
                 t_old,
+                session_id,
             )
             .expect("honest reshare must succeed");
             new_outputs.insert(new_id, output);

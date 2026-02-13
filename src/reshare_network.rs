@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use ark_bls12_381::G1Affine;
+use rand::RngCore;
 use tokio::sync::{broadcast, Barrier, RwLock};
 
 use crate::schnorr_pok::{self, SchnorrPoK};
@@ -29,6 +30,8 @@ pub struct ReshareNetwork {
     new_members: Arc<RwLock<HashMap<NodeId, G1Affine>>>,
     /// Barrier: waits for all participants (old + new) to register.
     barrier: Arc<Barrier>,
+    /// Session ID for replay protection (random per reshare session).
+    session_id: Arc<[u8; 32]>,
 }
 
 impl ReshareNetwork {
@@ -37,12 +40,20 @@ impl ReshareNetwork {
     /// `total_participants` is `n_old + n_new` (or fewer if groups overlap).
     pub fn new(total_participants: u32) -> Self {
         let (sender, _) = broadcast::channel((total_participants * 2) as usize);
+        let mut session_id = [0u8; 32];
+        rand::rngs::OsRng.fill_bytes(&mut session_id);
         Self {
             sender,
             old_members: Arc::new(RwLock::new(HashMap::new())),
             new_members: Arc::new(RwLock::new(HashMap::new())),
             barrier: Arc::new(Barrier::new(total_participants as usize)),
+            session_id: Arc::new(session_id),
         }
+    }
+
+    /// Get the session ID for this reshare session.
+    pub fn session_id(&self) -> [u8; 32] {
+        *self.session_id
     }
 
     /// Register an old group member with proof of knowledge.

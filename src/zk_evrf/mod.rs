@@ -174,11 +174,8 @@ pub fn verify_evrf(
     beta: Fr,
     proof: &EVRFProof,
 ) -> Result<bool, String> {
-    // For batch proofs, we cannot re-synthesize without knowing the peer list.
-    // The batch verifier needs the full peer info.
-    // TODO: pass peer list to verify_evrf_batch
     if proof.is_batch {
-        return verify_evrf_structural(proof);
+        return Err("Use verify_evrf_batch for batch proofs".to_string());
     }
 
     // 1. Re-synthesize the circuit with the verifier's public inputs
@@ -210,18 +207,46 @@ pub fn verify_evrf(
     }
 }
 
-/// Structural verification for batch proofs (fallback when peer list unavailable).
+/// Verify a batched eVRF proof using ark-spartan NIZK with full public-input binding.
 ///
-/// Deserializes the proof and checks basic structural validity.
-/// Full batch verification requires the complete peer list.
-fn verify_evrf_structural(proof: &EVRFProof) -> Result<bool, String> {
-    // Check that the proof deserializes successfully
-    let _nizk_proof = NIZK::<G1Projective>::deserialize_compressed(&proof.proof_bytes[..])
+/// Per Golden paper Section 5.3: the batch proof covers all n-1 eVRF evaluations.
+/// The verifier re-synthesizes the BatchEVRFCircuit with the claimed public inputs
+/// (pk1, all peer PKs, all R commitments, beta) to reconstruct the R1CS instance,
+/// then checks the proof against it.
+pub fn verify_evrf_batch(
+    pk1: G1Affine,
+    peers: &[(NodeId, G1Affine)],
+    pad_commitments: &[(NodeId, G1Affine)],
+    beta: Fr,
+    proof: &EVRFProof,
+) -> Result<bool, String> {
+    // Re-synthesize the batch circuit with the verifier's public inputs
+    let circuit = BatchEVRFCircuit::for_verification(pk1, peers, pad_commitments, beta);
+    let captured = capture_circuit(circuit)?;
+    let spartan_data = self::adapter::to_spartan(&captured)?;
+
+    // Reconstruct generators
+    let gens = NIZKGens::<G1Projective>::new(
+        spartan_data.num_cons,
+        spartan_data.num_vars,
+        spartan_data.num_inputs,
+    );
+
+    // Deserialize the proof
+    let nizk_proof = NIZK::<G1Projective>::deserialize_compressed(&proof.proof_bytes[..])
         .map_err(|e| format!("Failed to deserialize batch proof: {}", e))?;
 
-    // Structural check passes -- the proof is well-formed
-    // Full verification with public-input binding requires the peer list
-    Ok(true)
+    // Verify with the verifier's public inputs
+    let mut transcript = merlin::Transcript::new(b"golden-evrf-batch-proof");
+    match nizk_proof.verify(
+        &spartan_data.instance,
+        &spartan_data.inputs,
+        &mut transcript,
+        &gens,
+    ) {
+        Ok(()) => Ok(true),
+        Err(_) => Ok(false),
+    }
 }
 
 #[cfg(test)]
@@ -266,6 +291,63 @@ mod verification_tests {
             !result,
             "Proof verified against wrong public inputs should fail"
         );
+    }
+
+    #[test]
+    fn test_verify_evrf_batch_valid() {
+        let mut rng = ark_std::test_rng();
+        let sk1 = Fr::rand(&mut rng);
+        let pk1 = (G1Affine::generator() * sk1).into_affine();
+        let beta = Fr::rand(&mut rng);
+
+        // Create 3 peers
+        let mut peers = Vec::new();
+        let mut pads = Vec::new();
+        let mut pad_commitments = Vec::new();
+        for peer_id in 2..=4u32 {
+            let sk_peer = Fr::rand(&mut rng);
+            let pk_peer = (G1Affine::generator() * sk_peer).into_affine();
+            let r_value = Fr::rand(&mut rng);
+            let r_commitment = (G1Affine::generator() * r_value).into_affine();
+            peers.push((peer_id, pk_peer));
+            pads.push((peer_id, r_value, r_commitment));
+            pad_commitments.push((peer_id, r_commitment));
+        }
+
+        let proof = prove_evrf_batch(sk1, pk1, &peers, &pads, beta).unwrap();
+
+        // Verify with correct public inputs
+        let result = verify_evrf_batch(pk1, &peers, &pad_commitments, beta, &proof).unwrap();
+        assert!(result, "Valid batch proof should verify");
+    }
+
+    #[test]
+    fn test_verify_evrf_batch_wrong_peer() {
+        let mut rng = ark_std::test_rng();
+        let sk1 = Fr::rand(&mut rng);
+        let pk1 = (G1Affine::generator() * sk1).into_affine();
+        let beta = Fr::rand(&mut rng);
+
+        let mut peers = Vec::new();
+        let mut pads = Vec::new();
+        let mut pad_commitments = Vec::new();
+        for peer_id in 2..=4u32 {
+            let sk_peer = Fr::rand(&mut rng);
+            let pk_peer = (G1Affine::generator() * sk_peer).into_affine();
+            let r_value = Fr::rand(&mut rng);
+            let r_commitment = (G1Affine::generator() * r_value).into_affine();
+            peers.push((peer_id, pk_peer));
+            pads.push((peer_id, r_value, r_commitment));
+            pad_commitments.push((peer_id, r_commitment));
+        }
+
+        let proof = prove_evrf_batch(sk1, pk1, &peers, &pads, beta).unwrap();
+
+        // Verify with WRONG peer PK -- should fail
+        let mut wrong_peers = peers.clone();
+        wrong_peers[1].1 = (G1Affine::generator() * Fr::rand(&mut rng)).into_affine();
+        let result = verify_evrf_batch(pk1, &wrong_peers, &pad_commitments, beta, &proof).unwrap();
+        assert!(!result, "Batch proof with wrong peer PK should fail");
     }
 
     #[test]

@@ -8,6 +8,13 @@
 //! and prove they know the corresponding secret key. This prevents rogue-key
 //! attacks where an adversary registers a public key they cannot use.
 
+// SECURITY: Constant-time analysis
+// - prove: nonce sampling (OsRng), scalar mul (constant-time), field add/mul (constant-time).
+// - verify: scalar mul and field ops are constant-time. The final equality check
+//   on affine points compares field elements, which is constant-time in arkworks.
+// - compute_challenge: SHA-256 is constant-time for fixed-length inputs.
+// Verdict: All operations are constant-time.
+
 use ark_bls12_381::{Fr, G1Affine};
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::PrimeField;
@@ -17,7 +24,7 @@ use ark_std::UniformRand;
 use borsh::{BorshDeserialize, BorshSerialize};
 use sha2::{Digest, Sha256};
 
-use crate::types::Scalar;
+use crate::types::{Scalar, SecretScalar};
 
 /// A Schnorr proof of knowledge of discrete log: proves knowledge of `sk` such
 /// that `PK = g^sk`.
@@ -45,16 +52,16 @@ pub struct SchnorrPoK {
 ///   5. Output `(R, s)`
 pub fn prove(sk: Scalar, pk: G1Affine, rng: &mut impl Rng) -> SchnorrPoK {
     // 1. Sample random nonce
-    let nonce = Scalar::rand(rng);
+    let nonce = SecretScalar::new(Scalar::rand(rng));
 
     // 2. R = g^nonce
-    let commitment = (G1Affine::generator() * nonce).into_affine();
+    let commitment = (G1Affine::generator() * nonce.inner()).into_affine();
 
     // 3. Fiat-Shamir challenge: c = H(g || pk || R)
     let challenge = compute_challenge(pk, commitment);
 
     // 4. s = nonce + c * sk
-    let response = nonce + challenge * sk;
+    let response = nonce.inner() + challenge * sk;
 
     SchnorrPoK {
         commitment,

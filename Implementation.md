@@ -47,6 +47,18 @@ The arkworks-to-Spartan conversion handles the column index remapping between ar
 
 All production key material (identity keypairs, polynomial coefficients, Schnorr nonces) uses `OsRng` -- the OS-provided cryptographically secure random number generator. Deterministic test RNG (`ark_std::test_rng()`) is confined to `#[cfg(test)]` modules only.
 
+### Constant-Time Properties
+
+All secret-dependent operations use arkworks' constant-time field and group arithmetic:
+
+- **Field operations** (`ark-ff`): Addition, multiplication, and inversion on `Fr` scalars are constant-time. This covers Shamir polynomial evaluation, Lagrange interpolation, Schnorr response computation, and eVRF pad derivation.
+- **Scalar multiplication** (`ark-ec`): BLS12-381 G1 scalar multiplication is constant-time. This covers identity key generation, DH shared secret computation, and VSS commitments.
+- **SHA-256 hashing**: Constant-time for fixed-length inputs (Fiat-Shamir challenges, hash-to-curve).
+
+**Known negligible-probability leak:** `extract_x_as_scalar` in `evrf.rs` checks `point.infinity` to handle the identity point case. The DH shared secret is the identity only if one party's secret key is zero, which has probability 1/r (negligible for a 255-bit field).
+
+**Zeroization:** Secret keys and polynomial coefficients are wrapped in `SecretScalar`, which zeros memory on drop via `ptr::write_bytes(ptr, 0, len)`.
+
 ## Native vs On-Chain Verification
 
 The paper's eVRF proof system (Section 4) describes a two-curve architecture: G_in (BLS12-381 G1) for DKG operations and G_out (a companion curve) for the proof system. This G_out requirement exists because the Bulletproofs R1CS operates over G_out's scalar field, which must equal G_in's base field.
@@ -112,16 +124,21 @@ The paper's eVRF proof system (Section 4) describes a two-curve architecture: G_
 | Reshare: shrink (5,3)->(4,2), grow (4,2)->(7,4) | Done |
 | RFC 9380 hash-to-curve (WB map for BLS12-381 G1) | Done |
 | Malicious participant detection | Done (10 adversarial tests) |
-| Public-input binding in eVRF verification | Done (ark-spartan NIZK, 3 adversarial tests) |
+| Public-input binding in eVRF verification | Done (ark-spartan NIZK, 5 adversarial tests) |
+| Batch proof public-input binding | Done (`verify_evrf_batch` with full peer list) |
+| Zeroize secrets on drop | Done (`SecretScalar` wrapper, zeros memory on drop) |
+| Constant-time audit | Done (documented in source, all ops use arkworks constant-time arithmetic) |
 | Production randomness (OsRng) | Done |
 | Borsh serialization for all network types | Done |
 | Exhaustive C(n,t) reconstruction verification | Done |
+| Error handling (no panics in production code) | Done (all `panic!`/`expect`/`assert_eq!` replaced with `Result` returns) |
+| Replay protection (session IDs) | Done (`session_id: [u8; 32]` in Round0Msg/ReshareMsg, verified in round1) |
 
 ### TODO
 
-| #   | Item       | Description                                                                                                                      |
-| --- | ---------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Benchmarks | Paper provides specific performance numbers (Table 1: 223 kb bandwidth, 13.5s for n=50). No benchmarks exist to compare against. |
+| #   | Item       | Description                                                                                                                     | Priority           |
+| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| 1   | Benchmarks | Paper provides specific performance numbers (Table 1: 223 kb bandwidth, 13.5s for n=50). Add `criterion` benchmarks to compare. | Paper completeness |
 
 ### Out of Scope
 

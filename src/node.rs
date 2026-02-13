@@ -16,9 +16,9 @@ use rand::rngs::OsRng;
 use tokio::sync::broadcast;
 
 use crate::network::Network;
-use crate::protocol;
+use crate::protocol::{self, ProtocolError};
 use crate::schnorr_pok;
-use crate::types::{DkgOutput, NodeId, Round0Msg, Scalar};
+use crate::types::{DkgOutput, NodeId, Round0Msg, Scalar, SecretScalar};
 
 /// A participant in the Golden DKG protocol.
 ///
@@ -32,7 +32,7 @@ pub struct Node {
     /// Threshold parameter `t` (minimum shares needed to reconstruct).
     pub t: u32,
     /// Identity secret key `sk_i^I` per Section 5.1.
-    sk: Scalar,
+    sk: SecretScalar,
     /// Identity public key `PK_i^I = g^{sk_i^I}` per Section 5.1.
     pub pk: G1Affine,
     /// Public `beta` parameter for the leftover hash lemma (Appendix C).
@@ -49,18 +49,24 @@ impl Node {
     /// Per Section 5.1 of the Golden paper (IACR 2025/1924), generates an
     /// identity keypair `(sk_i^I, PK_i^I)` and registers the public key with
     /// the PKI via a Schnorr proof of knowledge (Appendix F).
-    pub async fn new(id: NodeId, n: u32, t: u32, beta: Scalar, network: Network) -> Self {
+    pub async fn new(
+        id: NodeId,
+        n: u32,
+        t: u32,
+        beta: Scalar,
+        network: Network,
+    ) -> Result<Self, ProtocolError> {
         let mut rng = OsRng;
-        let sk = Scalar::rand(&mut rng);
-        let pk = (G1Affine::generator() * sk).into_affine();
-        let pok = schnorr_pok::prove(sk, pk, &mut rng);
+        let sk = SecretScalar::new(Scalar::rand(&mut rng));
+        let pk = (G1Affine::generator() * sk.inner()).into_affine();
+        let pok = schnorr_pok::prove(sk.inner(), pk, &mut rng);
 
         let receiver = network
             .register(id, pk, &pok)
             .await
-            .expect("PKI registration failed: invalid proof of knowledge");
+            .map_err(|reason| ProtocolError::RegistrationFailed { node: id, reason })?;
 
-        Self {
+        Ok(Self {
             id,
             n,
             t,
@@ -69,7 +75,7 @@ impl Node {
             beta,
             network,
             receiver,
-        }
+        })
     }
 
     /// Run the full DKG protocol (Round 0 + Round 1 per Figure 4).
@@ -79,24 +85,32 @@ impl Node {
     /// 3. Collect `n-1` Round 0 messages from peers
     /// 4. Execute Round 1: verify, decrypt, aggregate
     /// 5. Return [`DkgOutput`] containing `(PK, {PK_j}, sk_i)`
-    pub async fn run(mut self) -> DkgOutput {
+    pub async fn run(mut self) -> Result<DkgOutput, ProtocolError> {
         // Wait for all peers to register
         self.network.wait_ready().await;
 
         // Get peer public keys
         let peers = self.network.get_peers().await;
-        assert_eq!(
-            peers.len(),
-            self.n as usize,
-            "Expected {} peers, got {}",
-            self.n,
-            peers.len()
-        );
+        if peers.len() != self.n as usize {
+            return Err(ProtocolError::PeerCountMismatch {
+                expected: self.n,
+                got: peers.len(),
+            });
+        }
+
+        let session_id = self.network.session_id();
 
         // Round 0: generate VSS shares, encrypt, and broadcast
         let mut rng = OsRng;
         let (my_msg, own_share) = protocol::round0(
-            self.id, self.n, self.t, self.sk, &peers, self.beta, &mut rng,
+            self.id,
+            self.n,
+            self.t,
+            self.sk.inner(),
+            &peers,
+            self.beta,
+            &mut rng,
+            session_id,
         );
 
         // Save our VSS commitment before broadcasting
@@ -115,7 +129,10 @@ impl Node {
                     }
                 }
                 Err(e) => {
-                    panic!("Node {} failed to receive broadcast: {}", self.id, e);
+                    return Err(ProtocolError::BroadcastReceiveFailed {
+                        node: self.id,
+                        reason: e.to_string(),
+                    });
                 }
             }
         }
@@ -123,14 +140,14 @@ impl Node {
         // Round 1: verify, decrypt, aggregate
         protocol::round1(
             self.id,
-            self.sk,
+            self.sk.inner(),
             &peers,
             own_share,
             own_vss_commitment,
             &received,
             self.beta,
+            session_id,
         )
-        .unwrap_or_else(|e| panic!("Node {} Round 1 failed: {}", self.id, e))
     }
 
     /// Run the key refresh protocol (zero secret sharing).
@@ -138,24 +155,35 @@ impl Node {
     /// Per Section 5.2 of the Golden paper (IACR 2025/1924): rotates secret
     /// shares while keeping `sk` and `PK` unchanged. Each node uses `omega = 0`
     /// and the zero-sharing deltas update existing shares.
-    pub async fn run_refresh(mut self, existing_output: DkgOutput) -> DkgOutput {
+    pub async fn run_refresh(
+        mut self,
+        existing_output: DkgOutput,
+    ) -> Result<DkgOutput, ProtocolError> {
         // Wait for all peers to register
         self.network.wait_ready().await;
 
         // Get peer public keys
         let peers = self.network.get_peers().await;
-        assert_eq!(
-            peers.len(),
-            self.n as usize,
-            "Expected {} peers, got {}",
-            self.n,
-            peers.len()
-        );
+        if peers.len() != self.n as usize {
+            return Err(ProtocolError::PeerCountMismatch {
+                expected: self.n,
+                got: peers.len(),
+            });
+        }
+
+        let session_id = self.network.session_id();
 
         // Round 0 refresh: zero secret sharing
         let mut rng = OsRng;
         let (my_msg, own_refresh_delta) = protocol::round0_refresh(
-            self.id, self.n, self.t, self.sk, &peers, self.beta, &mut rng,
+            self.id,
+            self.n,
+            self.t,
+            self.sk.inner(),
+            &peers,
+            self.beta,
+            &mut rng,
+            session_id,
         );
 
         let own_vss_commitment = my_msg.vss_commitment.clone();
@@ -173,7 +201,10 @@ impl Node {
                     }
                 }
                 Err(e) => {
-                    panic!("Node {} failed to receive broadcast: {}", self.id, e);
+                    return Err(ProtocolError::BroadcastReceiveFailed {
+                        node: self.id,
+                        reason: e.to_string(),
+                    });
                 }
             }
         }
@@ -181,7 +212,7 @@ impl Node {
         // Round 1 refresh: verify zero-secret, decrypt deltas, update shares
         protocol::round1_refresh(
             self.id,
-            self.sk,
+            self.sk.inner(),
             &peers,
             own_refresh_delta,
             own_vss_commitment,
@@ -190,7 +221,7 @@ impl Node {
             existing_output.secret_share,
             existing_output.public_key,
             &existing_output.public_key_shares,
+            session_id,
         )
-        .unwrap_or_else(|e| panic!("Node {} refresh Round 1 failed: {}", self.id, e))
     }
 }

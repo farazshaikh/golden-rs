@@ -58,8 +58,8 @@ async fn main() {
         let net = network.clone();
         let b = beta;
         handles.push(tokio::spawn(async move {
-            let node = Node::new(i, n, t, b, net).await;
-            node.run().await
+            let node = Node::new(i, n, t, b, net).await.unwrap();
+            node.run().await.unwrap()
         }));
     }
 
@@ -186,8 +186,8 @@ async fn main() {
         let net = refresh_network.clone();
         let b = beta;
         refresh_handles.push(tokio::spawn(async move {
-            let node = Node::new(id, n, t, b, net).await;
-            node.run_refresh(output).await
+            let node = Node::new(id, n, t, b, net).await.unwrap();
+            node.run_refresh(output).await.unwrap()
         }));
     }
 
@@ -338,7 +338,9 @@ async fn main() {
         let share = output.secret_share;
         let old_id = *id;
         old_handles_1.push(tokio::spawn(async move {
-            let node = OldReshareNode::new(old_id, share, t_new_1, b, n_old_1, net).await;
+            let node = OldReshareNode::new(old_id, share, t_new_1, b, n_old_1, net)
+                .await
+                .unwrap();
             node.run().await;
         }));
     }
@@ -351,8 +353,10 @@ async fn main() {
         let pk = reshare1_original_pk;
         let old_pks = old_pk_shares_1.clone();
         new_handles_1.push(tokio::spawn(async move {
-            let node = NewReshareNode::new(new_id, b, pk, old_pks, t_old_1, n_old_1, net).await;
-            node.run().await
+            let node = NewReshareNode::new(new_id, b, pk, old_pks, t_old_1, n_old_1, net)
+                .await
+                .unwrap();
+            node.run().await.unwrap()
         }));
     }
 
@@ -486,7 +490,9 @@ async fn main() {
         let share = output.secret_share;
         let old_id = *id;
         old_handles_2.push(tokio::spawn(async move {
-            let node = OldReshareNode::new(old_id, share, t_new_2, b, n_old_2, net).await;
+            let node = OldReshareNode::new(old_id, share, t_new_2, b, n_old_2, net)
+                .await
+                .unwrap();
             node.run().await;
         }));
     }
@@ -499,8 +505,10 @@ async fn main() {
         let pk = reshare1_original_pk;
         let old_pks = old_pk_shares_2.clone();
         new_handles_2.push(tokio::spawn(async move {
-            let node = NewReshareNode::new(new_id, b, pk, old_pks, t_old_2, n_old_2, net).await;
-            node.run().await
+            let node = NewReshareNode::new(new_id, b, pk, old_pks, t_old_2, n_old_2, net)
+                .await
+                .unwrap();
+            node.run().await.unwrap()
         }));
     }
 

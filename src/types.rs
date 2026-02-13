@@ -18,6 +18,44 @@ pub type Scalar = Fr;
 /// BLS12-381 G1 projective point.
 pub type G1 = G1Projective;
 
+/// A scalar value that is zeroed from memory on drop.
+///
+/// SECURITY: Wraps `Fr` (BLS12-381 scalar field) for secret keys,
+/// polynomial coefficients, and other sensitive values. The internal
+/// representation is overwritten with zeros when the value goes out of scope.
+pub struct SecretScalar(pub Scalar);
+
+impl SecretScalar {
+    /// Create a new secret scalar.
+    pub fn new(val: Scalar) -> Self {
+        Self(val)
+    }
+
+    /// Get the inner scalar value.
+    pub fn inner(&self) -> Scalar {
+        self.0
+    }
+}
+
+impl std::ops::Deref for SecretScalar {
+    type Target = Scalar;
+    fn deref(&self) -> &Scalar {
+        &self.0
+    }
+}
+
+impl Drop for SecretScalar {
+    fn drop(&mut self) {
+        // Zero the scalar's internal representation (BigInt<4> = [u64; 4])
+        // arkworks Fr is repr'd as Montgomery form in [u64; 4]
+        unsafe {
+            let ptr = &mut self.0 as *mut Scalar as *mut u8;
+            let len = std::mem::size_of::<Scalar>();
+            std::ptr::write_bytes(ptr, 0, len);
+        }
+    }
+}
+
 /// Helper: serialize an arkworks type to bytes via CanonicalSerialize (compressed).
 fn ark_to_bytes<T: CanonicalSerialize>(val: &T) -> Vec<u8> {
     let mut buf = Vec::new();
@@ -76,6 +114,8 @@ impl BorshDeserialize for Ciphertext {
 /// demonstrating correct pad derivation.
 #[derive(Clone, Debug)]
 pub struct Round0Msg {
+    /// Session ID for replay protection (must match across all messages in a session).
+    pub session_id: [u8; 32],
     /// Sender node ID.
     pub from: NodeId,
     /// Random message used for eVRF evaluation (`msg_i` in the paper).
@@ -92,6 +132,7 @@ pub struct Round0Msg {
 
 impl BorshSerialize for Round0Msg {
     fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        BorshSerialize::serialize(&self.session_id, writer)?;
         BorshSerialize::serialize(&self.from, writer)?;
         BorshSerialize::serialize(&self.random_msg, writer)?;
         // vss_commitment: Vec<G1Affine> -- serialize each element as bytes
@@ -127,6 +168,7 @@ impl BorshSerialize for Round0Msg {
 
 impl BorshDeserialize for Round0Msg {
     fn deserialize_reader<R: Read>(reader: &mut R) -> io::Result<Self> {
+        let session_id: [u8; 32] = BorshDeserialize::deserialize_reader(reader)?;
         let from: NodeId = BorshDeserialize::deserialize_reader(reader)?;
         let random_msg: [u8; 32] = BorshDeserialize::deserialize_reader(reader)?;
         let commitment_bytes: Vec<Vec<u8>> = BorshDeserialize::deserialize_reader(reader)?;
@@ -154,6 +196,7 @@ impl BorshDeserialize for Round0Msg {
             None
         };
         Ok(Round0Msg {
+            session_id,
             from,
             random_msg,
             vss_commitment,
@@ -171,6 +214,8 @@ impl BorshDeserialize for Round0Msg {
 /// instead).
 #[derive(Clone, Debug)]
 pub struct ReshareMsg {
+    /// Session ID for replay protection.
+    pub session_id: [u8; 32],
     /// Sender node ID (old-group member).
     pub from: NodeId,
     /// Random message used for eVRF pad derivation.
@@ -242,6 +287,7 @@ mod tests {
         );
 
         let msg = Round0Msg {
+            session_id: [0u8; 32],
             from: 1,
             random_msg: [42u8; 32],
             vss_commitment: vec![

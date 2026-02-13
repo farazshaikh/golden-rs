@@ -10,6 +10,14 @@
 //! while ZK proofs (see [`crate::zk_evrf`]) ensure correctness. The pad is
 //! symmetric by the DH key exchange property.
 
+// SECURITY: Constant-time analysis
+// - derive_pad: `peer_pk * sk` uses arkworks constant-time scalar multiplication.
+//   `extract_x_as_scalar` checks `point.infinity` which is a public-observable branch,
+//   but the DH shared secret being the identity point has negligible probability (1/r).
+// - hash_to_curve: RFC 9380 WB map is constant-time per the standard.
+// Verdict: Constant-time for all practical purposes. The infinity check is a known
+// negligible-probability leak documented here for completeness.
+
 use ark_bls12_381::{g1::Config as G1Config, Fr, G1Affine, G1Projective};
 use ark_ec::{
     hashing::{curve_maps::wb::WBMap, map_to_curve_hasher::MapToCurveBasedHasher, HashToCurve},

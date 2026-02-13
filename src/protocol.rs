@@ -15,7 +15,7 @@ use ark_std::rand::Rng;
 
 use crate::evrf;
 use crate::shamir::Polynomial;
-use crate::types::{Ciphertext, DkgOutput, NodeId, Round0Msg, Scalar};
+use crate::types::{Ciphertext, DkgOutput, NodeId, Round0Msg, Scalar, SecretScalar};
 use crate::vss;
 
 /// Execute Round 0 of the Golden DKG protocol for a single node.
@@ -29,6 +29,7 @@ use crate::vss;
 /// >  9-10. Broadcast"
 ///
 /// Returns the broadcast message and this node's own Shamir share (`st_i`).
+#[allow(clippy::too_many_arguments)]
 pub fn round0(
     id: NodeId,
     n: u32,
@@ -37,12 +38,13 @@ pub fn round0(
     peers: &HashMap<NodeId, G1Affine>,
     beta: Scalar,
     rng: &mut impl Rng,
+    session_id: [u8; 32],
 ) -> (Round0Msg, Scalar) {
     // Sample random secret omega_i
-    let omega = Scalar::rand(rng);
+    let omega = SecretScalar::new(Scalar::rand(rng));
 
     // Build polynomial f_i of degree t-1, f_i(0) = omega
-    let poly = Polynomial::new_random(omega, (t - 1) as usize, rng);
+    let poly = Polynomial::new_random(omega.inner(), (t - 1) as usize, rng);
 
     // Feldman VSS commitment: C_k = g^{a_k}
     let vss_commitment = vss::commit(&poly);
@@ -96,6 +98,7 @@ pub fn round0(
         crate::zk_evrf::prove_evrf_batch(sk, my_pk, &peers_for_proof, &pads_for_proof, beta).ok();
 
     let msg = Round0Msg {
+        session_id,
         from: id,
         random_msg,
         vss_commitment,
@@ -129,6 +132,32 @@ pub enum ProtocolError {
         /// The node that violated the zero-secret invariant.
         sender: NodeId,
     },
+    /// The number of registered peers did not match the expected count.
+    PeerCountMismatch {
+        /// Expected peer count.
+        expected: u32,
+        /// Actual peer count.
+        got: usize,
+    },
+    /// Failed to receive a broadcast message from the network.
+    BroadcastReceiveFailed {
+        /// The node that failed to receive.
+        node: NodeId,
+        /// Description of the receive failure.
+        reason: String,
+    },
+    /// PKI registration failed (invalid proof of knowledge).
+    RegistrationFailed {
+        /// The node whose registration failed.
+        node: NodeId,
+        /// Description of the registration failure.
+        reason: String,
+    },
+    /// Session ID in a received message does not match the expected session.
+    SessionMismatch {
+        /// The node that sent the mismatched session ID.
+        sender: NodeId,
+    },
 }
 
 impl std::fmt::Display for ProtocolError {
@@ -156,6 +185,7 @@ impl std::error::Error for ProtocolError {}
 /// > "PK = product A_{k,0}"
 ///
 /// Verifies received broadcasts, decrypts shares, and produces the DKG output.
+#[allow(clippy::too_many_arguments)]
 pub fn round1(
     id: NodeId,
     sk: Scalar,
@@ -164,8 +194,16 @@ pub fn round1(
     own_vss_commitment: Vec<G1Affine>,
     received: &HashMap<NodeId, Round0Msg>,
     beta: Scalar,
+    session_id: [u8; 32],
 ) -> Result<DkgOutput, ProtocolError> {
     let n = peers.len() as u32;
+
+    // === SESSION ID VERIFICATION ===
+    for (&sender_id, msg) in received {
+        if msg.session_id != session_id {
+            return Err(ProtocolError::SessionMismatch { sender: sender_id });
+        }
+    }
 
     // === VERIFICATION ===
     // For each received message from sender j, verify ciphertexts against VSS commitment
@@ -191,11 +229,21 @@ pub fn round1(
         // Verify eVRF proofs: prefer batch proof (Section 5.3), fall back to per-peer
         let sender_pk = peers[&sender_id];
         if let Some(ref batch_proof) = msg.batch_evrf_proof {
-            // Batch verification: single proof covers all peers
-            match crate::zk_evrf::verify_evrf(
+            // Build peer list and R commitment list from the message for batch verification
+            let peers_for_verify: Vec<(crate::types::NodeId, G1Affine)> = msg
+                .ciphertexts
+                .keys()
+                .map(|&pid| (pid, peers[&pid]))
+                .collect();
+            let pad_commitments: Vec<(crate::types::NodeId, G1Affine)> = msg
+                .ciphertexts
+                .iter()
+                .map(|(&pid, ct)| (pid, ct.r_commitment))
+                .collect();
+            match crate::zk_evrf::verify_evrf_batch(
                 sender_pk,
-                G1Affine::default(),
-                G1Affine::default(),
+                &peers_for_verify,
+                &pad_commitments,
                 beta,
                 batch_proof,
             ) {
@@ -288,6 +336,7 @@ pub fn round1(
 /// Identical to [`round0`] but with `omega = 0`. The polynomial `f_i` has
 /// `f_i(0) = 0`, so `A_{i,0} = g^0 = identity`. The node's existing share
 /// is NOT modified here -- the delta is applied in [`round1_refresh`].
+#[allow(clippy::too_many_arguments)]
 pub fn round0_refresh(
     id: NodeId,
     n: u32,
@@ -296,12 +345,13 @@ pub fn round0_refresh(
     peers: &HashMap<NodeId, G1Affine>,
     beta: Scalar,
     rng: &mut impl Rng,
+    session_id: [u8; 32],
 ) -> (Round0Msg, Scalar) {
     // Zero secret: omega = 0 (paper Section 5.2)
-    let omega = Scalar::ZERO;
+    let omega = SecretScalar::new(Scalar::ZERO);
 
     // Build polynomial f_i of degree t-1, f_i(0) = 0
-    let poly = Polynomial::new_random(omega, (t - 1) as usize, rng);
+    let poly = Polynomial::new_random(omega.inner(), (t - 1) as usize, rng);
 
     // Feldman VSS commitment: C_k = g^{a_k}
     // vss_commitment[0] = g^0 = identity (the point at infinity)
@@ -355,6 +405,7 @@ pub fn round0_refresh(
         crate::zk_evrf::prove_evrf_batch(sk, my_pk, &peers_for_proof, &pads_for_proof, beta).ok();
 
     let msg = Round0Msg {
+        session_id,
         from: id,
         random_msg,
         vss_commitment,
@@ -386,8 +437,16 @@ pub fn round1_refresh(
     existing_share: Scalar,
     original_pk: G1Affine,
     original_pk_shares: &HashMap<NodeId, G1Affine>,
+    session_id: [u8; 32],
 ) -> Result<DkgOutput, ProtocolError> {
     let n = peers.len() as u32;
+
+    // === SESSION ID VERIFICATION ===
+    for (&sender_id, msg) in received {
+        if msg.session_id != session_id {
+            return Err(ProtocolError::SessionMismatch { sender: sender_id });
+        }
+    }
 
     // === ZERO-SECRET VERIFICATION (paper Section 5.2) ===
     // Check own commitment: A_{i,0} must be identity
@@ -421,10 +480,21 @@ pub fn round1_refresh(
         // Verify eVRF proofs: prefer batch proof (Section 5.3), fall back to per-peer
         let sender_pk = peers[&sender_id];
         if let Some(ref batch_proof) = msg.batch_evrf_proof {
-            match crate::zk_evrf::verify_evrf(
+            // Build peer list and R commitment list from the message for batch verification
+            let peers_for_verify: Vec<(crate::types::NodeId, G1Affine)> = msg
+                .ciphertexts
+                .keys()
+                .map(|&pid| (pid, peers[&pid]))
+                .collect();
+            let pad_commitments: Vec<(crate::types::NodeId, G1Affine)> = msg
+                .ciphertexts
+                .iter()
+                .map(|(&pid, ct)| (pid, ct.r_commitment))
+                .collect();
+            match crate::zk_evrf::verify_evrf_batch(
                 sender_pk,
-                G1Affine::default(),
-                G1Affine::default(),
+                &peers_for_verify,
+                &pad_commitments,
                 beta,
                 batch_proof,
             ) {
@@ -536,9 +606,10 @@ mod malicious_tests {
         }
 
         // Run round0 for each node
+        let session_id = [0u8; 32];
         let mut results = Vec::new();
         for i in 1..=n {
-            let (msg, own_share) = round0(i, n, t, sks[&i], &peers, beta, &mut rng);
+            let (msg, own_share) = round0(i, n, t, sks[&i], &peers, beta, &mut rng, session_id);
             results.push((i, msg, own_share));
         }
 
@@ -577,7 +648,7 @@ mod malicious_tests {
         let own_vss = round0_results[1].1.vss_commitment.clone();
 
         let result = round1(
-            node2_id, node2_sk, &peers, own_share, own_vss, &received, beta,
+            node2_id, node2_sk, &peers, own_share, own_vss, &received, beta, [0u8; 32],
         );
 
         // Should fail with CiphertextVerificationFailed
@@ -617,6 +688,7 @@ mod malicious_tests {
             round0_results[1].1.vss_commitment.clone(),
             &received,
             beta,
+            [0u8; 32],
         );
 
         assert!(result.is_err(), "Tampered R commitment should be detected");
@@ -651,6 +723,7 @@ mod malicious_tests {
             round0_results[1].1.vss_commitment.clone(),
             &received,
             beta,
+            [0u8; 32],
         );
 
         // VSS commitment mismatch causes g^z != R * X check to fail
@@ -734,6 +807,7 @@ mod malicious_tests {
             round0_results[1].1.vss_commitment.clone(),
             &received,
             beta,
+            [0u8; 32],
         );
 
         // The tampered ciphertext for recipient 3 should be caught by node 2's verification
@@ -778,13 +852,15 @@ mod malicious_refresh_tests {
             peers.insert(i, pk);
         }
 
+        let session_id = [0u8; 32];
+
         // Node 1 is malicious: uses regular round0 (non-zero omega) instead of round0_refresh
-        let (malicious_msg, _) = round0(1, n, t, sks[&1], &peers, beta, &mut rng);
+        let (malicious_msg, _) = round0(1, n, t, sks[&1], &peers, beta, &mut rng, session_id);
         // malicious_msg.vss_commitment[0] != identity (it's g^omega for random omega)
 
         // Nodes 2 and 3 do honest refresh
-        let (msg2, delta2) = round0_refresh(2, n, t, sks[&2], &peers, beta, &mut rng);
-        let (_msg3, _delta3) = round0_refresh(3, n, t, sks[&3], &peers, beta, &mut rng);
+        let (msg2, delta2) = round0_refresh(2, n, t, sks[&2], &peers, beta, &mut rng, session_id);
+        let (_msg3, _delta3) = round0_refresh(3, n, t, sks[&3], &peers, beta, &mut rng, session_id);
 
         // Node 2 tries round1_refresh with node 1's malicious message
         let mut received: HashMap<NodeId, Round0Msg> = HashMap::new();
@@ -813,6 +889,7 @@ mod malicious_refresh_tests {
             existing_share,
             original_pk,
             &original_pk_shares,
+            session_id,
         );
 
         assert!(
