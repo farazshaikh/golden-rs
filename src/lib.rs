@@ -15,15 +15,13 @@
 //! - [`schnorr_pok`] -- PKI proof of knowledge (Appendix F)
 //! - [`protocol`] -- DKG and refresh protocol rounds (Section 5, Figure 4)
 //! - [`reshare`] -- Membership-change resharing
-//! - [`bulletproofs`] -- Inner Product Argument proof system (Section 3.4)
-//! - [`zk_evrf`] -- R_eVRF circuit and proof generation (Section 4.3)
+//! - [`zk_evrf`] -- R_eVRF circuit and ark-spartan NIZK proof system (Section 4.3, [15])
 //! - [`network`] -- Simulated broadcast channel
 //! - [`node`] -- DKG participant abstraction
 //! - [`types`] -- Shared data types with Borsh serialization
 
 #![warn(missing_docs)]
 
-pub mod bulletproofs;
 pub mod evrf;
 pub mod network;
 pub mod node;
