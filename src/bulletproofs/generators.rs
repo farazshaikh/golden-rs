@@ -42,7 +42,7 @@ impl BulletproofGens {
 fn hash_to_generator(domain: &[u8], index: u64) -> G1Affine {
     let mut hasher = Sha256::new();
     hasher.update(domain);
-    hasher.update(&index.to_le_bytes());
+    hasher.update(index.to_le_bytes());
     let hash = hasher.finalize();
     let scalar = Fr::from_le_bytes_mod_order(&hash);
     (G1Affine::generator() * scalar).into_affine()

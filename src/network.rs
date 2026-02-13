@@ -4,6 +4,7 @@ use std::sync::Arc;
 use ark_bls12_381::G1Affine;
 use tokio::sync::{broadcast, Barrier, RwLock};
 
+use crate::schnorr_pok::{self, SchnorrPoK};
 use crate::types::{NodeId, Round0Msg};
 
 /// Simulated broadcast channel with peer discovery.
@@ -32,12 +33,25 @@ impl Network {
         }
     }
 
-    /// Register a node's identity public key and get a broadcast receiver.
-    /// Called once per node during initialization.
-    pub async fn register(&self, id: NodeId, pk: G1Affine) -> broadcast::Receiver<Round0Msg> {
+    /// Register a node's identity public key with proof of knowledge.
+    /// SECURITY: Rejects registration if the Schnorr PoK is invalid (prevents rogue-key attacks).
+    pub async fn register(
+        &self,
+        id: NodeId,
+        pk: G1Affine,
+        pok: &SchnorrPoK,
+    ) -> Result<broadcast::Receiver<Round0Msg>, String> {
+        // Verify proof of knowledge before accepting
+        if !schnorr_pok::verify(pk, pok) {
+            return Err(format!(
+                "Node {} failed proof of knowledge for PK registration",
+                id
+            ));
+        }
+
         let mut peers = self.peers.write().await;
         peers.insert(id, pk);
-        self.sender.subscribe()
+        Ok(self.sender.subscribe())
     }
 
     /// Wait for all nodes to finish registration.
@@ -61,21 +75,29 @@ impl Network {
 mod tests {
     use super::*;
     use ark_bls12_381::Fr;
-    use ark_ec::AffineRepr;
+    use ark_ec::{AffineRepr, CurveGroup};
     use ark_ff::UniformRand;
+
+    /// Helper: generate a keypair and PoK proof for test registration.
+    fn gen_keypair_with_pok(rng: &mut impl ark_std::rand::Rng) -> (Fr, G1Affine, SchnorrPoK) {
+        let sk = Fr::rand(rng);
+        let pk = (G1Affine::generator() * sk).into_affine();
+        let pok = schnorr_pok::prove(sk, pk, rng);
+        (sk, pk, pok)
+    }
 
     #[tokio::test]
     async fn test_register_and_discover_peers() {
         let network = Network::new(3);
 
         let mut rng = ark_std::test_rng();
-        let pk1: G1Affine = (G1Affine::generator() * Fr::rand(&mut rng)).into();
-        let pk2: G1Affine = (G1Affine::generator() * Fr::rand(&mut rng)).into();
-        let pk3: G1Affine = (G1Affine::generator() * Fr::rand(&mut rng)).into();
+        let (_, pk1, pok1) = gen_keypair_with_pok(&mut rng);
+        let (_, pk2, pok2) = gen_keypair_with_pok(&mut rng);
+        let (_, pk3, pok3) = gen_keypair_with_pok(&mut rng);
 
-        let _rx1 = network.register(1, pk1).await;
-        let _rx2 = network.register(2, pk2).await;
-        let _rx3 = network.register(3, pk3).await;
+        let _rx1 = network.register(1, pk1, &pok1).await.unwrap();
+        let _rx2 = network.register(2, pk2, &pok2).await.unwrap();
+        let _rx3 = network.register(3, pk3, &pok3).await.unwrap();
 
         let peers = network.get_peers().await;
         assert_eq!(peers.len(), 3);
@@ -85,15 +107,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_register_rejects_bad_pok() {
+        let network = Network::new(2);
+        let mut rng = ark_std::test_rng();
+
+        let sk = Fr::rand(&mut rng);
+        let pk = (G1Affine::generator() * sk).into_affine();
+
+        // Prove with a wrong secret key
+        let wrong_sk = Fr::rand(&mut rng);
+        let bad_pok = schnorr_pok::prove(wrong_sk, pk, &mut rng);
+
+        let result = network.register(1, pk, &bad_pok).await;
+        assert!(result.is_err(), "Registration with bad PoK should fail");
+    }
+
+    #[tokio::test]
     async fn test_broadcast_delivery() {
         let network = Network::new(3);
         let mut rng = ark_std::test_rng();
 
-        let pk1: G1Affine = (G1Affine::generator() * Fr::rand(&mut rng)).into();
-        let pk2: G1Affine = (G1Affine::generator() * Fr::rand(&mut rng)).into();
+        let (_, pk1, pok1) = gen_keypair_with_pok(&mut rng);
+        let (_, pk2, pok2) = gen_keypair_with_pok(&mut rng);
 
-        let mut rx1 = network.register(1, pk1).await;
-        let mut rx2 = network.register(2, pk2).await;
+        let mut rx1 = network.register(1, pk1, &pok1).await.unwrap();
+        let mut rx2 = network.register(2, pk2, &pok2).await.unwrap();
 
         let msg = Round0Msg {
             from: 1,
@@ -119,20 +157,20 @@ mod tests {
         let network = Network::new(2);
         let mut rng = ark_std::test_rng();
 
-        let pk1: G1Affine = (G1Affine::generator() * Fr::rand(&mut rng)).into();
-        let pk2: G1Affine = (G1Affine::generator() * Fr::rand(&mut rng)).into();
+        let (_, pk1, pok1) = gen_keypair_with_pok(&mut rng);
+        let (_, pk2, pok2) = gen_keypair_with_pok(&mut rng);
 
         let net1 = network.clone();
         let net2 = network.clone();
 
         let h1 = tokio::spawn(async move {
-            let _rx = net1.register(1, pk1).await;
+            let _rx = net1.register(1, pk1, &pok1).await.unwrap();
             net1.wait_ready().await;
             true
         });
 
         let h2 = tokio::spawn(async move {
-            let _rx = net2.register(2, pk2).await;
+            let _rx = net2.register(2, pk2, &pok2).await.unwrap();
             net2.wait_ready().await;
             true
         });

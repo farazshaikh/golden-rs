@@ -3,10 +3,12 @@ use std::collections::HashMap;
 use ark_bls12_381::G1Affine;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::UniformRand;
+use rand::rngs::OsRng;
 use tokio::sync::broadcast;
 
 use crate::reshare;
 use crate::reshare_network::ReshareNetwork;
+use crate::schnorr_pok;
 use crate::types::{DkgOutput, NodeId, ReshareMsg, Scalar};
 
 /// An old group member participating in resharing.
@@ -14,12 +16,12 @@ use crate::types::{DkgOutput, NodeId, ReshareMsg, Scalar};
 pub struct OldReshareNode {
     pub id: NodeId,
     sk_identity: Scalar,
-    pk_identity: G1Affine,
+    _pk_identity: G1Affine,
     old_share: Scalar,
     t_new: u32,
     beta: Scalar,
     network: ReshareNetwork,
-    n_old: u32,
+    _n_old: u32,
     _receiver: broadcast::Receiver<ReshareMsg>,
 }
 
@@ -32,22 +34,23 @@ impl OldReshareNode {
         n_old: u32,
         network: ReshareNetwork,
     ) -> Self {
-        let (sk_identity, pk_identity) = {
-            let mut rng = rand::thread_rng();
-            let sk = Scalar::rand(&mut rng);
-            let pk = (G1Affine::generator() * sk).into_affine();
-            (sk, pk)
-        };
-        let receiver = network.register_old(id, pk_identity).await;
+        let mut rng = OsRng;
+        let sk = Scalar::rand(&mut rng);
+        let pk = (G1Affine::generator() * sk).into_affine();
+        let pok = schnorr_pok::prove(sk, pk, &mut rng);
+        let receiver = network
+            .register_old(id, pk, &pok)
+            .await
+            .expect("Old node PKI registration failed: invalid proof of knowledge");
         Self {
             id,
-            sk_identity,
-            pk_identity,
+            sk_identity: sk,
+            _pk_identity: pk,
             old_share,
             t_new,
             beta,
             network,
-            n_old,
+            _n_old: n_old,
             _receiver: receiver,
         }
     }
@@ -58,18 +61,16 @@ impl OldReshareNode {
         self.network.wait_ready().await;
         let new_members = self.network.get_new_members().await;
 
-        let msg = {
-            let mut rng = rand::thread_rng();
-            reshare::reshare_deal(
-                self.id,
-                self.old_share,
-                self.sk_identity,
-                &new_members,
-                self.t_new,
-                self.beta,
-                &mut rng,
-            )
-        };
+        let mut rng = OsRng;
+        let msg = reshare::reshare_deal(
+            self.id,
+            self.old_share,
+            self.sk_identity,
+            &new_members,
+            self.t_new,
+            self.beta,
+            &mut rng,
+        );
 
         self.network.broadcast(msg);
     }
@@ -80,7 +81,7 @@ impl OldReshareNode {
 pub struct NewReshareNode {
     pub id: NodeId,
     sk_identity: Scalar,
-    pk_identity: G1Affine,
+    _pk_identity: G1Affine,
     beta: Scalar,
     original_pk: G1Affine,
     old_pk_shares: HashMap<NodeId, G1Affine>,
@@ -100,17 +101,18 @@ impl NewReshareNode {
         n_old: u32,
         network: ReshareNetwork,
     ) -> Self {
-        let (sk_identity, pk_identity) = {
-            let mut rng = rand::thread_rng();
-            let sk = Scalar::rand(&mut rng);
-            let pk = (G1Affine::generator() * sk).into_affine();
-            (sk, pk)
-        };
-        let receiver = network.register_new(id, pk_identity).await;
+        let mut rng = OsRng;
+        let sk = Scalar::rand(&mut rng);
+        let pk = (G1Affine::generator() * sk).into_affine();
+        let pok = schnorr_pok::prove(sk, pk, &mut rng);
+        let receiver = network
+            .register_new(id, pk, &pok)
+            .await
+            .expect("New node PKI registration failed: invalid proof of knowledge");
         Self {
             id,
-            sk_identity,
-            pk_identity,
+            sk_identity: sk,
+            _pk_identity: pk,
             beta,
             original_pk,
             old_pk_shares,

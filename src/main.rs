@@ -4,6 +4,7 @@ use std::time::Instant;
 use ark_bls12_381::G1Affine;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::UniformRand;
+use rand::rngs::OsRng;
 
 use goldenkeysharing::network::Network;
 use goldenkeysharing::node::Node;
@@ -43,10 +44,8 @@ async fn main() {
     println!();
 
     // Shared public parameter beta (same for all nodes)
-    let beta = {
-        let mut rng = rand::thread_rng();
-        Scalar::rand(&mut rng)
-    };
+    let mut rng = OsRng;
+    let beta = Scalar::rand(&mut rng);
 
     // Create network
     let network = Network::new(n);

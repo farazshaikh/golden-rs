@@ -1,6 +1,6 @@
 use ark_bls12_381::Fr;
 use ark_ec::AdditiveGroup;
-use ark_ff::{BigInteger, Field, One, PrimeField, Zero};
+use ark_ff::{BigInteger, One, PrimeField, Zero};
 
 use super::nonnative::{ConstraintSystem, VarIndex};
 
@@ -56,8 +56,8 @@ pub fn bit_decompose(cs: &mut ConstraintSystem, value: Fr, lambda: usize) -> Bit
     // R1CS form: (sum 2^i * k_i) * 1 = k
     let mut power_of_two = Fr::one();
     let mut recomp_terms = Vec::new();
-    for i in 0..=lambda {
-        recomp_terms.push((bits[i], power_of_two));
+    for &bit_var in &bits {
+        recomp_terms.push((bit_var, power_of_two));
         power_of_two.double_in_place();
     }
 

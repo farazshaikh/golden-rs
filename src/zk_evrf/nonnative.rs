@@ -27,6 +27,12 @@ pub struct ConstraintSystem {
     pub witness: Vec<Fr>,
 }
 
+impl Default for ConstraintSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConstraintSystem {
     /// Create a new constraint system. Variable 0 is the constant 1.
     pub fn new() -> Self {

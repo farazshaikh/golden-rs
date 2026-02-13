@@ -324,6 +324,7 @@ pub fn round0_refresh(
 ///
 /// The output secret_share = existing_share + sum of zero-sharing deltas.
 /// The output public_key is carried forward from the original DKG (unchanged).
+#[allow(clippy::too_many_arguments)]
 pub fn round1_refresh(
     id: NodeId,
     sk: Scalar,

@@ -6,6 +6,7 @@ pub mod protocol;
 pub mod reshare;
 pub mod reshare_network;
 pub mod reshare_node;
+pub mod schnorr_pok;
 pub mod shamir;
 pub mod types;
 pub mod vss;

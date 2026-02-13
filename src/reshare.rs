@@ -78,6 +78,7 @@ pub fn reshare_deal(
 ///   new_sk_j = sum_{i in S} g_i(j) * L_i(0)
 /// where S is the set of old members used and L_i(0) are Lagrange coefficients
 /// for the old members' indices.
+#[allow(clippy::too_many_arguments)]
 pub fn reshare_receive(
     new_id: NodeId,
     new_sk_identity: Scalar,
@@ -353,10 +354,7 @@ mod malicious_tests {
             beta,
             &mut rng,
         );
-        msg2.ciphertexts
-            .get_mut(&10)
-            .unwrap()
-            .encrypted_share += Scalar::from(1u64);
+        msg2.ciphertexts.get_mut(&10).unwrap().encrypted_share += Scalar::from(1u64);
 
         let mut received = HashMap::new();
         received.insert(1, msg1);

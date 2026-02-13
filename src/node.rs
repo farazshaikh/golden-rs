@@ -3,10 +3,12 @@ use std::collections::HashMap;
 use ark_bls12_381::G1Affine;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::UniformRand;
+use rand::rngs::OsRng;
 use tokio::sync::broadcast;
 
 use crate::network::Network;
 use crate::protocol;
+use crate::schnorr_pok;
 use crate::types::{DkgOutput, NodeId, Round0Msg, Scalar};
 
 /// A participant in the Golden DKG protocol.
@@ -34,15 +36,15 @@ impl Node {
     ///
     /// Generates an identity keypair and registers the public key.
     pub async fn new(id: NodeId, n: u32, t: u32, beta: Scalar, network: Network) -> Self {
-        // Scope the rng so it's dropped before the await (ThreadRng is !Send)
-        let (sk, pk) = {
-            let mut rng = rand::thread_rng();
-            let sk = Scalar::rand(&mut rng);
-            let pk = (G1Affine::generator() * sk).into_affine();
-            (sk, pk)
-        };
+        let mut rng = OsRng;
+        let sk = Scalar::rand(&mut rng);
+        let pk = (G1Affine::generator() * sk).into_affine();
+        let pok = schnorr_pok::prove(sk, pk, &mut rng);
 
-        let receiver = network.register(id, pk).await;
+        let receiver = network
+            .register(id, pk, &pok)
+            .await
+            .expect("PKI registration failed: invalid proof of knowledge");
 
         Self {
             id,
@@ -78,13 +80,10 @@ impl Node {
         );
 
         // Round 0: generate VSS shares, encrypt, and broadcast
-        // Scope the rng so it's dropped before the recv awaits below (ThreadRng is !Send)
-        let (my_msg, own_share) = {
-            let mut rng = rand::thread_rng();
-            protocol::round0(
-                self.id, self.n, self.t, self.sk, &peers, self.beta, &mut rng,
-            )
-        };
+        let mut rng = OsRng;
+        let (my_msg, own_share) = protocol::round0(
+            self.id, self.n, self.t, self.sk, &peers, self.beta, &mut rng,
+        );
 
         // Save our VSS commitment before broadcasting
         let own_vss_commitment = my_msg.vss_commitment.clone();
@@ -139,12 +138,10 @@ impl Node {
         );
 
         // Round 0 refresh: zero secret sharing
-        let (my_msg, own_refresh_delta) = {
-            let mut rng = rand::thread_rng();
-            protocol::round0_refresh(
-                self.id, self.n, self.t, self.sk, &peers, self.beta, &mut rng,
-            )
-        };
+        let mut rng = OsRng;
+        let (my_msg, own_refresh_delta) = protocol::round0_refresh(
+            self.id, self.n, self.t, self.sk, &peers, self.beta, &mut rng,
+        );
 
         let own_vss_commitment = my_msg.vss_commitment.clone();
 

@@ -1,5 +1,5 @@
 use ark_bls12_381::{Fq, Fr, G1Affine};
-use ark_ec::{AffineRepr, CurveGroup};
+use ark_ec::CurveGroup;
 use ark_ff::Zero;
 use ark_r1cs_std::{fields::emulated_fp::EmulatedFpVar, fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
@@ -268,6 +268,7 @@ impl ConstraintSynthesizer<Fr> for BatchEVRFCircuit {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ark_ec::AffineRepr;
     use crate::zk_evrf::adapter::capture_circuit;
 
     #[test]

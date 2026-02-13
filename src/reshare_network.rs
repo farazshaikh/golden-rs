@@ -4,6 +4,7 @@ use std::sync::Arc;
 use ark_bls12_381::G1Affine;
 use tokio::sync::{broadcast, Barrier, RwLock};
 
+use crate::schnorr_pok::{self, SchnorrPoK};
 use crate::types::{NodeId, ReshareMsg};
 
 /// Network for resharing protocol with two groups: old members broadcast, new members receive.
@@ -32,18 +33,36 @@ impl ReshareNetwork {
         }
     }
 
-    /// Register an old group member and get a broadcast receiver.
-    pub async fn register_old(&self, id: NodeId, pk: G1Affine) -> broadcast::Receiver<ReshareMsg> {
+    /// Register an old group member with proof of knowledge.
+    /// SECURITY: Rejects registration if the Schnorr PoK is invalid (prevents rogue-key attacks).
+    pub async fn register_old(
+        &self,
+        id: NodeId,
+        pk: G1Affine,
+        pok: &SchnorrPoK,
+    ) -> Result<broadcast::Receiver<ReshareMsg>, String> {
+        if !schnorr_pok::verify(pk, pok) {
+            return Err(format!("Old node {} failed PoK", id));
+        }
         let mut old = self.old_members.write().await;
         old.insert(id, pk);
-        self.sender.subscribe()
+        Ok(self.sender.subscribe())
     }
 
-    /// Register a new group member and get a broadcast receiver.
-    pub async fn register_new(&self, id: NodeId, pk: G1Affine) -> broadcast::Receiver<ReshareMsg> {
+    /// Register a new group member with proof of knowledge.
+    /// SECURITY: Rejects registration if the Schnorr PoK is invalid (prevents rogue-key attacks).
+    pub async fn register_new(
+        &self,
+        id: NodeId,
+        pk: G1Affine,
+        pok: &SchnorrPoK,
+    ) -> Result<broadcast::Receiver<ReshareMsg>, String> {
+        if !schnorr_pok::verify(pk, pok) {
+            return Err(format!("New node {} failed PoK", id));
+        }
         let mut new_m = self.new_members.write().await;
         new_m.insert(id, pk);
-        self.sender.subscribe()
+        Ok(self.sender.subscribe())
     }
 
     /// Wait for all participants to register.

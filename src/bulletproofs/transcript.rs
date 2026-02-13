@@ -45,7 +45,7 @@ impl Transcript {
         let hash = self.hasher.finalize_reset();
         // Reseed the hasher with the hash output for domain separation
         self.hasher.update(b"golden-bulletproofs-transcript");
-        self.hasher.update(&hash);
+        self.hasher.update(hash);
         Fr::from_le_bytes_mod_order(&hash)
     }
 }

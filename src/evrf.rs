@@ -1,7 +1,10 @@
-use ark_bls12_381::{Fr, G1Affine};
-use ark_ec::{AdditiveGroup, AffineRepr, CurveGroup};
-use ark_ff::{BigInteger, PrimeField};
-use sha2::{Digest, Sha256};
+use ark_bls12_381::{g1::Config as G1Config, Fr, G1Affine, G1Projective};
+use ark_ec::{
+    hashing::{curve_maps::wb::WBMap, map_to_curve_hasher::MapToCurveBasedHasher, HashToCurve},
+    AdditiveGroup, AffineRepr, CurveGroup,
+};
+use ark_ff::{field_hashers::DefaultFieldHasher, BigInteger, PrimeField};
+use sha2::Sha256;
 
 use crate::types::Scalar;
 
@@ -17,22 +20,19 @@ fn extract_x_as_scalar(point: G1Affine) -> Scalar {
     Fr::from_le_bytes_mod_order(&bytes)
 }
 
-/// Prototype hash-to-curve using hash-and-multiply.
+/// RFC 9380 compliant hash-to-curve for BLS12-381 G1.
 ///
-/// 1. SHA-256(domain || msg) -> 32 bytes
-/// 2. Interpret as scalar via from_le_bytes_mod_order
-/// 3. Multiply the G1 generator by that scalar
-///
-/// NOT standards-compliant (no constant-time, no try-and-increment),
-/// but sufficient for a prototype.
+/// Implements the BLS12381G1_XMD:SHA-256_SSWU_RO_ suite using arkworks'
+/// MapToCurveBasedHasher with the Wahby-Boneh (WB) map. This produces
+/// uniformly distributed points on the curve per the IETF standard.
 fn hash_to_curve(domain: &[u8], msg: &[u8]) -> G1Affine {
-    let mut hasher = Sha256::new();
-    hasher.update(domain);
-    hasher.update(msg);
-    let hash_bytes = hasher.finalize();
+    let hasher =
+        MapToCurveBasedHasher::<G1Projective, DefaultFieldHasher<Sha256>, WBMap<G1Config>>::new(
+            domain,
+        )
+        .expect("Failed to create hash-to-curve hasher");
 
-    let scalar = Fr::from_le_bytes_mod_order(&hash_bytes);
-    (G1Affine::generator() * scalar).into_affine()
+    hasher.hash(msg).expect("Hash-to-curve failed")
 }
 
 /// Derive the eVRF pad that both parties can independently compute.
@@ -139,5 +139,31 @@ mod tests {
         let (r2, _) = derive_pad(sk_a, pk_c, b"msg", beta);
 
         assert_ne!(r1, r2, "Different peers should produce different pads");
+    }
+
+    #[test]
+    fn test_hash_to_curve_on_curve_and_not_identity() {
+        let p1 = hash_to_curve(b"test-domain", b"message-1");
+        assert!(p1.is_on_curve(), "Hash output must be on the curve");
+        assert!(!p1.is_zero(), "Hash output must not be the identity");
+
+        let p2 = hash_to_curve(b"test-domain", b"message-2");
+        assert!(p2.is_on_curve());
+        assert!(!p2.is_zero());
+        assert_ne!(p1, p2, "Different messages must produce different points");
+    }
+
+    #[test]
+    fn test_hash_to_curve_deterministic() {
+        let p1 = hash_to_curve(b"domain", b"msg");
+        let p2 = hash_to_curve(b"domain", b"msg");
+        assert_eq!(p1, p2, "Same inputs must produce same output");
+    }
+
+    #[test]
+    fn test_hash_to_curve_domain_separation() {
+        let p1 = hash_to_curve(b"domain-a", b"msg");
+        let p2 = hash_to_curve(b"domain-b", b"msg");
+        assert_ne!(p1, p2, "Different domains must produce different points");
     }
 }

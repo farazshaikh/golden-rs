@@ -154,7 +154,7 @@ pub fn verify(
         let x_inv = x.inverse().expect("challenge must be nonzero");
         let step = 1 << (k - 1 - j);
         for i in 0..n {
-            if (i / step) % 2 == 0 {
+            if (i / step).is_multiple_of(2) {
                 // Index is in the "lo" half at this recursion level
                 s_scalars[i] *= x_inv;
                 s_inv_scalars[i] *= *x;
