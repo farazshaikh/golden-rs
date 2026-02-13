@@ -144,7 +144,34 @@ RUSTC_WRAPPER= cargo +nightly-2025-11-08 hax into fstar
 
 **Known limitation:** One `&mut` error in `zk_evrf/mod.rs` (hax issue #420). All other modules extract cleanly.
 
-**Next step:** Write F* specs and proofs for the extracted `Shamir` and `Vss` modules.
+### hax Gotchas (for future reference)
+
+1. **Pinned nightly is mandatory.** hax's rustc driver (`driver-hax-frontend-exporter`) uses internal compiler APIs (`rustc_middle`, `rustc_hir`, etc.) that break between nightly versions. You MUST use the exact nightly from hax's `rust-toolchain.toml`. As of v0.3.6: `nightly-2025-11-08`. Using any other nightly will fail with cryptic `GenericArgs` or similar errors.
+
+2. **Three separate components.** hax is not a single binary. You need:
+   - `driver-hax-frontend-exporter` (Rust, built with pinned nightly + `rustc-dev` component)
+   - `cargo-hax` + `hax-engine-names-extract` (Rust, built with pinned nightly)
+   - `hax-engine` (OCaml, built via opam + dune, requires OCaml 4.14)
+   All three must be on `PATH` when running `cargo hax`.
+
+3. **Bootstrap order matters.** `hax-engine` (dune build) depends on `hax-engine-names-extract` (Rust) being in PATH. Build the Rust components first, then the OCaml engine.
+
+4. **`RUSTC_WRAPPER` must be unset.** If `sccache` or similar is configured, hax will fail because the driver binary path is wrong. Use `RUSTC_WRAPPER= cargo +nightly-2025-11-08 hax into fstar`.
+
+5. **`CI` env var.** Set `CI=false` when building the OCaml engine, otherwise `js_of_ocaml-compiler` fails with "This value must be either true or false" on a dune `%{env:CI=false}` expression.
+
+6. **`&mut` limitation.** hax cannot handle some `&mut` patterns (issue #420). The `zk_evrf/mod.rs` serialization code triggers this. Workaround: restructure to avoid `&mut` in the affected code, or exclude the module from extraction.
+
+### Task 2 Sub-Tasks
+
+| # | Sub-Task | Module | What to Prove in F* | Status |
+|---|----------|--------|---------------------|--------|
+| 2a | Shamir functional correctness | `Golden_rs.Shamir.fst` | `lagrange_interpolate_at_zero` returns `f(0)` for valid shares | Not started |
+| 2b | VSS functional correctness | `Golden_rs.Vss.fst` | `verify_share` returns true iff share is consistent with commitment | Not started |
+| 2c | eVRF DH symmetry (F* version) | `Golden_rs.Evrf.fst` | `derive_pad(sk_i, pk_j, ...) = derive_pad(sk_j, pk_i, ...)` | Not started (proven in Lean, Task 5) |
+| 2d | Protocol round correctness | `Golden_rs.Protocol.fst` | `round1` output `sk_i = sum_j f_j(i)` for honest broadcasts | Not started |
+
+**Next step:** Install F*, write specs and proofs for sub-tasks 2a and 2b.
 
 ---
 
