@@ -40,10 +40,7 @@ impl PointVar {
     }
 
     /// Allocate a G1 point as a public input.
-    pub fn new_input(
-        cs: ConstraintSystemRef<Fr>,
-        point: G1Affine,
-    ) -> Result<Self, SynthesisError> {
+    pub fn new_input(cs: ConstraintSystemRef<Fr>, point: G1Affine) -> Result<Self, SynthesisError> {
         let (x, y) = if point.infinity {
             (Fq::zero(), Fq::zero())
         } else {

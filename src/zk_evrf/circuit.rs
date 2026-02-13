@@ -65,20 +65,44 @@ impl ConstraintSynthesizer<Fr> for EVRFCircuit {
     fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
         // === PUBLIC INPUTS ===
         // PK_1 coordinates
-        let pk1_x = if self.pk1.infinity { Fq::zero() } else { self.pk1.x };
-        let pk1_y = if self.pk1.infinity { Fq::zero() } else { self.pk1.y };
+        let pk1_x = if self.pk1.infinity {
+            Fq::zero()
+        } else {
+            self.pk1.x
+        };
+        let pk1_y = if self.pk1.infinity {
+            Fq::zero()
+        } else {
+            self.pk1.y
+        };
         let _pk1_x_var = FqVar::new_input(cs.clone(), || Ok(pk1_x))?;
         let _pk1_y_var = FqVar::new_input(cs.clone(), || Ok(pk1_y))?;
 
         // PK_2 coordinates
-        let pk2_x = if self.pk2.infinity { Fq::zero() } else { self.pk2.x };
-        let pk2_y = if self.pk2.infinity { Fq::zero() } else { self.pk2.y };
+        let pk2_x = if self.pk2.infinity {
+            Fq::zero()
+        } else {
+            self.pk2.x
+        };
+        let pk2_y = if self.pk2.infinity {
+            Fq::zero()
+        } else {
+            self.pk2.y
+        };
         let _pk2_x_var = FqVar::new_input(cs.clone(), || Ok(pk2_x))?;
         let _pk2_y_var = FqVar::new_input(cs.clone(), || Ok(pk2_y))?;
 
         // R commitment coordinates
-        let r_x = if self.r_commitment.infinity { Fq::zero() } else { self.r_commitment.x };
-        let r_y = if self.r_commitment.infinity { Fq::zero() } else { self.r_commitment.y };
+        let r_x = if self.r_commitment.infinity {
+            Fq::zero()
+        } else {
+            self.r_commitment.x
+        };
+        let r_y = if self.r_commitment.infinity {
+            Fq::zero()
+        } else {
+            self.r_commitment.y
+        };
         let _r_x_var = FqVar::new_input(cs.clone(), || Ok(r_x))?;
         let _r_y_var = FqVar::new_input(cs.clone(), || Ok(r_y))?;
 
@@ -93,8 +117,16 @@ impl ConstraintSynthesizer<Fr> for EVRFCircuit {
         let r_var = FpVar::new_witness(cs.clone(), || Ok(self.r_value))?;
 
         // DH shared secret coordinates
-        let dh_x = if self.dh_shared.infinity { Fq::zero() } else { self.dh_shared.x };
-        let dh_y = if self.dh_shared.infinity { Fq::zero() } else { self.dh_shared.y };
+        let dh_x = if self.dh_shared.infinity {
+            Fq::zero()
+        } else {
+            self.dh_shared.x
+        };
+        let dh_y = if self.dh_shared.infinity {
+            Fq::zero()
+        } else {
+            self.dh_shared.y
+        };
         let _dh_x_var = FqVar::new_witness(cs.clone(), || Ok(dh_x))?;
         let _dh_y_var = FqVar::new_witness(cs.clone(), || Ok(dh_y))?;
 
@@ -166,8 +198,16 @@ impl ConstraintSynthesizer<Fr> for BatchEVRFCircuit {
         let _sk1_bits = sk1_var.to_bits_le()?;
 
         // === SHARED: PK_1 as public input ===
-        let pk1_x = if self.my_pk.infinity { Fq::zero() } else { self.my_pk.x };
-        let pk1_y = if self.my_pk.infinity { Fq::zero() } else { self.my_pk.y };
+        let pk1_x = if self.my_pk.infinity {
+            Fq::zero()
+        } else {
+            self.my_pk.x
+        };
+        let pk1_y = if self.my_pk.infinity {
+            Fq::zero()
+        } else {
+            self.my_pk.y
+        };
         let _pk1_x_var = FqVar::new_input(cs.clone(), || Ok(pk1_x))?;
         let _pk1_y_var = FqVar::new_input(cs.clone(), || Ok(pk1_y))?;
 
@@ -177,8 +217,16 @@ impl ConstraintSynthesizer<Fr> for BatchEVRFCircuit {
         // === PER-PEER: each eVRF evaluation ===
         for (peer_id, peer_pk) in &self.peers {
             // Public inputs: peer PK
-            let pk2_x = if peer_pk.infinity { Fq::zero() } else { peer_pk.x };
-            let pk2_y = if peer_pk.infinity { Fq::zero() } else { peer_pk.y };
+            let pk2_x = if peer_pk.infinity {
+                Fq::zero()
+            } else {
+                peer_pk.x
+            };
+            let pk2_y = if peer_pk.infinity {
+                Fq::zero()
+            } else {
+                peer_pk.y
+            };
             let _pk2_x_var = FqVar::new_input(cs.clone(), || Ok(pk2_x))?;
             let _pk2_y_var = FqVar::new_input(cs.clone(), || Ok(pk2_y))?;
 
@@ -187,8 +235,16 @@ impl ConstraintSynthesizer<Fr> for BatchEVRFCircuit {
                 self.pads.iter().find(|(pid, _, _)| pid == peer_id)
             {
                 // Public inputs: R commitment
-                let r_x = if r_commitment.infinity { Fq::zero() } else { r_commitment.x };
-                let r_y = if r_commitment.infinity { Fq::zero() } else { r_commitment.y };
+                let r_x = if r_commitment.infinity {
+                    Fq::zero()
+                } else {
+                    r_commitment.x
+                };
+                let r_y = if r_commitment.infinity {
+                    Fq::zero()
+                } else {
+                    r_commitment.y
+                };
                 let _r_x_var = FqVar::new_input(cs.clone(), || Ok(r_x))?;
                 let _r_y_var = FqVar::new_input(cs.clone(), || Ok(r_y))?;
 
@@ -246,8 +302,8 @@ mod tests {
 
     #[test]
     fn test_evrf_circuit_with_real_evrf() {
-        use ark_ff::UniformRand;
         use crate::evrf;
+        use ark_ff::UniformRand;
 
         let mut rng = ark_std::test_rng();
 
@@ -267,14 +323,16 @@ mod tests {
         let circuit = EVRFCircuit::new(sk1, pk1, pk2, r_value, r_commitment, beta);
         let captured = capture_circuit(circuit).expect("Circuit synthesis failed");
 
-        println!("Real eVRF circuit: {} constraints, {} inputs, {} witnesses",
-            captured.num_constraints, captured.num_inputs, captured.num_witness);
+        println!(
+            "Real eVRF circuit: {} constraints, {} inputs, {} witnesses",
+            captured.num_constraints, captured.num_inputs, captured.num_witness
+        );
     }
 
     #[test]
     fn test_batch_evrf_circuit() {
-        use ark_ff::UniformRand;
         use crate::evrf;
+        use ark_ff::UniformRand;
 
         let mut rng = ark_std::test_rng();
 

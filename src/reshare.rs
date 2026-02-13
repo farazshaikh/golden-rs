@@ -202,3 +202,294 @@ pub fn reshare_receive(
         secret_share: new_secret_share,
     })
 }
+
+#[cfg(test)]
+mod malicious_tests {
+    use super::*;
+    use ark_bls12_381::G1Affine;
+    use ark_ec::{AffineRepr, CurveGroup};
+    use ark_ff::UniformRand;
+
+    use crate::shamir::{generate_shares, Polynomial};
+    use crate::types::{NodeId, Scalar};
+
+    /// Setup an old group of `n_old` members with threshold `t_old` sharing a known secret.
+    fn setup_old_group(
+        n_old: u32,
+        t_old: u32,
+        rng: &mut impl ark_std::rand::Rng,
+    ) -> (
+        Scalar,                    // secret
+        Vec<(NodeId, Scalar)>,     // old shares
+        HashMap<NodeId, Scalar>,   // old sk_identity
+        HashMap<NodeId, G1Affine>, // old pk_identity (old_members)
+        HashMap<NodeId, G1Affine>, // old pk_shares (g^{sk_i})
+        G1Affine,                  // original_pk
+    ) {
+        let secret = Scalar::rand(rng);
+        let poly = Polynomial::new_random(secret, (t_old - 1) as usize, rng);
+        let shares = generate_shares(&poly, n_old);
+        let original_pk = (G1Affine::generator() * secret).into_affine();
+
+        let mut old_sk_identities = HashMap::new();
+        let mut old_pk_identities = HashMap::new();
+        let mut old_pk_shares = HashMap::new();
+
+        for &(id, share) in &shares {
+            let sk_id = Scalar::rand(rng);
+            old_sk_identities.insert(id, sk_id);
+            old_pk_identities.insert(id, (G1Affine::generator() * sk_id).into_affine());
+            old_pk_shares.insert(id, (G1Affine::generator() * share).into_affine());
+        }
+
+        (
+            secret,
+            shares,
+            old_sk_identities,
+            old_pk_identities,
+            old_pk_shares,
+            original_pk,
+        )
+    }
+
+    /// Setup a new group of `n_new` members with IDs starting at `start_id`.
+    fn setup_new_group(
+        n_new: u32,
+        start_id: NodeId,
+        rng: &mut impl ark_std::rand::Rng,
+    ) -> (HashMap<NodeId, Scalar>, HashMap<NodeId, G1Affine>) {
+        let mut sk_map = HashMap::new();
+        let mut pk_map = HashMap::new();
+        for i in 0..n_new {
+            let id = start_id + i;
+            let sk = Scalar::rand(rng);
+            sk_map.insert(id, sk);
+            pk_map.insert(id, (G1Affine::generator() * sk).into_affine());
+        }
+        (sk_map, pk_map)
+    }
+
+    #[test]
+    fn test_reshare_wrong_share_detected() {
+        let mut rng = ark_std::test_rng();
+        let (_, shares, old_sk_ids, old_pk_ids, old_pk_shares, original_pk) =
+            setup_old_group(3, 2, &mut rng);
+        let (new_sk_ids, new_pk_ids) = setup_new_group(2, 10, &mut rng);
+        let beta = Scalar::rand(&mut rng);
+
+        // Node 1 deals honestly
+        let msg1 = reshare_deal(
+            1,
+            shares[0].1,
+            old_sk_ids[&1],
+            &new_pk_ids,
+            2,
+            beta,
+            &mut rng,
+        );
+
+        // Node 2 deals with a FAKE share (not its real sk_2)
+        let fake_share = Scalar::rand(&mut rng);
+        let msg2 = reshare_deal(
+            2,
+            fake_share,
+            old_sk_ids[&2],
+            &new_pk_ids,
+            2,
+            beta,
+            &mut rng,
+        );
+
+        let mut received = HashMap::new();
+        received.insert(1, msg1);
+        received.insert(2, msg2);
+
+        let result = reshare_receive(
+            10,
+            new_sk_ids[&10],
+            &old_pk_ids,
+            &received,
+            beta,
+            original_pk,
+            &old_pk_shares,
+            2,
+        );
+
+        match result {
+            Err(ReshareError::CiphertextVerificationFailed { sender, .. }) => {
+                assert_eq!(sender, 2, "should detect malicious node 2");
+                println!("correctly detected wrong share from node {sender}");
+            }
+            other => panic!("Expected CiphertextVerificationFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_reshare_tampered_ciphertext_detected() {
+        let mut rng = ark_std::test_rng();
+        let (_, shares, old_sk_ids, old_pk_ids, old_pk_shares, original_pk) =
+            setup_old_group(3, 2, &mut rng);
+        let (new_sk_ids, new_pk_ids) = setup_new_group(2, 10, &mut rng);
+        let beta = Scalar::rand(&mut rng);
+
+        // Node 1 deals honestly
+        let msg1 = reshare_deal(
+            1,
+            shares[0].1,
+            old_sk_ids[&1],
+            &new_pk_ids,
+            2,
+            beta,
+            &mut rng,
+        );
+
+        // Node 2 deals honestly, then we tamper the encrypted_share
+        let mut msg2 = reshare_deal(
+            2,
+            shares[1].1,
+            old_sk_ids[&2],
+            &new_pk_ids,
+            2,
+            beta,
+            &mut rng,
+        );
+        msg2.ciphertexts
+            .get_mut(&10)
+            .unwrap()
+            .encrypted_share += Scalar::from(1u64);
+
+        let mut received = HashMap::new();
+        received.insert(1, msg1);
+        received.insert(2, msg2);
+
+        let result = reshare_receive(
+            10,
+            new_sk_ids[&10],
+            &old_pk_ids,
+            &received,
+            beta,
+            original_pk,
+            &old_pk_shares,
+            2,
+        );
+
+        match result {
+            Err(ReshareError::CiphertextVerificationFailed { sender, .. }) => {
+                assert_eq!(sender, 2, "should detect tampered ciphertext from node 2");
+                println!("correctly detected tampered ciphertext from node {sender}");
+            }
+            other => panic!("Expected CiphertextVerificationFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_reshare_insufficient_dealers() {
+        let mut rng = ark_std::test_rng();
+        let (_, shares, old_sk_ids, old_pk_ids, old_pk_shares, original_pk) =
+            setup_old_group(3, 2, &mut rng);
+        let (new_sk_ids, new_pk_ids) = setup_new_group(2, 10, &mut rng);
+        let beta = Scalar::rand(&mut rng);
+
+        // Only 1 dealer when t_old=2
+        let msg1 = reshare_deal(
+            1,
+            shares[0].1,
+            old_sk_ids[&1],
+            &new_pk_ids,
+            2,
+            beta,
+            &mut rng,
+        );
+
+        let mut received = HashMap::new();
+        received.insert(1, msg1);
+
+        let result = reshare_receive(
+            10,
+            new_sk_ids[&10],
+            &old_pk_ids,
+            &received,
+            beta,
+            original_pk,
+            &old_pk_shares,
+            2,
+        );
+
+        match result {
+            Err(ReshareError::InsufficientDealers { needed, got }) => {
+                assert_eq!(needed, 2);
+                assert_eq!(got, 1);
+                println!("correctly detected {got} of {needed} needed dealers");
+            }
+            other => panic!("Expected InsufficientDealers, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_reshare_honest_succeeds() {
+        let mut rng = ark_std::test_rng();
+        let t_old = 2u32;
+        let t_new = 2u32;
+
+        let (secret, shares, old_sk_ids, old_pk_ids, old_pk_shares, original_pk) =
+            setup_old_group(3, t_old, &mut rng);
+        let (new_sk_ids, new_pk_ids) = setup_new_group(2, 10, &mut rng);
+        let beta = Scalar::rand(&mut rng);
+
+        // t_old old nodes deal honestly
+        let mut received = HashMap::new();
+        for &(id, share) in &shares[..t_old as usize] {
+            let msg = reshare_deal(
+                id,
+                share,
+                old_sk_ids[&id],
+                &new_pk_ids,
+                t_new,
+                beta,
+                &mut rng,
+            );
+            received.insert(id, msg);
+        }
+
+        // Each new node receives and computes their new share
+        let mut new_outputs = HashMap::new();
+        for (&new_id, &new_sk) in &new_sk_ids {
+            let output = reshare_receive(
+                new_id,
+                new_sk,
+                &old_pk_ids,
+                &received,
+                beta,
+                original_pk,
+                &old_pk_shares,
+                t_old,
+            )
+            .expect("honest reshare must succeed");
+            new_outputs.insert(new_id, output);
+        }
+
+        // Public key preserved
+        for output in new_outputs.values() {
+            assert_eq!(output.public_key, original_pk, "PK must be preserved");
+        }
+
+        // New shares reconstruct the original secret
+        let new_shares: Vec<(NodeId, Scalar)> = new_outputs
+            .iter()
+            .map(|(&id, out)| (id, out.secret_share))
+            .collect();
+        let reconstructed = crate::shamir::lagrange_interpolate_at_zero(&new_shares);
+        assert_eq!(reconstructed, secret, "reconstructed secret must match");
+
+        // PK shares consistent with secret shares
+        for (&new_id, output) in &new_outputs {
+            let expected = (G1Affine::generator() * output.secret_share).into_affine();
+            assert_eq!(
+                output.public_key_shares[&new_id], expected,
+                "PK share must match g^share for node {new_id}"
+            );
+        }
+
+        println!("honest reshare preserved secret and PK across groups");
+    }
+}

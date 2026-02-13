@@ -55,11 +55,13 @@ pub fn prove(transcript: &mut Transcript, gens: &BulletproofGens, a: &[Fr], b: &
         let (h_lo, h_hi) = h.split_at(half);
 
         // L = <a_lo, G_hi> + <b_hi, H_lo> + <a_lo, b_hi> * u
-        let l = msm_helper(g_hi, a_lo) + msm_helper(h_lo, b_hi) + u * inner_product_helper(a_lo, b_hi);
+        let l =
+            msm_helper(g_hi, a_lo) + msm_helper(h_lo, b_hi) + u * inner_product_helper(a_lo, b_hi);
         let l_affine = l.into_affine();
 
         // R = <a_hi, G_lo> + <b_lo, H_hi> + <a_hi, b_lo> * u
-        let r = msm_helper(g_lo, a_hi) + msm_helper(h_hi, b_lo) + u * inner_product_helper(a_hi, b_lo);
+        let r =
+            msm_helper(g_lo, a_hi) + msm_helper(h_hi, b_lo) + u * inner_product_helper(a_hi, b_lo);
         let r_affine = r.into_affine();
 
         // Append L, R to transcript and squeeze challenge
@@ -198,7 +200,9 @@ mod tests {
         let b: Vec<Fr> = (0..n).map(|_| Fr::rand(&mut rng)).collect();
 
         // Commitment: P = <a,g> + <b,h> + <a,b>*u
-        let p = msm_helper(&gens.g[..n], &a) + msm_helper(&gens.h[..n], &b) + gens.u * inner_product_helper(&a, &b);
+        let p = msm_helper(&gens.g[..n], &a)
+            + msm_helper(&gens.h[..n], &b)
+            + gens.u * inner_product_helper(&a, &b);
 
         let mut prove_transcript = Transcript::new(b"test-ipa");
         let proof = prove(&mut prove_transcript, &gens, &a, &b);
@@ -216,7 +220,9 @@ mod tests {
         let a: Vec<Fr> = (0..n).map(|_| Fr::rand(&mut rng)).collect();
         let b: Vec<Fr> = (0..n).map(|_| Fr::rand(&mut rng)).collect();
 
-        let p = msm_helper(&gens.g[..n], &a) + msm_helper(&gens.h[..n], &b) + gens.u * inner_product_helper(&a, &b);
+        let p = msm_helper(&gens.g[..n], &a)
+            + msm_helper(&gens.h[..n], &b)
+            + gens.u * inner_product_helper(&a, &b);
 
         let mut prove_transcript = Transcript::new(b"test-ipa");
         let mut proof = prove(&mut prove_transcript, &gens, &a, &b);
@@ -237,7 +243,9 @@ mod tests {
             let a: Vec<Fr> = (0..n).map(|_| Fr::rand(&mut rng)).collect();
             let b: Vec<Fr> = (0..n).map(|_| Fr::rand(&mut rng)).collect();
 
-            let p = msm_helper(&gens.g[..n], &a) + msm_helper(&gens.h[..n], &b) + gens.u * inner_product_helper(&a, &b);
+            let p = msm_helper(&gens.g[..n], &a)
+                + msm_helper(&gens.h[..n], &b)
+                + gens.u * inner_product_helper(&a, &b);
 
             let mut pt = Transcript::new(b"test");
             let proof = prove(&mut pt, &gens, &a, &b);

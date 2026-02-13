@@ -23,11 +23,7 @@ pub struct BitDecomposition {
 ///
 /// lambda is the bit-length (e.g., 256 for a 256-bit scalar).
 /// The value must fit in lambda+1 bits.
-pub fn bit_decompose(
-    cs: &mut ConstraintSystem,
-    value: Fr,
-    lambda: usize,
-) -> BitDecomposition {
+pub fn bit_decompose(cs: &mut ConstraintSystem, value: Fr, lambda: usize) -> BitDecomposition {
     // Get the bits of the value
     let value_bits = value.into_bigint().to_bits_le();
 

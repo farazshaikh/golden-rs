@@ -10,14 +10,10 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use borsh::{BorshDeserialize, BorshSerialize};
 use std::io::{self, Read, Write};
 
-use crate::bulletproofs::{
-    generators::BulletproofGens,
-    ipa,
-    transcript::Transcript,
-};
-use crate::types::NodeId;
 use self::adapter::capture_circuit;
 use self::circuit::{BatchEVRFCircuit, EVRFCircuit};
+use crate::bulletproofs::{generators::BulletproofGens, ipa, transcript::Transcript};
+use crate::types::NodeId;
 
 /// An eVRF proof (Bulletproofs IPA proof + auxiliary data).
 #[derive(Clone, Debug)]

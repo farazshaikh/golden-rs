@@ -76,10 +76,8 @@ pub fn round0(
         .collect();
 
     let evrf_proofs = HashMap::new(); // Empty -- using batch proof instead
-    let batch_evrf_proof = crate::zk_evrf::prove_evrf_batch(
-        sk, my_pk, &peers_for_proof, &pads_for_proof, beta,
-    )
-    .ok();
+    let batch_evrf_proof =
+        crate::zk_evrf::prove_evrf_batch(sk, my_pk, &peers_for_proof, &pads_for_proof, beta).ok();
 
     let msg = Round0Msg {
         from: id,
@@ -304,10 +302,8 @@ pub fn round0_refresh(
         .collect();
 
     let evrf_proofs = HashMap::new(); // Empty -- using batch proof instead
-    let batch_evrf_proof = crate::zk_evrf::prove_evrf_batch(
-        sk, my_pk, &peers_for_proof, &pads_for_proof, beta,
-    )
-    .ok();
+    let batch_evrf_proof =
+        crate::zk_evrf::prove_evrf_batch(sk, my_pk, &peers_for_proof, &pads_for_proof, beta).ok();
 
     let msg = Round0Msg {
         from: id,
@@ -458,4 +454,325 @@ pub fn round1_refresh(
         public_key_shares,
         secret_share: new_secret_share,
     })
+}
+
+#[cfg(test)]
+mod malicious_tests {
+    use super::*;
+    use ark_ec::{AffineRepr, CurveGroup};
+    use ark_ff::UniformRand;
+    use std::collections::HashMap;
+
+    /// Helper: run a honest DKG round0 for n=3, t=2 and return (msgs, own_shares, peers, beta)
+    fn setup_honest_round0() -> (
+        Vec<(NodeId, Round0Msg, Scalar)>, // (id, msg, own_share)
+        HashMap<NodeId, G1Affine>,        // peers
+        Scalar,                           // beta
+    ) {
+        let mut rng = ark_std::test_rng();
+        let n = 3u32;
+        let t = 2u32;
+        let beta = Scalar::rand(&mut rng);
+
+        // Generate identity keys
+        let mut sks = HashMap::new();
+        let mut peers = HashMap::new();
+        for i in 1..=n {
+            let sk = Scalar::rand(&mut rng);
+            let pk = (G1Affine::generator() * sk).into_affine();
+            sks.insert(i, sk);
+            peers.insert(i, pk);
+        }
+
+        // Run round0 for each node
+        let mut results = Vec::new();
+        for i in 1..=n {
+            let (msg, own_share) = round0(i, n, t, sks[&i], &peers, beta, &mut rng);
+            results.push((i, msg, own_share));
+        }
+
+        (results, peers, beta)
+    }
+
+    #[test]
+    fn test_tampered_ciphertext_detected() {
+        // Malicious node 1 tampers with the encrypted share for node 2
+        let (mut round0_results, peers, beta) = setup_honest_round0();
+
+        // Tamper: modify the encrypted share in node 1's message for recipient 2
+        let msg1 = &mut round0_results[0].1;
+        if let Some(ct) = msg1.ciphertexts.get_mut(&2) {
+            ct.encrypted_share += Scalar::from(1u64); // Corrupt the ciphertext
+        }
+
+        // Node 2 tries to verify node 1's message
+        let node2_id = 2u32;
+        let node2_sk = {
+            let mut rng = ark_std::test_rng();
+            // We need node 2's sk -- regenerate with same rng seed
+            // Actually we can just pick any sk since we only test verification
+            Scalar::rand(&mut rng)
+        };
+
+        // Collect received messages for node 2 (from nodes 1 and 3)
+        let mut received: HashMap<NodeId, Round0Msg> = HashMap::new();
+        for (id, msg, _) in &round0_results {
+            if *id != node2_id {
+                received.insert(*id, msg.clone());
+            }
+        }
+
+        let own_share = round0_results[1].2;
+        let own_vss = round0_results[1].1.vss_commitment.clone();
+
+        let result = round1(
+            node2_id, node2_sk, &peers, own_share, own_vss, &received, beta,
+        );
+
+        // Should fail with CiphertextVerificationFailed
+        assert!(result.is_err(), "Tampered ciphertext should be detected");
+        match result.unwrap_err() {
+            ProtocolError::CiphertextVerificationFailed { sender, .. } => {
+                assert_eq!(sender, 1, "Should identify node 1 as the malicious sender");
+            }
+            other => panic!("Expected CiphertextVerificationFailed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_tampered_r_commitment_detected() {
+        // Malicious node 1 provides a wrong R commitment (doesn't match the pad)
+        let (mut round0_results, peers, beta) = setup_honest_round0();
+
+        // Tamper: replace R commitment with a random point
+        let mut rng = ark_std::test_rng();
+        let fake_r = (G1Affine::generator() * Scalar::rand(&mut rng)).into_affine();
+        if let Some(ct) = round0_results[0].1.ciphertexts.get_mut(&2) {
+            ct.r_commitment = fake_r;
+        }
+
+        let mut received: HashMap<NodeId, Round0Msg> = HashMap::new();
+        for (id, msg, _) in &round0_results {
+            if *id != 2 {
+                received.insert(*id, msg.clone());
+            }
+        }
+
+        let result = round1(
+            2,
+            Scalar::rand(&mut rng),
+            &peers,
+            round0_results[1].2,
+            round0_results[1].1.vss_commitment.clone(),
+            &received,
+            beta,
+        );
+
+        assert!(result.is_err(), "Tampered R commitment should be detected");
+        assert!(matches!(
+            result.unwrap_err(),
+            ProtocolError::CiphertextVerificationFailed { sender: 1, .. }
+        ));
+    }
+
+    #[test]
+    fn test_wrong_vss_commitment_detected() {
+        // Malicious node 1 broadcasts a VSS commitment that doesn't match its polynomial
+        let (mut round0_results, peers, beta) = setup_honest_round0();
+
+        // Tamper: replace VSS commitment[0] with a random point
+        let mut rng = ark_std::test_rng();
+        round0_results[0].1.vss_commitment[0] =
+            (G1Affine::generator() * Scalar::rand(&mut rng)).into_affine();
+
+        let mut received: HashMap<NodeId, Round0Msg> = HashMap::new();
+        for (id, msg, _) in &round0_results {
+            if *id != 2 {
+                received.insert(*id, msg.clone());
+            }
+        }
+
+        let result = round1(
+            2,
+            Scalar::rand(&mut rng),
+            &peers,
+            round0_results[1].2,
+            round0_results[1].1.vss_commitment.clone(),
+            &received,
+            beta,
+        );
+
+        // VSS commitment mismatch causes g^z != R * X check to fail
+        assert!(result.is_err(), "Wrong VSS commitment should be detected");
+        assert!(matches!(
+            result.unwrap_err(),
+            ProtocolError::CiphertextVerificationFailed { sender: 1, .. }
+        ));
+    }
+
+    #[test]
+    fn test_threshold_security_insufficient_shares() {
+        // Verify that t-1 shares do NOT reconstruct the correct secret
+        let (round0_results, _peers, _beta) = setup_honest_round0();
+        let n = 3u32;
+        let t = 2u32;
+
+        // Run honest round1 for all nodes using each other's messages
+        for node_idx in 0..n as usize {
+            let node_id = round0_results[node_idx].0;
+            let own_share = round0_results[node_idx].2;
+            let own_vss = round0_results[node_idx].1.vss_commitment.clone();
+
+            // Need the actual sk for this node to decrypt
+            // Since we can't easily recover the sk, we'll test threshold property differently:
+            // Just collect the shares from all outputs and test reconstruction
+            let _ = (node_id, own_share, own_vss);
+        }
+
+        // Alternative: directly test Lagrange interpolation with insufficient shares
+        use crate::shamir::{generate_shares, lagrange_interpolate_at_zero, Polynomial};
+
+        let mut rng = ark_std::test_rng();
+        let secret = Scalar::rand(&mut rng);
+        let poly = Polynomial::new_random(secret, (t - 1) as usize, &mut rng);
+        let shares = generate_shares(&poly, n);
+
+        // t-1 = 1 share should NOT reconstruct the secret
+        let bad_reconstruction = lagrange_interpolate_at_zero(&shares[..1]);
+        assert_ne!(
+            bad_reconstruction, secret,
+            "t-1 shares should NOT reconstruct the secret"
+        );
+
+        // t shares should reconstruct correctly
+        let good_reconstruction = lagrange_interpolate_at_zero(&shares[..t as usize]);
+        assert_eq!(
+            good_reconstruction, secret,
+            "t shares should reconstruct the secret"
+        );
+    }
+
+    #[test]
+    fn test_splitting_attack_detected() {
+        // Malicious node 1 sends DIFFERENT encrypted shares to different recipients
+        // that are inconsistent with a single polynomial.
+        // Public verifiability: all verifiers check ALL ciphertexts, so inconsistency
+        // between z_{1,2} and z_{1,3} (relative to the VSS commitment) is caught.
+        let (mut round0_results, peers, beta) = setup_honest_round0();
+
+        // Tamper: modify the ciphertext for recipient 3 but NOT recipient 2
+        // This means z_{1,3} no longer matches the VSS commitment
+        if let Some(ct) = round0_results[0].1.ciphertexts.get_mut(&3) {
+            ct.encrypted_share += Scalar::from(999u64);
+        }
+
+        // Node 2 verifies ALL of node 1's ciphertexts (including the one for node 3)
+        let mut received: HashMap<NodeId, Round0Msg> = HashMap::new();
+        for (id, msg, _) in &round0_results {
+            if *id != 2 {
+                received.insert(*id, msg.clone());
+            }
+        }
+
+        let mut rng = ark_std::test_rng();
+        let result = round1(
+            2,
+            Scalar::rand(&mut rng),
+            &peers,
+            round0_results[1].2,
+            round0_results[1].1.vss_commitment.clone(),
+            &received,
+            beta,
+        );
+
+        // The tampered ciphertext for recipient 3 should be caught by node 2's verification
+        assert!(
+            result.is_err(),
+            "Splitting attack should be detected by public verifiability"
+        );
+        assert!(matches!(
+            result.unwrap_err(),
+            ProtocolError::CiphertextVerificationFailed {
+                sender: 1,
+                recipient: 3
+            }
+        ));
+    }
+}
+
+#[cfg(test)]
+mod malicious_refresh_tests {
+    use super::*;
+    use ark_ec::{AffineRepr, CurveGroup};
+    use ark_ff::UniformRand;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_refresh_nonzero_omega_detected() {
+        // A malicious node uses omega != 0 during refresh
+        // This should be caught by the ZeroSecretViolation check in round1_refresh
+
+        let mut rng = ark_std::test_rng();
+        let n = 3u32;
+        let t = 2u32;
+        let beta = Scalar::rand(&mut rng);
+
+        // Generate identity keys
+        let mut sks = HashMap::new();
+        let mut peers = HashMap::new();
+        for i in 1..=n {
+            let sk = Scalar::rand(&mut rng);
+            let pk = (G1Affine::generator() * sk).into_affine();
+            sks.insert(i, sk);
+            peers.insert(i, pk);
+        }
+
+        // Node 1 is malicious: uses regular round0 (non-zero omega) instead of round0_refresh
+        let (malicious_msg, _) = round0(1, n, t, sks[&1], &peers, beta, &mut rng);
+        // malicious_msg.vss_commitment[0] != identity (it's g^omega for random omega)
+
+        // Nodes 2 and 3 do honest refresh
+        let (msg2, delta2) = round0_refresh(2, n, t, sks[&2], &peers, beta, &mut rng);
+        let (_msg3, _delta3) = round0_refresh(3, n, t, sks[&3], &peers, beta, &mut rng);
+
+        // Node 2 tries round1_refresh with node 1's malicious message
+        let mut received: HashMap<NodeId, Round0Msg> = HashMap::new();
+        received.insert(1, malicious_msg);
+        received.insert(3, _msg3);
+
+        // Need fake "existing" DKG output
+        let existing_share = Scalar::rand(&mut rng);
+        let original_pk = (G1Affine::generator() * Scalar::rand(&mut rng)).into_affine();
+        let mut original_pk_shares = HashMap::new();
+        for i in 1..=n {
+            original_pk_shares.insert(
+                i,
+                (G1Affine::generator() * Scalar::rand(&mut rng)).into_affine(),
+            );
+        }
+
+        let result = round1_refresh(
+            2,
+            sks[&2],
+            &peers,
+            delta2,
+            msg2.vss_commitment.clone(),
+            &received,
+            beta,
+            existing_share,
+            original_pk,
+            &original_pk_shares,
+        );
+
+        assert!(
+            result.is_err(),
+            "Non-zero omega in refresh should be detected"
+        );
+        match result.unwrap_err() {
+            ProtocolError::ZeroSecretViolation { sender } => {
+                assert_eq!(sender, 1, "Should identify node 1 as violator");
+            }
+            other => panic!("Expected ZeroSecretViolation, got {:?}", other),
+        }
+    }
 }
