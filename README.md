@@ -19,9 +19,17 @@ Golden achieves public verifiability in a single broadcast round using an expone
 ## Security
 
 - **Schnorr PoK** on PKI registration (Appendix F) -- prevents rogue-key attacks
-- **Bulletproofs IPA** verification for eVRF proofs (Section 4) -- native verification on BLS12-381
+- **ark-spartan NIZK** for eVRF proofs (Section 3.4 / [15]) -- R1CS satisfiability with public-input binding
 - **RFC 9380** hash-to-curve (Wahby-Boneh map for BLS12-381 G1)
 - **OsRng** for all production key material
+
+## Proof System
+
+Per Golden Section 3.4: "We use Bulletproofs [15] to prove R1CS satisfiability." The R_eVRF circuit (Section 4.3, Figure 3) is synthesized via arkworks, then proved and verified using [ark-spartan](https://github.com/arkworks-rs/spartan)'s NIZK system. This provides:
+
+- Sound R1CS-to-IPA reduction (Spartan protocol, avoids the completeness-soundness gap in the 2018 Bulletproofs paper)
+- Public-input binding: the verifier re-synthesizes the circuit with claimed public inputs (pk1, pk2, R, beta) and checks the proof against them
+- Merlin transcripts for correct Fiat-Shamir transform
 
 ## Build
 
@@ -42,8 +50,13 @@ src/
 ├── schnorr_pok.rs       PKI proof of knowledge (Appendix F)
 ├── protocol.rs          DKG + refresh rounds (Section 5, Figure 4)
 ├── reshare.rs           Membership-change resharing
-├── bulletproofs/        IPA prover/verifier (Section 3.4)
-├── zk_evrf/             R_eVRF circuit + proof system (Section 4.3, Appendix E)
+├── zk_evrf/             R_eVRF circuit + ark-spartan NIZK prove/verify (Section 4.3)
+│   ├── circuit.rs       R_eVRF and batch eVRF circuits (Figure 3, Section 4.4)
+│   ├── adapter.rs       Arkworks-to-Spartan R1CS conversion
+│   ├── bit_decompose.rs Bit-decomposition gadget
+│   ├── exponentiation.rs Point exponentiation gadget (non-native Fq)
+│   └── nonnative.rs     Non-native field arithmetic (Appendix E)
+├── bulletproofs/        Reference IPA implementation (Section 3.4)
 ├── network.rs           Broadcast channel + peer discovery
 ├── reshare_network.rs   Old/new group broadcast for resharing
 ├── node.rs              DKG/refresh participant (tokio task)
@@ -54,4 +67,4 @@ src/
 
 ## Details
 
-See [Implementation.md](Implementation.md) for paper coverage, security properties, native vs on-chain verification, deviations from the paper, and remaining TODOs.
+See [Implementation.md](Implementation.md) for paper coverage, security properties, proof system design, deviations from the paper, and remaining TODOs.

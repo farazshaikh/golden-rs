@@ -78,6 +78,26 @@ impl EVRFCircuit {
             r_value,
         }
     }
+
+    /// Create a circuit for verification mode (no private witness).
+    /// Uses zero values for private witnesses -- only the constraint structure matters.
+    /// The verifier needs this to reconstruct the same R1CS matrices as the prover.
+    pub fn for_verification(
+        pk1: G1Affine,
+        pk2: G1Affine,
+        r_commitment: G1Affine,
+        beta: Fr,
+    ) -> Self {
+        Self {
+            pk1,
+            pk2,
+            r_commitment,
+            beta,
+            sk1: Fr::zero(),
+            dh_shared: G1Affine::default(),
+            r_value: Fr::zero(),
+        }
+    }
 }
 
 impl ConstraintSynthesizer<Fr> for EVRFCircuit {
@@ -215,6 +235,27 @@ impl BatchEVRFCircuit {
             beta,
         }
     }
+
+    /// Create a batch circuit for verification mode.
+    /// Uses zero values for private witnesses.
+    pub fn for_verification(
+        my_pk: G1Affine,
+        peers: &[(crate::types::NodeId, G1Affine)],
+        pad_commitments: &[(crate::types::NodeId, G1Affine)],
+        beta: Fr,
+    ) -> Self {
+        let pads: Vec<(crate::types::NodeId, Fr, G1Affine)> = pad_commitments
+            .iter()
+            .map(|&(id, rc)| (id, Fr::zero(), rc))
+            .collect();
+        Self {
+            sk1: Fr::zero(),
+            my_pk,
+            peers: peers.to_vec(),
+            pads,
+            beta,
+        }
+    }
 }
 
 impl ConstraintSynthesizer<Fr> for BatchEVRFCircuit {
@@ -294,8 +335,8 @@ impl ConstraintSynthesizer<Fr> for BatchEVRFCircuit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_ec::AffineRepr;
     use crate::zk_evrf::adapter::capture_circuit;
+    use ark_ec::AffineRepr;
 
     #[test]
     fn test_evrf_circuit_satisfied() {

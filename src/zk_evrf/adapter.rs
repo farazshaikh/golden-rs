@@ -80,6 +80,101 @@ pub fn capture_circuit<C: ConstraintSynthesizer<Fr>>(circuit: C) -> Result<Captu
     })
 }
 
+/// Conversion result: ark-spartan Instance + assignments extracted from a captured circuit.
+pub struct SpartanData {
+    /// The R1CS constraint system in ark-spartan format.
+    pub instance: libspartan::Instance<Fr>,
+    /// Witness (private) variable assignment.
+    pub vars: libspartan::VarsAssignment<Fr>,
+    /// Public input assignment.
+    pub inputs: libspartan::InputsAssignment<Fr>,
+    /// Number of R1CS constraints.
+    pub num_cons: usize,
+    /// Number of witness variables (num_vars in spartan).
+    pub num_vars: usize,
+    /// Number of public inputs.
+    pub num_inputs: usize,
+}
+
+/// Convert a captured arkworks R1CS circuit to ark-spartan format.
+///
+/// Performs the column index remapping between arkworks ordering
+/// (z = [1, public_inputs, witnesses]) and ark-spartan ordering
+/// (z = [vars, 1, inputs]).
+pub fn to_spartan(captured: &CapturedR1CS) -> Result<SpartanData, String> {
+    let num_instance_vars = captured.num_inputs + 1; // +1 for constant 1
+    let num_witness = captured.num_witness;
+    let num_cons = captured.num_constraints;
+    let num_inputs = captured.num_inputs;
+
+    // Convert arkworks Matrix<Fr> (row-major with (coeff, col) pairs) to COO triples
+    // with remapped column indices
+    let convert_matrix = |ark_matrix: &[Vec<(Fr, usize)>]| -> Vec<(usize, usize, Fr)> {
+        let mut triples = Vec::new();
+        for (row, row_entries) in ark_matrix.iter().enumerate() {
+            for &(coeff, ark_col) in row_entries {
+                let spartan_col = if ark_col == 0 {
+                    // constant 1 -> col num_witness in spartan
+                    num_witness
+                } else if ark_col < num_instance_vars {
+                    // public input -> col num_witness + ark_col
+                    num_witness + ark_col
+                } else {
+                    // witness -> col ark_col - num_instance_vars
+                    ark_col - num_instance_vars
+                };
+                triples.push((row, spartan_col, coeff));
+            }
+        }
+        triples
+    };
+
+    let a_triples = convert_matrix(&captured.matrices.a);
+    let b_triples = convert_matrix(&captured.matrices.b);
+    let c_triples = convert_matrix(&captured.matrices.c);
+
+    let instance = libspartan::Instance::new(
+        num_cons,
+        num_witness,
+        num_inputs,
+        &a_triples,
+        &b_triples,
+        &c_triples,
+    )
+    .map_err(|e| format!("Failed to create Spartan instance: {:?}", e))?;
+
+    // Split assignment into vars (witnesses) and inputs (public inputs)
+    // Arkworks assignment: [1, pub_0, pub_1, ..., wit_0, wit_1, ...]
+    // We need:
+    //   inputs = [pub_0, pub_1, ...] (exclude constant 1)
+    //   vars = [wit_0, wit_1, ...]
+    let input_values: Vec<Fr> = captured.assignment[1..num_instance_vars].to_vec();
+    let witness_values: Vec<Fr> = captured.assignment[num_instance_vars..].to_vec();
+
+    let vars = libspartan::VarsAssignment::new(&witness_values)
+        .map_err(|e| format!("Failed to create VarsAssignment: {:?}", e))?;
+    let inputs = libspartan::InputsAssignment::new(&input_values)
+        .map_err(|e| format!("Failed to create InputsAssignment: {:?}", e))?;
+
+    Ok(SpartanData {
+        instance,
+        vars,
+        inputs,
+        num_cons,
+        num_vars: num_witness,
+        num_inputs,
+    })
+}
+
+/// Convert an arkworks R1CS to a Spartan Instance without assignments.
+/// Used by the verifier, which only needs the constraint structure + public inputs.
+pub fn to_spartan_instance_only(
+    captured: &CapturedR1CS,
+) -> Result<(libspartan::Instance<Fr>, usize, usize, usize), String> {
+    let data = to_spartan(captured)?;
+    Ok((data.instance, data.num_cons, data.num_vars, data.num_inputs))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

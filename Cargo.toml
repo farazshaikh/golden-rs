@@ -8,9 +8,11 @@ ark-bls12-381 = "0.5"
 ark-ec = "0.5"
 ark-ff = "0.5"
 ark-std = "0.5"
-ark-serialize = "0.5"
+ark-serialize = { version = "0.5", features = ["derive"] }
 ark-r1cs-std = "0.5"
 ark-relations = "0.5"
+ark-spartan = { git = "https://github.com/arkworks-rs/spartan" }
+merlin = "3.0"
 tokio = { version = "1", features = ["full"] }
 sha2 = "0.10"
 rand = "0.8"

@@ -31,15 +31,17 @@ Every node must prove knowledge of its secret key when registering its public ke
 
 Registration is rejected if the PoK fails. This prevents rogue-key attacks where an adversary registers a public key as a function of honest parties' keys to bias the DKG output.
 
-### eVRF Zero-Knowledge Proofs
+### eVRF Zero-Knowledge Proofs (ark-spartan NIZK)
 
-Full Bulletproofs IPA verification for eVRF proofs. The prover synthesizes an R1CS circuit (sk bit-decomposition, non-native Fq point arithmetic) and commits to the assignment via Pedersen commitments over deterministic generators. The verifier:
+Per Golden paper Section 3.4: "We use Bulletproofs [15] to prove R1CS satisfiability."
 
-1. Reconstructs generators from the proof's declared size (n = 2^k)
-2. Replays the Fiat-Shamir transcript with the stored commitment P
-3. Runs the Inner Product Argument verifier against P
+The R_eVRF circuit (Section 4.3, Figure 3) is synthesized via arkworks into R1CS matrices, then converted to [ark-spartan](https://github.com/arkworks-rs/spartan) format and proved using the Spartan NIZK proof system. This provides:
 
-Tampered proofs (mutated IPA scalars or commitment) are rejected.
+1. **Sound R1CS reduction**: The Spartan protocol correctly reduces R1CS constraint satisfaction to an inner product argument, avoiding the completeness-soundness gap identified in the original 2018 Bulletproofs paper (see "Bulletproofs for R1CS: Bridging the Completeness-Soundness Gap" 2025).
+2. **Public-input binding**: The verifier re-synthesizes the R_eVRF circuit with the claimed public inputs (pk1, pk2, R, beta) using `EVRFCircuit::for_verification()`, converts to a Spartan Instance, and calls `proof.verify(&instance, &inputs)`. A proof generated for different public inputs is rejected.
+3. **Merlin transcripts**: Correct Fiat-Shamir transform via the Merlin transcript protocol, matching the dalek-cryptography standard.
+
+The arkworks-to-Spartan conversion handles the column index remapping between arkworks' `z = [1, inputs, witnesses]` and Spartan's `z = [vars, 1, inputs]` orderings.
 
 ### Randomness
 
@@ -47,13 +49,13 @@ All production key material (identity keypairs, polynomial coefficients, Schnorr
 
 ## Native vs On-Chain Verification
 
-The paper's Bulletproofs eVRF proof system (Section 4) describes a two-curve architecture: G_in (BLS12-381 G1) for DKG operations and G_out (a companion curve) for the proof system. This G_out requirement exists because the Bulletproofs R1CS operates over G_out's scalar field, which must equal G_in's base field.
+The paper's eVRF proof system (Section 4) describes a two-curve architecture: G_in (BLS12-381 G1) for DKG operations and G_out (a companion curve) for the proof system. This G_out requirement exists because the Bulletproofs R1CS operates over G_out's scalar field, which must equal G_in's base field.
 
 **The problem:** BLS12-381 has no known companion curve with matching order. Constructing one via Complex Multiplication is computationally infeasible for a 381-bit prime (the Hilbert class polynomial would have degree ~2^191).
 
-**Our resolution:** Native verification. Nodes verify Bulletproofs proofs by running the IPA verifier directly on BLS12-381 G1 -- no companion curve needed. The R1CS operates over Fr (255-bit scalar field) with non-native Fq (381-bit base field) arithmetic via arkworks' audited `EmulatedFpVar`. The "Constraint Capture" pattern uses arkworks as a circuit compiler, extracting R1CS matrices for our custom Bulletproofs prover.
+**Our resolution:** Native verification. Nodes verify proofs by running the Spartan NIZK verifier directly on BLS12-381 G1 -- no companion curve needed. The R1CS operates over Fr (255-bit scalar field) with non-native Fq (381-bit base field) arithmetic via arkworks' audited `EmulatedFpVar`. The "Constraint Capture" pattern uses arkworks as a circuit compiler, extracting R1CS matrices which are then converted to ark-spartan format for proving and verification.
 
-**On-chain path (documented, not implemented):** Wrap the Bulletproof verifier inside a Groth16 circuit over BLS12-381. ~50K constraints, <1s prover time, ~250K gas on-chain. Alternative: Halo-style atomic accumulation for cycle-free recursion.
+**On-chain path (documented, not implemented):** Wrap the proof verifier inside a Groth16 circuit over BLS12-381. ~50K constraints, <1s prover time, ~250K gas on-chain. Alternative: Halo-style atomic accumulation for cycle-free recursion.
 
 ## Deviations from the Paper
 
@@ -61,13 +63,15 @@ The paper's Bulletproofs eVRF proof system (Section 4) describes a two-curve arc
 
 **Hash-to-curve:** The paper specifies random oracles H_1, H_2 mapping to G_in. We implement RFC 9380 compliant hash-to-curve using the Wahby-Boneh (WB) map for BLS12-381 G1 via `ark_ec::hashing::MapToCurveBasedHasher`. Domain-separated: `"golden-evrf-h1"` and `"golden-evrf-h2"`.
 
+**Proof system:** The paper says "use Bulletproofs [15]". We use ark-spartan's NIZK system instead of a direct implementation of the 2018 Bulletproofs R1CS protocol. The 2018 paper has a known completeness-soundness gap (see "Bridging the Gap" 2025). ark-spartan provides a production-quality R1CS-to-IPA reduction with correct transcript management and public-input binding.
+
 **eVRF circuit:** The paper achieves 3598 Fq-level constraints (14*lambda + 14 for lambda=256). Our implementation has higher Fr-level constraint count due to EmulatedFpVar's non-native arithmetic overhead (~7K constraints per point operation). The logical circuit structure matches the paper; the expansion is a known cost of the Appendix E / native-verification approach.
 
 **Batch proofs:** Implemented per Section 5.3 -- one proof per node covering all n-1 eVRF evaluations, with shared sk_1 bit-decomposition. Proof size scales logarithmically.
 
 ## Codebase
 
-13 modules, 61 tests (including 10 adversarial). BLS12-381 via arkworks 0.5. Borsh serialization for all network types. Tokio async nodes communicating over broadcast channels. Zero clippy warnings.
+13 modules, 61 tests (including 10 adversarial + 3 public-input binding). BLS12-381 via arkworks 0.5. ark-spartan for NIZK proofs. Borsh serialization for all network types. Tokio async nodes communicating over broadcast channels. Zero clippy warnings.
 
 | Module            | Purpose                                                             |
 | ----------------- | ------------------------------------------------------------------- |
@@ -81,8 +85,8 @@ The paper's Bulletproofs eVRF proof system (Section 4) describes a two-curve arc
 | `reshare_node`    | Reshare participant (old dealer / new receiver)                     |
 | `protocol`        | DKG round0/round1, refresh round0/round1                            |
 | `reshare`         | Reshare deal/receive logic                                          |
-| `bulletproofs`    | IPA prover/verifier, Fiat-Shamir transcript, generators             |
-| `zk_evrf`         | R1CS circuit (non-native Fq), constraint capture, eVRF prove/verify |
+| `bulletproofs`    | Reference IPA prover/verifier (Section 3.4)                         |
+| `zk_evrf`         | R_eVRF circuit, constraint capture, ark-spartan NIZK prove/verify   |
 | `types`           | Shared types with Borsh serialization                               |
 
 ### Implemented (Paper Coverage)
@@ -91,7 +95,7 @@ The paper's Bulletproofs eVRF proof system (Section 4) describes a two-curve arc
 | ------------------------- | ------------------------------------------------------------------------------ | ------ |
 | 3.1 Shamir Secret Sharing | Polynomial sharing + Lagrange interpolation                                    | Done   |
 | 3.2 Feldman VSS           | Polynomial commitments, share verification                                     | Done   |
-| 3.3 Bulletproofs          | IPA prover + verifier over BLS12-381 G1                                        | Done   |
+| 3.4 Bulletproofs [15]     | R1CS satisfiability via ark-spartan NIZK (Spartan R1CS-to-IPA reduction)       | Done   |
 | 4.2 eVRF Definition       | NIKE pad derivation (DH shared secret -> x-coord -> hash-to-curve)             | Done   |
 | 4.3 R_eVRF Relation       | Circuit: bit-decompose sk, point exponentiation, extract x-coords              | Done   |
 | 4.4 Circuit Structure     | Bit-decomposition gadget, exponentiation gadget, non-native Fq                 | Done   |
@@ -108,17 +112,16 @@ The paper's Bulletproofs eVRF proof system (Section 4) describes a two-curve arc
 | Reshare: shrink (5,3)->(4,2), grow (4,2)->(7,4) | Done |
 | RFC 9380 hash-to-curve (WB map for BLS12-381 G1) | Done |
 | Malicious participant detection | Done (10 adversarial tests) |
+| Public-input binding in eVRF verification | Done (ark-spartan NIZK, 3 adversarial tests) |
 | Production randomness (OsRng) | Done |
 | Borsh serialization for all network types | Done |
 | Exhaustive C(n,t) reconstruction verification | Done |
 
 ### TODO
 
-| #   | Item                                      | Description                                                                                                                                                                                                                                                                                           |
-| --- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Public-input binding in eVRF verification | `verify_evrf` checks IPA against stored commitment P but does not re-derive P from public inputs (pk1, pk2, R, beta). A malicious prover could supply a valid IPA proof for a different circuit. Fix: verifier re-synthesizes circuit with public inputs, reconstructs expected P, checks it matches. |
-| 2   | R1CS-to-IPA reduction module              | `bulletproofs/r1cs.rs` is a TODO stub. The reduction (Section 3.4: random linear combination of constraint rows to inner product relation) is baked into the prove/verify flow but not factored out as a standalone module.                                                                           |
-| 3   | Benchmarks                                | Paper provides specific performance numbers (Table 1: 223 kb bandwidth, 13.5s for n=50). No benchmarks exist to compare against.                                                                                                                                                                      |
+| #   | Item       | Description                                                                                                                      |
+| --- | ---------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Benchmarks | Paper provides specific performance numbers (Table 1: 223 kb bandwidth, 13.5s for n=50). No benchmarks exist to compare against. |
 
 ### Out of Scope
 
