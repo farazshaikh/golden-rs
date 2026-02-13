@@ -42,7 +42,10 @@ def advantage (p0 p1 : Prob) : ℝ := |p0 - p1|
 theorem advantage_triangle (p0 p1 p2 : Prob) :
     advantage p0 p2 ≤ advantage p0 p1 + advantage p1 p2 := by
   unfold advantage
-  sorry -- abs_sub triangle: |a - c| ≤ |a - b| + |b - c|
+  -- |p0 - p2| = |(p0 - p1) + (p1 - p2)| ≤ |p0 - p1| + |p1 - p2|
+  have h : p0 - p2 = (p0 - p1) + (p1 - p2) := by ring
+  rw [h]
+  exact abs_add_le (p0 - p1) (p1 - p2)
 
 end GameFramework
 
