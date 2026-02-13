@@ -171,7 +171,11 @@ RUSTC_WRAPPER= cargo +nightly-2025-11-08 hax into fstar
 | 2c | eVRF DH symmetry (F* version) | `Golden_rs.Evrf.fst` | `derive_pad(sk_i, pk_j, ...) = derive_pad(sk_j, pk_i, ...)` | Not started (proven in Lean, Task 5) |
 | 2d | Protocol round correctness | `Golden_rs.Protocol.fst` | `round1` output `sk_i = sum_j f_j(i)` for honest broadcasts | Not started |
 
-**Next step:** Install F*, write specs and proofs for sub-tasks 2a and 2b.
+7. **F* version must match hax.** hax v0.3.6 expects F* **v2025.10.06** (specified in `flake.nix`). Using a newer F* (e.g., v2025.12.15) causes hard errors in the core models (`Core_models.Slice.Iter` record type mismatch). Download the exact binary from `https://github.com/FStarLang/FStar/releases/download/v2025.10.06/fstar-v2025.10.06-Linux-x86_64.tar.gz`.
+
+8. **Arkworks types need F* models.** hax extracts arkworks types like `Ark_ff.Fields.Models.Fp.t_Fp (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)` -- deeply nested generic types that have no existing F* models. Creating these models (mapping arkworks' Montgomery-form field elements to abstract F* field types) is the main blocking work for Task 2 F* proofs. This is what makes Novel Contribution #4 (first hax verification of arkworks code) novel.
+
+**Current state:** F* v2025.10.06 installed. Extraction succeeds. Lax-checking fails on missing arkworks type models. Next step: create minimal `Ark_bls12_381_.Fields.Fr.fst` and `Ark_ff.Fields.Models.Fp.fst` stub modules.
 
 ---
 
