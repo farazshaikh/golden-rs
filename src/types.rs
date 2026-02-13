@@ -62,6 +62,10 @@ pub struct Round0Msg {
     pub vss_commitment: Vec<G1Affine>,
     /// Encrypted shares: one Ciphertext per peer (keyed by recipient NodeId)
     pub ciphertexts: HashMap<NodeId, Ciphertext>,
+    /// eVRF proofs: one per peer, proving the pad was correctly derived (legacy per-peer)
+    pub evrf_proofs: HashMap<NodeId, crate::zk_evrf::EVRFProof>,
+    /// Batched eVRF proof covering all peers (Section 5.3 optimization)
+    pub batch_evrf_proof: Option<crate::zk_evrf::EVRFProof>,
 }
 
 impl BorshSerialize for Round0Msg {
@@ -79,6 +83,21 @@ impl BorshSerialize for Round0Msg {
         for (node_id, ct) in ct_entries {
             BorshSerialize::serialize(&node_id, writer)?;
             BorshSerialize::serialize(ct, writer)?;
+        }
+        // evrf_proofs: HashMap<NodeId, EVRFProof> -- serialize as length + entries
+        let proof_entries: Vec<(NodeId, &crate::zk_evrf::EVRFProof)> =
+            self.evrf_proofs.iter().map(|(&k, v)| (k, v)).collect();
+        let proof_len = proof_entries.len() as u32;
+        BorshSerialize::serialize(&proof_len, writer)?;
+        for (node_id, proof) in proof_entries {
+            BorshSerialize::serialize(&node_id, writer)?;
+            BorshSerialize::serialize(proof, writer)?;
+        }
+        // batch_evrf_proof: Option<EVRFProof> -- bool flag + optional proof
+        let has_batch = self.batch_evrf_proof.is_some();
+        BorshSerialize::serialize(&has_batch, writer)?;
+        if let Some(ref proof) = self.batch_evrf_proof {
+            BorshSerialize::serialize(proof, writer)?;
         }
         Ok(())
     }
@@ -98,11 +117,27 @@ impl BorshDeserialize for Round0Msg {
             let ct: Ciphertext = BorshDeserialize::deserialize_reader(reader)?;
             ciphertexts.insert(node_id, ct);
         }
+        let proof_len: u32 = BorshDeserialize::deserialize_reader(reader)?;
+        let mut evrf_proofs = HashMap::new();
+        for _ in 0..proof_len {
+            let node_id: NodeId = BorshDeserialize::deserialize_reader(reader)?;
+            let proof: crate::zk_evrf::EVRFProof = BorshDeserialize::deserialize_reader(reader)?;
+            evrf_proofs.insert(node_id, proof);
+        }
+        // batch_evrf_proof: Option<EVRFProof>
+        let has_batch: bool = BorshDeserialize::deserialize_reader(reader)?;
+        let batch_evrf_proof = if has_batch {
+            Some(BorshDeserialize::deserialize_reader(reader)?)
+        } else {
+            None
+        };
         Ok(Round0Msg {
             from,
             random_msg,
             vss_commitment,
             ciphertexts,
+            evrf_proofs,
+            batch_evrf_proof,
         })
     }
 }
@@ -178,6 +213,8 @@ mod tests {
                 (G1Affine::generator() * sk2).into_affine(),
             ],
             ciphertexts,
+            evrf_proofs: HashMap::new(),
+            batch_evrf_proof: None,
         };
 
         let bytes = borsh::to_vec(&msg).unwrap();

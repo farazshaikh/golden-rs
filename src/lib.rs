@@ -1,3 +1,4 @@
+pub mod bulletproofs;
 pub mod evrf;
 pub mod network;
 pub mod node;
@@ -8,3 +9,4 @@ pub mod reshare_node;
 pub mod shamir;
 pub mod types;
 pub mod vss;
+pub mod zk_evrf;

@@ -100,6 +100,8 @@ mod tests {
             random_msg: [42u8; 32],
             vss_commitment: vec![],
             ciphertexts: HashMap::new(),
+            evrf_proofs: HashMap::new(),
+            batch_evrf_proof: None,
         };
 
         network.broadcast(msg.clone());

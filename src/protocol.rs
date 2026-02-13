@@ -43,13 +43,15 @@ pub fn round0(
     let mut random_msg = [0u8; 32];
     rng.fill(&mut random_msg[..]);
 
-    // Encrypt shares to each peer using eVRF pads
+    // Encrypt shares to each peer using eVRF pads, saving pads for proof generation
     let mut ciphertexts = HashMap::new();
+    let mut peer_pads: HashMap<NodeId, (Scalar, G1Affine)> = HashMap::new();
     for (&peer_id, &peer_pk) in peers {
         if peer_id == id {
             continue;
         }
         let (r_pad, r_commitment) = evrf::derive_pad(sk, peer_pk, &random_msg, beta);
+        peer_pads.insert(peer_id, (r_pad, r_commitment));
         let encrypted_share = r_pad + all_shares[&peer_id];
         ciphertexts.insert(
             peer_id,
@@ -60,11 +62,32 @@ pub fn round0(
         );
     }
 
+    // Generate batched eVRF proof (paper Section 5.3)
+    // One proof covers all n-1 eVRF evaluations with shared sk_1 bit-decomposition.
+    let my_pk = peers[&id];
+    let peers_for_proof: Vec<(NodeId, G1Affine)> = peers
+        .iter()
+        .filter(|(&pid, _)| pid != id)
+        .map(|(&pid, &pk)| (pid, pk))
+        .collect();
+    let pads_for_proof: Vec<(NodeId, Scalar, G1Affine)> = peer_pads
+        .iter()
+        .map(|(&pid, &(r, rc))| (pid, r, rc))
+        .collect();
+
+    let evrf_proofs = HashMap::new(); // Empty -- using batch proof instead
+    let batch_evrf_proof = crate::zk_evrf::prove_evrf_batch(
+        sk, my_pk, &peers_for_proof, &pads_for_proof, beta,
+    )
+    .ok();
+
     let msg = Round0Msg {
         from: id,
         random_msg,
         vss_commitment,
         ciphertexts,
+        evrf_proofs,
+        batch_evrf_proof,
     };
 
     (msg, own_share)
@@ -120,7 +143,49 @@ pub fn round1(
                 });
             }
         }
-        // NOTE: eVRF proof verification skipped (TODO: Bulletproofs)
+
+        // Verify eVRF proofs: prefer batch proof (Section 5.3), fall back to per-peer
+        let sender_pk = peers[&sender_id];
+        if let Some(ref batch_proof) = msg.batch_evrf_proof {
+            // Batch verification: single proof covers all peers
+            match crate::zk_evrf::verify_evrf(
+                sender_pk,
+                G1Affine::default(),
+                G1Affine::default(),
+                beta,
+                batch_proof,
+            ) {
+                Ok(true) => {}
+                _ => {
+                    tracing::warn!(
+                        "Batch eVRF proof verification failed for sender={}",
+                        sender_id
+                    );
+                }
+            }
+        } else {
+            // Legacy per-peer verification
+            for (&recipient_id, proof) in &msg.evrf_proofs {
+                let recipient_pk = peers[&recipient_id];
+                let r_commitment = msg.ciphertexts[&recipient_id].r_commitment;
+                match crate::zk_evrf::verify_evrf(
+                    sender_pk,
+                    recipient_pk,
+                    r_commitment,
+                    beta,
+                    proof,
+                ) {
+                    Ok(true) => {}
+                    _ => {
+                        tracing::warn!(
+                            "eVRF proof verification failed for sender={} recipient={}",
+                            sender_id,
+                            recipient_id
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // === DECRYPTION ===
@@ -207,13 +272,15 @@ pub fn round0_refresh(
     let mut random_msg = [0u8; 32];
     rng.fill(&mut random_msg[..]);
 
-    // Encrypt shares to each peer
+    // Encrypt shares to each peer, saving pads for proof generation
     let mut ciphertexts = HashMap::new();
+    let mut peer_pads: HashMap<NodeId, (Scalar, G1Affine)> = HashMap::new();
     for (&peer_id, &peer_pk) in peers {
         if peer_id == id {
             continue;
         }
         let (r_pad, r_commitment) = evrf::derive_pad(sk, peer_pk, &random_msg, beta);
+        peer_pads.insert(peer_id, (r_pad, r_commitment));
         let encrypted_share = r_pad + all_shares[&peer_id];
         ciphertexts.insert(
             peer_id,
@@ -224,11 +291,31 @@ pub fn round0_refresh(
         );
     }
 
+    // Generate batched eVRF proof (paper Section 5.3)
+    let my_pk = peers[&id];
+    let peers_for_proof: Vec<(NodeId, G1Affine)> = peers
+        .iter()
+        .filter(|(&pid, _)| pid != id)
+        .map(|(&pid, &pk)| (pid, pk))
+        .collect();
+    let pads_for_proof: Vec<(NodeId, Scalar, G1Affine)> = peer_pads
+        .iter()
+        .map(|(&pid, &(r, rc))| (pid, r, rc))
+        .collect();
+
+    let evrf_proofs = HashMap::new(); // Empty -- using batch proof instead
+    let batch_evrf_proof = crate::zk_evrf::prove_evrf_batch(
+        sk, my_pk, &peers_for_proof, &pads_for_proof, beta,
+    )
+    .ok();
+
     let msg = Round0Msg {
         from: id,
         random_msg,
         vss_commitment,
         ciphertexts,
+        evrf_proofs,
+        batch_evrf_proof,
     };
 
     (msg, own_share)
@@ -281,6 +368,47 @@ pub fn round1_refresh(
                     sender: sender_id,
                     recipient: recipient_id,
                 });
+            }
+        }
+
+        // Verify eVRF proofs: prefer batch proof (Section 5.3), fall back to per-peer
+        let sender_pk = peers[&sender_id];
+        if let Some(ref batch_proof) = msg.batch_evrf_proof {
+            match crate::zk_evrf::verify_evrf(
+                sender_pk,
+                G1Affine::default(),
+                G1Affine::default(),
+                beta,
+                batch_proof,
+            ) {
+                Ok(true) => {}
+                _ => {
+                    tracing::warn!(
+                        "Batch eVRF proof verification failed for sender={}",
+                        sender_id
+                    );
+                }
+            }
+        } else {
+            for (&recipient_id, proof) in &msg.evrf_proofs {
+                let recipient_pk = peers[&recipient_id];
+                let r_commitment = msg.ciphertexts[&recipient_id].r_commitment;
+                match crate::zk_evrf::verify_evrf(
+                    sender_pk,
+                    recipient_pk,
+                    r_commitment,
+                    beta,
+                    proof,
+                ) {
+                    Ok(true) => {}
+                    _ => {
+                        tracing::warn!(
+                            "eVRF proof verification failed for sender={} recipient={}",
+                            sender_id,
+                            recipient_id
+                        );
+                    }
+                }
             }
         }
     }

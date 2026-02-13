@@ -9,6 +9,8 @@ ark-ec = "0.5"
 ark-ff = "0.5"
 ark-std = "0.5"
 ark-serialize = "0.5"
+ark-r1cs-std = "0.5"
+ark-relations = "0.5"
 tokio = { version = "1", features = ["full"] }
 sha2 = "0.10"
 rand = "0.8"
