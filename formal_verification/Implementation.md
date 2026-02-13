@@ -13,7 +13,7 @@ The verification uses Lean 4 + Mathlib + VCV-io for mathematical proofs, hax for
 | # | Task | Layer | Tool | What Is Proven | Effort | Status |
 |---|------|-------|------|----------------|--------|--------|
 | 1 | Safety (no panics) across all modules | Implementation | Kani | Absence of panics, overflows, and assertion violations for all inputs within bound. Covers `shamir`, `vss`, `protocol`, `evrf`, `adapter`. | 1-2 weeks | **Done** -- 17 harnesses, all verified |
-| 2 | Shamir + VSS functional correctness | Implementation | hax -> F* | `lagrange_interpolate_at_zero` is correct polynomial interpolation. `verify_share` accepts only valid shares. `round1` output `sk_i = sum_j f_j(i)` when all broadcasts are honest. | 3-4 weeks | **Blocked** -- hax driver requires pinned nightly; cargo-hax installed but driver fails on current nightly |
+| 2 | Shamir + VSS functional correctness | Implementation | hax -> F* | `lagrange_interpolate_at_zero` is correct polynomial interpolation. `verify_share` accepts only valid shares. `round1` output `sk_i = sum_j f_j(i)` when all broadcasts are honest. | 3-4 weeks | **Unblocked** -- hax extraction succeeds, 17 F* files generated. F* proofs not yet written. |
 | 3 | Adapter column remapping correctness | Circuit | Kani | The arkworks-to-Spartan column index remapping in `to_spartan()` is a correct bijection: every arkworks column maps to a unique Spartan column and back. No out-of-bounds indices. | 3-5 days | **Done** -- subsumed by Task 1 (4 adapter harnesses) |
 | 4 | Shamir/VSS algebraic properties | Paper Math | Lean 4 + Mathlib | `forall (f : Polynomial F_r) (S : Finset), |S| >= t -> lagrange_interpolate S f = f(0)`. Feldman VSS binding: if `commit(f) = C` and `verify_share(C, i, s) = true`, then `s = f(i)` under DL hardness. | 3-4 weeks | **Done** -- 9 theorems proved (5 Shamir + 4 VSS) in Lean 4 |
 | 5 | eVRF DH symmetry proof | Implementation | Lean 4 (pivoted from hax) | `derive_pad(sk_i, pk_j, msg, beta) == derive_pad(sk_j, pk_i, msg, beta)` -- the pad derivation is symmetric under DH key exchange. Proven algebraically in Lean 4. | 2-3 weeks | **Done** -- 7 theorems, 0 sorry |
@@ -111,12 +111,40 @@ This is the first machine-checked proof of Feldman VSS completeness in Lean 4.
 
 ---
 
-## Task 2 Status: hax Extraction Blocked
+## Task 2 Status: hax Extraction Working
 
-`cargo-hax` v0.3.6 installed, but the `hax-driver` (rustc frontend exporter) requires a pinned nightly
-toolchain matching its internal rustc API usage. The current nightly (2026-02-12) has breaking changes
-in `GenericArgs` that prevent compilation. Resolution: use hax's pinned `rust-toolchain.toml`
-(requires building from source with `make` in the hax repo).
+**Unblocked.** hax v0.3.6 fully installed (driver + engine + CLI) by building from source with the pinned `nightly-2025-11-08` toolchain. Full extraction of the golden-rs crate succeeds, producing 17 F* files.
+
+**Installation (for reproducibility):**
+```bash
+# 1. Clone hax and install with pinned nightly
+git clone --depth 1 https://github.com/cryspen/hax.git /tmp/hax-build
+rustup toolchain install nightly-2025-11-08
+rustup component add rustc-dev rust-src --toolchain nightly-2025-11-08
+cargo +nightly-2025-11-08 install --path /tmp/hax-build/cli/driver
+cargo +nightly-2025-11-08 install --path /tmp/hax-build/cli/subcommands
+cargo +nightly-2025-11-08 install --path /tmp/hax-build/engine/names/extract
+# 2. Build OCaml engine (requires opam + OCaml 4.14)
+opam switch create hax-engine 4.14.2
+eval $(opam env --switch=hax-engine)
+cd /tmp/hax-build/engine && opam install . --yes --deps-only
+CI=false dune build && dune install
+# 3. Extract
+eval $(opam env --switch=hax-engine)
+RUSTC_WRAPPER= cargo +nightly-2025-11-08 hax into fstar
+```
+
+**Extracted files** (in `proofs/fstar/extraction/`):
+- `Golden_rs.Shamir.fst` (25 KB) -- Polynomial, generate_shares, lagrange_interpolate_at_zero
+- `Golden_rs.Vss.fst` (17 KB) -- commit, verify_share, expected_share_commitment
+- `Golden_rs.Evrf.fst` (18 KB) -- derive_pad, extract_x_as_scalar, hash_to_curve
+- `Golden_rs.Protocol.fst` (181 KB) -- round0, round1, round0_refresh, round1_refresh
+- `Golden_rs.Schnorr_pok.fst` (36 KB) -- prove, verify, compute_challenge
+- Plus 12 more modules (adapter, circuit, types, network, etc.)
+
+**Known limitation:** One `&mut` error in `zk_evrf/mod.rs` (hax issue #420). All other modules extract cleanly.
+
+**Next step:** Write F* specs and proofs for the extracted `Shamir` and `Vss` modules.
 
 ---
 
