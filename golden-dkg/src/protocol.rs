@@ -193,10 +193,7 @@ pub fn round1(
             ) {
                 Ok(true) => {}
                 _ => {
-                    tracing::warn!(
-                        "Batch eVRF proof verification failed for sender={}",
-                        sender_id
-                    );
+                    // Batch eVRF proof verification failed for sender
                 }
             }
         } else {
@@ -213,11 +210,7 @@ pub fn round1(
                 ) {
                     Ok(true) => {}
                     _ => {
-                        tracing::warn!(
-                            "eVRF proof verification failed for sender={} recipient={}",
-                            sender_id,
-                            recipient_id
-                        );
+                        // eVRF proof verification failed for sender/recipient
                     }
                 }
             }
@@ -444,10 +437,7 @@ pub fn round1_refresh(
             ) {
                 Ok(true) => {}
                 _ => {
-                    tracing::warn!(
-                        "Batch eVRF proof verification failed for sender={}",
-                        sender_id
-                    );
+                    // Batch eVRF proof verification failed for sender
                 }
             }
         } else {
@@ -463,11 +453,7 @@ pub fn round1_refresh(
                 ) {
                     Ok(true) => {}
                     _ => {
-                        tracing::warn!(
-                            "eVRF proof verification failed for sender={} recipient={}",
-                            sender_id,
-                            recipient_id
-                        );
+                        // eVRF proof verification failed for sender/recipient
                     }
                 }
             }
