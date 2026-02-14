@@ -1,2 +1,3 @@
 module Libspartan.Errors
-assume val t_R1CSError : #a:Type0 -> a
+assume new type t_R1CSError : Type0
+assume new type t_ProofVerifyError : Type0

@@ -77,7 +77,44 @@ $FSTAR --lax --warn_error -331 \
   --include proofs/fstar/hax-libs/core \
   --include proofs/fstar/hax-libs/rust_primitives \
   --include proofs/fstar/hax-libs/hax_lib \
-  proofs/fstar/extraction/Golden_rs.Shamir.fst
+  proofs/fstar/extraction/Golden_dkg.Shamir.fst
 ```
 
 Expected output: `All verification conditions discharged successfully`
+
+## Lax-Check Status (18 modules)
+
+15/18 PASS. Remaining 3 blocked by F* error 163 (tracing `let rec`).
+
+| Module | Status | Notes |
+|--------|--------|-------|
+| Golden_dkg.Shamir | PASS | Core Shamir secret sharing |
+| Golden_dkg.Vss | PASS | Feldman VSS |
+| Golden_dkg.Evrf | PASS | eVRF pad derivation |
+| Golden_dkg.Error | PASS | Error types |
+| Golden_dkg.Types | PASS | Type definitions |
+| Golden_dkg.Schnorr_pok | PASS | Schnorr proof of knowledge |
+| Golden_dkg.Bundle | PASS | Re-exports |
+| Golden_dkg.Reshare | PASS | Reshare public API |
+| Golden_dkg.Reshare_protocol | PASS | Reshare protocol logic |
+| Golden_dkg.Zk_evrf | PASS | NIZK prove/verify |
+| Golden_dkg.Zk_evrf.Adapter | PASS | Arkworks-to-Spartan bridge |
+| Golden_dkg.Zk_evrf.Bit_decompose | PASS | Bit decomposition gadget |
+| Golden_dkg.Zk_evrf.Circuit | PASS | R1CS circuit |
+| Golden_dkg.Zk_evrf.Exponentiation | PASS | Exponentiation gadget |
+| Golden_dkg.Zk_evrf.Nonnative | PASS | Non-native field arithmetic |
+| Golden_dkg.Protocol | FAIL | F* E163: `let rec` tracing statics |
+| Golden_dkg.Dkg | FAIL | Depends on Protocol |
+| Golden_dkg.Refresh | FAIL | Depends on Protocol |
+
+### Remaining Blocker: F* Error 163
+
+hax extracts Rust's `tracing::warn!` macro into `let rec` bindings for callsite
+metadata constants. F* error 163 ("Only function literals with arrow types can be
+defined recursively") is fatal and cannot be suppressed. This affects only
+`Golden_dkg.Protocol.fst` which has 4 `warn!` invocations.
+
+**Fix options:**
+1. Remove `tracing::warn!` from `protocol.rs` (simplest -- replace with silent error returns)
+2. Add `#[hax_lib::opaque]` annotations to the tracing code blocks
+3. Post-process the extraction to convert `let rec X: t_Metadata = ...` to `let X: t_Metadata = ...`

@@ -10,6 +10,12 @@ class t_CanonicalDeserialize (v_Self: Type0) = {
   __canon_de_dummy: bool;
 }
 
+/// Blanket instances for any type
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume val impl_canon_ser_blanket (#v_T: Type0) : t_CanonicalSerialize v_T
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume val impl_canon_de_blanket (#v_T: Type0) : t_CanonicalDeserialize v_T
+
 /// f_serialize_compressed: used by ark_to_bytes via Hax.failure (body is opaque).
 /// f_deserialize_compressed: called as
 ///   Ark_serialize.f_deserialize_compressed #T #solve #Reader data

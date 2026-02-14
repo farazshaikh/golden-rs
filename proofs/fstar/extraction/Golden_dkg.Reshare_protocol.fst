@@ -1,4 +1,4 @@
-module Golden_rs.Reshare
+module Golden_dkg.Reshare_protocol
 #set-options "--fuel 0 --ifuel 1 --z3rlimit 15"
 open FStar.Mul
 open Core_models
@@ -17,90 +17,11 @@ let _ =
   let open Ark_ff.Fields in
   let open Ark_ff.Fields.Models.Fp in
   let open Ark_ff.Fields.Models.Fp.Montgomery_backend in
+  let open Golden_dkg.Types in
   let open Rand.Rng in
   let open Std.Collections.Hash.Map in
   let open Std.Hash.Random in
   ()
-
-/// Error type for resharing protocol failures.
-type t_ReshareError =
-  | ReshareError_CiphertextVerificationFailed {
-    f_sender:u32;
-    f_recipient:u32
-  }: t_ReshareError
-  | ReshareError_MissingCiphertext {
-    f_sender:u32;
-    f_recipient:u32
-  }: t_ReshareError
-  | ReshareError_InsufficientDealers {
-    f_needed:u32;
-    f_got:u32
-  }: t_ReshareError
-  | ReshareError_BroadcastReceiveFailed {
-    f_node:u32;
-    f_reason:Alloc.String.t_String
-  }: t_ReshareError
-  | ReshareError_RegistrationFailed {
-    f_node:u32;
-    f_reason:Alloc.String.t_String
-  }: t_ReshareError
-  | ReshareError_DuplicateNodeIndex { f_index:u32 }: t_ReshareError
-  | ReshareError_NoMessages : t_ReshareError
-  | ReshareError_SessionMismatch { f_sender:u32 }: t_ReshareError
-
-[@@ FStar.Tactics.Typeclasses.tcinstance]
-assume
-val impl_2': Core_models.Fmt.t_Debug t_ReshareError
-
-unfold
-let impl_2 = impl_2'
-
-[@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl: Core_models.Fmt.t_Display t_ReshareError =
-  {
-    f_fmt_pre = (fun (self: t_ReshareError) (f: Core_models.Fmt.t_Formatter) -> true);
-    f_fmt_post
-    =
-    (fun
-        (self: t_ReshareError)
-        (f: Core_models.Fmt.t_Formatter)
-        (out1:
-          (Core_models.Fmt.t_Formatter &
-            Core_models.Result.t_Result Prims.unit Core_models.Fmt.t_Error))
-        ->
-        true);
-    f_fmt
-    =
-    fun (self: t_ReshareError) (f: Core_models.Fmt.t_Formatter) ->
-      let args:t_ReshareError = self <: t_ReshareError in
-      let args:t_Array Core_models.Fmt.Rt.t_Argument (mk_usize 1) =
-        let list = [Core_models.Fmt.Rt.impl__new_debug #t_ReshareError args] in
-        FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
-        Rust_primitives.Hax.array_of_list 1 list
-      in
-      let
-      (tmp0: Core_models.Fmt.t_Formatter),
-      (out: Core_models.Result.t_Result Prims.unit Core_models.Fmt.t_Error) =
-        Core_models.Fmt.impl_11__write_fmt f
-          (Core_models.Fmt.Rt.impl_1__new_v1 (mk_usize 1)
-              (mk_usize 1)
-              (let list = [""] in
-                FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
-                Rust_primitives.Hax.array_of_list 1 list)
-              args
-            <:
-            Core_models.Fmt.t_Arguments)
-      in
-      let f:Core_models.Fmt.t_Formatter = tmp0 in
-      let hax_temp_output:Core_models.Result.t_Result Prims.unit Core_models.Fmt.t_Error = out in
-      f, hax_temp_output
-      <:
-      (Core_models.Fmt.t_Formatter & Core_models.Result.t_Result Prims.unit Core_models.Fmt.t_Error)
-  }
-
-[@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_1: Core_models.Error.t_Error t_ReshareError =
-  { _super_i0 = FStar.Tactics.Typeclasses.solve; _super_i1 = FStar.Tactics.Typeclasses.solve }
 
 /// Old node deals its existing share to the new group.
 /// Creates a polynomial `g_i` of degree `(t_new - 1)` with `g_i(0) = old_share`,
@@ -125,20 +46,20 @@ let reshare_deal
             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                 Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
       (rng: iimpl_1039969868_)
-      (session_id: t_Array u8 (mk_usize 32))
-    : (iimpl_1039969868_ & Golden_rs.Types.t_ReshareMsg) =
-  let (tmp0: iimpl_1039969868_), (out: Golden_rs.Shamir.t_Polynomial) =
-    Golden_rs.Shamir.impl_Polynomial__new_random #iimpl_1039969868_
+      (session_id: Golden_dkg.Types.t_SessionId)
+    : (iimpl_1039969868_ & Golden_dkg.Types.t_ReshareMsg) =
+  let (tmp0: iimpl_1039969868_), (out: Golden_dkg.Shamir.t_Polynomial) =
+    Golden_dkg.Shamir.impl_Polynomial__new_random #iimpl_1039969868_
       old_share
       (cast (tt_new -! mk_u32 1 <: u32) <: usize)
       rng
   in
   let rng:iimpl_1039969868_ = tmp0 in
-  let poly:Golden_rs.Shamir.t_Polynomial = out in
+  let poly:Golden_dkg.Shamir.t_Polynomial = out in
   let vss_commitment:Alloc.Vec.t_Vec
     (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
     Alloc.Alloc.t_Global =
-    Golden_rs.Vss.commit poly
+    Golden_dkg.Vss.commit poly
   in
   let random_msg:t_Array u8 (mk_usize 32) = Rust_primitives.Hax.repeat (mk_u8 0) (mk_usize 32) in
   let (tmp0: iimpl_1039969868_), (tmp1: t_Slice u8) =
@@ -158,12 +79,12 @@ let reshare_deal
   in
   let _:Prims.unit = () in
   let ciphertexts:Std.Collections.Hash.Map.t_HashMap u32
-    Golden_rs.Types.t_Ciphertext
+    Golden_dkg.Types.t_Ciphertext
     Std.Hash.Random.t_RandomState =
-    Std.Collections.Hash.Map.impl__new #u32 #Golden_rs.Types.t_Ciphertext ()
+    Std.Collections.Hash.Map.impl__new #u32 #Golden_dkg.Types.t_Ciphertext ()
   in
   let ciphertexts:Std.Collections.Hash.Map.t_HashMap u32
-    Golden_rs.Types.t_Ciphertext
+    Golden_dkg.Types.t_Ciphertext
     Std.Hash.Random.t_RandomState =
     Core_models.Iter.Traits.Iterator.f_fold (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_HashMap
               u32
@@ -177,7 +98,7 @@ let reshare_deal
       ciphertexts
       (fun ciphertexts temp_1_ ->
           let ciphertexts:Std.Collections.Hash.Map.t_HashMap u32
-            Golden_rs.Types.t_Ciphertext
+            Golden_dkg.Types.t_Ciphertext
             Std.Hash.Random.t_RandomState =
             ciphertexts
           in
@@ -190,7 +111,7 @@ let reshare_deal
           let share_for_new:Ark_ff.Fields.Models.Fp.t_Fp
             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                 Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
-            Golden_rs.Shamir.impl_Polynomial__evaluate poly
+            Golden_dkg.Shamir.impl_Polynomial__evaluate poly
               (Core_models.Convert.f_from #(Ark_ff.Fields.Models.Fp.t_Fp
                       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                           Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
@@ -209,7 +130,7 @@ let reshare_deal
                   Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)),
           (r_commitment:
             Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config) =
-            Golden_rs.Evrf.derive_pad old_sk_identity new_pk (random_msg <: t_Slice u8) beta
+            Golden_dkg.Evrf.derive_pad old_sk_identity new_pk (random_msg <: t_Slice u8) beta
           in
           let encrypted_share:Ark_ff.Fields.Models.Fp.t_Fp
             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -227,41 +148,41 @@ let reshare_deal
           let
           (tmp0:
             Std.Collections.Hash.Map.t_HashMap u32
-              Golden_rs.Types.t_Ciphertext
+              Golden_dkg.Types.t_Ciphertext
               Std.Hash.Random.t_RandomState),
-          (out: Core_models.Option.t_Option Golden_rs.Types.t_Ciphertext) =
+          (out: Core_models.Option.t_Option Golden_dkg.Types.t_Ciphertext) =
             Std.Collections.Hash.Map.impl_2__insert #u32
-              #Golden_rs.Types.t_Ciphertext
+              #Golden_dkg.Types.t_Ciphertext
               #Std.Hash.Random.t_RandomState
               ciphertexts
               new_id
               ({
-                  Golden_rs.Types.f_r_commitment = r_commitment;
-                  Golden_rs.Types.f_encrypted_share = encrypted_share
+                  Golden_dkg.Types.f_r_commitment = r_commitment;
+                  Golden_dkg.Types.f_encrypted_share = encrypted_share
                 }
                 <:
-                Golden_rs.Types.t_Ciphertext)
+                Golden_dkg.Types.t_Ciphertext)
           in
           let ciphertexts:Std.Collections.Hash.Map.t_HashMap u32
-            Golden_rs.Types.t_Ciphertext
+            Golden_dkg.Types.t_Ciphertext
             Std.Hash.Random.t_RandomState =
             tmp0
           in
-          let _:Core_models.Option.t_Option Golden_rs.Types.t_Ciphertext = out in
+          let _:Core_models.Option.t_Option Golden_dkg.Types.t_Ciphertext = out in
           ciphertexts)
   in
-  let hax_temp_output:Golden_rs.Types.t_ReshareMsg =
+  let hax_temp_output:Golden_dkg.Types.t_ReshareMsg =
     {
-      Golden_rs.Types.f_session_id = session_id;
-      Golden_rs.Types.f_from = old_id;
-      Golden_rs.Types.f_random_msg = random_msg;
-      Golden_rs.Types.f_vss_commitment = vss_commitment;
-      Golden_rs.Types.f_ciphertexts = ciphertexts
+      Golden_dkg.Types.f_session_id = session_id;
+      Golden_dkg.Types.f_from = old_id;
+      Golden_dkg.Types.f_random_msg = random_msg;
+      Golden_dkg.Types.f_vss_commitment = vss_commitment;
+      Golden_dkg.Types.f_ciphertexts = ciphertexts
     }
     <:
-    Golden_rs.Types.t_ReshareMsg
+    Golden_dkg.Types.t_ReshareMsg
   in
-  rng, hax_temp_output <: (iimpl_1039969868_ & Golden_rs.Types.t_ReshareMsg)
+  rng, hax_temp_output <: (iimpl_1039969868_ & Golden_dkg.Types.t_ReshareMsg)
 
 /// New node receives resharing messages from old group and computes new share.
 /// Each old member `i` dealt their share `sk_i` under polynomial `g_i`.
@@ -282,7 +203,7 @@ let reshare_receive
             Std.Hash.Random.t_RandomState)
       (received:
           Std.Collections.Hash.Map.t_HashMap u32
-            Golden_rs.Types.t_ReshareMsg
+            Golden_dkg.Types.t_ReshareMsg
             Std.Hash.Random.t_RandomState)
       (beta:
           Ark_ff.Fields.Models.Fp.t_Fp
@@ -295,52 +216,57 @@ let reshare_receive
             (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
             Std.Hash.Random.t_RandomState)
       (tt_old: u32)
-      (session_id: t_Array u8 (mk_usize 32))
-    : Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError =
+      (session_id: Golden_dkg.Types.t_SessionId)
+    : Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_ReshareError =
   match
     Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_HashMap
-              u32 Golden_rs.Types.t_ReshareMsg Std.Hash.Random.t_RandomState)
+              u32 Golden_dkg.Types.t_ReshareMsg Std.Hash.Random.t_RandomState)
           #FStar.Tactics.Typeclasses.solve
           received
         <:
-        Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_ReshareMsg)
+        Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_ReshareMsg)
       ()
       (fun temp_0_ temp_1_ ->
           let _:Prims.unit = temp_0_ in
-          let (sender_id: u32), (msg: Golden_rs.Types.t_ReshareMsg) = temp_1_ in
-          if msg.Golden_rs.Types.f_session_id <>. session_id <: bool
+          let (sender_id: u32), (msg: Golden_dkg.Types.t_ReshareMsg) = temp_1_ in
+          if msg.Golden_dkg.Types.f_session_id <>. session_id <: bool
           then
             Core_models.Ops.Control_flow.ControlFlow_Break
             (Core_models.Ops.Control_flow.ControlFlow_Break
               (Core_models.Result.Result_Err
-                (ReshareError_SessionMismatch ({ f_sender = sender_id }) <: t_ReshareError)
+                (Golden_dkg.Error.ReshareError_SessionMismatch
+                  ({ Golden_dkg.Error.f_sender = sender_id })
+                  <:
+                  Golden_dkg.Error.t_ReshareError)
                 <:
-                Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                  Golden_dkg.Error.t_ReshareError)
               <:
               Core_models.Ops.Control_flow.t_ControlFlow
-                (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                (Prims.unit & Prims.unit))
+                (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                    Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit))
             <:
             Core_models.Ops.Control_flow.t_ControlFlow
               (Core_models.Ops.Control_flow.t_ControlFlow
-                  (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                  (Prims.unit & Prims.unit)) Prims.unit
+                  (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                      Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit)) Prims.unit
           else
             Core_models.Ops.Control_flow.ControlFlow_Continue ()
             <:
             Core_models.Ops.Control_flow.t_ControlFlow
               (Core_models.Ops.Control_flow.t_ControlFlow
-                  (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                  (Prims.unit & Prims.unit)) Prims.unit)
+                  (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                      Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit)) Prims.unit)
     <:
     Core_models.Ops.Control_flow.t_ControlFlow
-      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError) Prims.unit
+      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_ReshareError)
+      Prims.unit
   with
   | Core_models.Ops.Control_flow.ControlFlow_Break ret -> ret
   | Core_models.Ops.Control_flow.ControlFlow_Continue _ ->
     if
       (cast (Std.Collections.Hash.Map.impl_1__len #u32
-              #Golden_rs.Types.t_ReshareMsg
+              #Golden_dkg.Types.t_ReshareMsg
               #Std.Hash.Random.t_RandomState
               received
             <:
@@ -350,13 +276,13 @@ let reshare_receive
       tt_old
     then
       Core_models.Result.Result_Err
-      (ReshareError_InsufficientDealers
+      (Golden_dkg.Error.ReshareError_InsufficientDealers
         ({
-            f_needed = tt_old;
-            f_got
+            Golden_dkg.Error.f_needed = tt_old;
+            Golden_dkg.Error.f_got
             =
             cast (Std.Collections.Hash.Map.impl_1__len #u32
-                  #Golden_rs.Types.t_ReshareMsg
+                  #Golden_dkg.Types.t_ReshareMsg
                   #Std.Hash.Random.t_RandomState
                   received
                 <:
@@ -365,21 +291,21 @@ let reshare_receive
             u32
           })
         <:
-        t_ReshareError)
+        Golden_dkg.Error.t_ReshareError)
       <:
-      Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError
+      Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_ReshareError
     else
       match
         Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_HashMap
-                  u32 Golden_rs.Types.t_ReshareMsg Std.Hash.Random.t_RandomState)
+                  u32 Golden_dkg.Types.t_ReshareMsg Std.Hash.Random.t_RandomState)
               #FStar.Tactics.Typeclasses.solve
               received
             <:
-            Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_ReshareMsg)
+            Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_ReshareMsg)
           ()
           (fun temp_0_ temp_1_ ->
               let _:Prims.unit = temp_0_ in
-              let (sender_id: u32), (msg: Golden_rs.Types.t_ReshareMsg) = temp_1_ in
+              let (sender_id: u32), (msg: Golden_dkg.Types.t_ReshareMsg) = temp_1_ in
               match
                 Std.Collections.Hash.Map.impl_2__get #u32
                   #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -394,7 +320,7 @@ let reshare_receive
               with
               | Core_models.Option.Option_Some expected_pk_share ->
                 if
-                  (msg.Golden_rs.Types.f_vss_commitment.[ mk_usize 0 ]
+                  (msg.Golden_dkg.Types.f_vss_commitment.[ mk_usize 0 ]
                     <:
                     Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                     Ark_bls12_381_.Curves.G1.t_Config) <>.
@@ -405,39 +331,45 @@ let reshare_receive
                   Core_models.Ops.Control_flow.ControlFlow_Break
                   (Core_models.Ops.Control_flow.ControlFlow_Break
                     (Core_models.Result.Result_Err
-                      (ReshareError_CiphertextVerificationFailed
-                        ({ f_sender = sender_id; f_recipient = new_id })
+                      (Golden_dkg.Error.ReshareError_CiphertextVerificationFailed
+                        ({
+                            Golden_dkg.Error.f_sender = sender_id;
+                            Golden_dkg.Error.f_recipient = new_id
+                          })
                         <:
-                        t_ReshareError)
+                        Golden_dkg.Error.t_ReshareError)
                       <:
-                      Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                      Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                        Golden_dkg.Error.t_ReshareError)
                     <:
                     Core_models.Ops.Control_flow.t_ControlFlow
-                      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                      (Prims.unit & Prims.unit))
+                      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                          Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit))
                   <:
                   Core_models.Ops.Control_flow.t_ControlFlow
                     (Core_models.Ops.Control_flow.t_ControlFlow
-                        (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                        (Prims.unit & Prims.unit)) Prims.unit
+                        (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                            Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit)) Prims.unit
                 else
                   (match
                       Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter
                             #(Std.Collections.Hash.Map.t_HashMap u32
-                                Golden_rs.Types.t_Ciphertext
+                                Golden_dkg.Types.t_Ciphertext
                                 Std.Hash.Random.t_RandomState)
                             #FStar.Tactics.Typeclasses.solve
-                            msg.Golden_rs.Types.f_ciphertexts
+                            msg.Golden_dkg.Types.f_ciphertexts
                           <:
-                          Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Ciphertext)
+                          Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Ciphertext)
                         ()
                         (fun temp_0_ temp_1_ ->
                             let _:Prims.unit = temp_0_ in
-                            let (recipient_id: u32), (ct: Golden_rs.Types.t_Ciphertext) = temp_1_ in
+                            let (recipient_id: u32), (ct: Golden_dkg.Types.t_Ciphertext) =
+                              temp_1_
+                            in
                             let expected_share_comm:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                             Ark_bls12_381_.Curves.G1.t_Config =
-                              Golden_rs.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice msg
-                                      .Golden_rs.Types.f_vss_commitment
+                              Golden_dkg.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice msg
+                                      .Golden_dkg.Types.f_vss_commitment
                                   <:
                                   t_Slice
                                   (Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -463,7 +395,7 @@ let reshare_receive
                                       <:
                                       Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                       Ark_bls12_381_.Curves.G1.t_Config)
-                                    ct.Golden_rs.Types.f_encrypted_share
+                                    ct.Golden_dkg.Types.f_encrypted_share
                                   <:
                                   Ark_ec.Models.Short_weierstrass.Group.t_Projective
                                   Ark_bls12_381_.Curves.G1.t_Config)
@@ -481,7 +413,7 @@ let reshare_receive
                                     (Ark_ec.f_into_group #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                           Ark_bls12_381_.Curves.G1.t_Config)
                                         #FStar.Tactics.Typeclasses.solve
-                                        ct.Golden_rs.Types.f_r_commitment
+                                        ct.Golden_dkg.Types.f_r_commitment
                                       <:
                                       Ark_ec.Models.Short_weierstrass.Group.t_Projective
                                       Ark_bls12_381_.Curves.G1.t_Config)
@@ -501,71 +433,78 @@ let reshare_receive
                               Core_models.Ops.Control_flow.ControlFlow_Break
                               (Core_models.Ops.Control_flow.ControlFlow_Break
                                 (Core_models.Result.Result_Err
-                                  (ReshareError_CiphertextVerificationFailed
-                                    ({ f_sender = sender_id; f_recipient = recipient_id })
+                                  (Golden_dkg.Error.ReshareError_CiphertextVerificationFailed
+                                    ({
+                                        Golden_dkg.Error.f_sender = sender_id;
+                                        Golden_dkg.Error.f_recipient = recipient_id
+                                      })
                                     <:
-                                    t_ReshareError)
+                                    Golden_dkg.Error.t_ReshareError)
                                   <:
-                                  Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                    t_ReshareError)
+                                  Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                    Golden_dkg.Error.t_ReshareError)
                                 <:
                                 Core_models.Ops.Control_flow.t_ControlFlow
-                                  (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                      t_ReshareError) (Prims.unit & Prims.unit))
+                                  (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                      Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit))
                               <:
                               Core_models.Ops.Control_flow.t_ControlFlow
                                 (Core_models.Ops.Control_flow.t_ControlFlow
-                                    (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                        t_ReshareError) (Prims.unit & Prims.unit)) Prims.unit
+                                    (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                        Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit))
+                                Prims.unit
                             else
                               Core_models.Ops.Control_flow.ControlFlow_Continue ()
                               <:
                               Core_models.Ops.Control_flow.t_ControlFlow
                                 (Core_models.Ops.Control_flow.t_ControlFlow
-                                    (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                        t_ReshareError) (Prims.unit & Prims.unit)) Prims.unit)
+                                    (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                        Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit))
+                                Prims.unit)
                       <:
                       Core_models.Ops.Control_flow.t_ControlFlow
-                        (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                        Prims.unit
+                        (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                            Golden_dkg.Error.t_ReshareError) Prims.unit
                     with
                     | Core_models.Ops.Control_flow.ControlFlow_Break ret ->
                       Core_models.Ops.Control_flow.ControlFlow_Break
                       (Core_models.Ops.Control_flow.ControlFlow_Break ret
                         <:
                         Core_models.Ops.Control_flow.t_ControlFlow
-                          (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                          (Prims.unit & Prims.unit))
+                          (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                              Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit))
                       <:
                       Core_models.Ops.Control_flow.t_ControlFlow
                         (Core_models.Ops.Control_flow.t_ControlFlow
-                            (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                            (Prims.unit & Prims.unit)) Prims.unit
+                            (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit))
+                        Prims.unit
                     | Core_models.Ops.Control_flow.ControlFlow_Continue loop_res ->
                       Core_models.Ops.Control_flow.ControlFlow_Continue loop_res
                       <:
                       Core_models.Ops.Control_flow.t_ControlFlow
                         (Core_models.Ops.Control_flow.t_ControlFlow
-                            (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                            (Prims.unit & Prims.unit)) Prims.unit)
+                            (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit))
+                        Prims.unit)
               | _ ->
                 match
                   Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter
                         #(Std.Collections.Hash.Map.t_HashMap u32
-                            Golden_rs.Types.t_Ciphertext
+                            Golden_dkg.Types.t_Ciphertext
                             Std.Hash.Random.t_RandomState)
                         #FStar.Tactics.Typeclasses.solve
-                        msg.Golden_rs.Types.f_ciphertexts
+                        msg.Golden_dkg.Types.f_ciphertexts
                       <:
-                      Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Ciphertext)
+                      Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Ciphertext)
                     ()
                     (fun temp_0_ temp_1_ ->
                         let _:Prims.unit = temp_0_ in
-                        let (recipient_id: u32), (ct: Golden_rs.Types.t_Ciphertext) = temp_1_ in
+                        let (recipient_id: u32), (ct: Golden_dkg.Types.t_Ciphertext) = temp_1_ in
                         let expected_share_comm:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                         Ark_bls12_381_.Curves.G1.t_Config =
-                          Golden_rs.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice msg
-                                  .Golden_rs.Types.f_vss_commitment
+                          Golden_dkg.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice msg
+                                  .Golden_dkg.Types.f_vss_commitment
                               <:
                               t_Slice
                               (Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -591,7 +530,7 @@ let reshare_receive
                                   <:
                                   Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                   Ark_bls12_381_.Curves.G1.t_Config)
-                                ct.Golden_rs.Types.f_encrypted_share
+                                ct.Golden_dkg.Types.f_encrypted_share
                               <:
                               Ark_ec.Models.Short_weierstrass.Group.t_Projective
                               Ark_bls12_381_.Curves.G1.t_Config)
@@ -609,7 +548,7 @@ let reshare_receive
                                 (Ark_ec.f_into_group #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                       Ark_bls12_381_.Curves.G1.t_Config)
                                     #FStar.Tactics.Typeclasses.solve
-                                    ct.Golden_rs.Types.f_r_commitment
+                                    ct.Golden_dkg.Types.f_r_commitment
                                   <:
                                   Ark_ec.Models.Short_weierstrass.Group.t_Projective
                                   Ark_bls12_381_.Curves.G1.t_Config)
@@ -629,56 +568,62 @@ let reshare_receive
                           Core_models.Ops.Control_flow.ControlFlow_Break
                           (Core_models.Ops.Control_flow.ControlFlow_Break
                             (Core_models.Result.Result_Err
-                              (ReshareError_CiphertextVerificationFailed
-                                ({ f_sender = sender_id; f_recipient = recipient_id })
+                              (Golden_dkg.Error.ReshareError_CiphertextVerificationFailed
+                                ({
+                                    Golden_dkg.Error.f_sender = sender_id;
+                                    Golden_dkg.Error.f_recipient = recipient_id
+                                  })
                                 <:
-                                t_ReshareError)
+                                Golden_dkg.Error.t_ReshareError)
                               <:
-                              Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError
-                            )
+                              Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                Golden_dkg.Error.t_ReshareError)
                             <:
                             Core_models.Ops.Control_flow.t_ControlFlow
-                              (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                  t_ReshareError) (Prims.unit & Prims.unit))
+                              (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                  Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit))
                           <:
                           Core_models.Ops.Control_flow.t_ControlFlow
                             (Core_models.Ops.Control_flow.t_ControlFlow
-                                (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                    t_ReshareError) (Prims.unit & Prims.unit)) Prims.unit
+                                (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                    Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit))
+                            Prims.unit
                         else
                           Core_models.Ops.Control_flow.ControlFlow_Continue ()
                           <:
                           Core_models.Ops.Control_flow.t_ControlFlow
                             (Core_models.Ops.Control_flow.t_ControlFlow
-                                (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                    t_ReshareError) (Prims.unit & Prims.unit)) Prims.unit)
+                                (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                    Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit))
+                            Prims.unit)
                   <:
                   Core_models.Ops.Control_flow.t_ControlFlow
-                    (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                    Prims.unit
+                    (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                        Golden_dkg.Error.t_ReshareError) Prims.unit
                 with
                 | Core_models.Ops.Control_flow.ControlFlow_Break ret ->
                   Core_models.Ops.Control_flow.ControlFlow_Break
                   (Core_models.Ops.Control_flow.ControlFlow_Break ret
                     <:
                     Core_models.Ops.Control_flow.t_ControlFlow
-                      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                      (Prims.unit & Prims.unit))
+                      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                          Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit))
                   <:
                   Core_models.Ops.Control_flow.t_ControlFlow
                     (Core_models.Ops.Control_flow.t_ControlFlow
-                        (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                        (Prims.unit & Prims.unit)) Prims.unit
+                        (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                            Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit)) Prims.unit
                 | Core_models.Ops.Control_flow.ControlFlow_Continue loop_res ->
                   Core_models.Ops.Control_flow.ControlFlow_Continue loop_res
                   <:
                   Core_models.Ops.Control_flow.t_ControlFlow
                     (Core_models.Ops.Control_flow.t_ControlFlow
-                        (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
-                        (Prims.unit & Prims.unit)) Prims.unit)
+                        (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                            Golden_dkg.Error.t_ReshareError) (Prims.unit & Prims.unit)) Prims.unit)
         <:
         Core_models.Ops.Control_flow.t_ControlFlow
-          (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError) Prims.unit
+          (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_ReshareError)
+          Prims.unit
       with
       | Core_models.Ops.Control_flow.ControlFlow_Break ret -> ret
       | Core_models.Ops.Control_flow.ControlFlow_Continue _ ->
@@ -703,11 +648,11 @@ let reshare_receive
         in
         match
           Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_HashMap
-                    u32 Golden_rs.Types.t_ReshareMsg Std.Hash.Random.t_RandomState)
+                    u32 Golden_dkg.Types.t_ReshareMsg Std.Hash.Random.t_RandomState)
                 #FStar.Tactics.Typeclasses.solve
                 received
               <:
-              Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_ReshareMsg)
+              Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_ReshareMsg)
             sub_shares
             (fun sub_shares temp_1_ ->
                 let sub_shares:Alloc.Vec.t_Vec
@@ -718,23 +663,28 @@ let reshare_receive
                   Alloc.Alloc.t_Global =
                   sub_shares
                 in
-                let (sender_id: u32), (msg: Golden_rs.Types.t_ReshareMsg) = temp_1_ in
+                let (sender_id: u32), (msg: Golden_dkg.Types.t_ReshareMsg) = temp_1_ in
                 match
-                  Core_models.Option.impl__ok_or #Golden_rs.Types.t_Ciphertext
-                    #t_ReshareError
+                  Core_models.Option.impl__ok_or #Golden_dkg.Types.t_Ciphertext
+                    #Golden_dkg.Error.t_ReshareError
                     (Std.Collections.Hash.Map.impl_2__get #u32
-                        #Golden_rs.Types.t_Ciphertext
+                        #Golden_dkg.Types.t_Ciphertext
                         #Std.Hash.Random.t_RandomState
                         #u32
-                        msg.Golden_rs.Types.f_ciphertexts
+                        msg.Golden_dkg.Types.f_ciphertexts
                         new_id
                       <:
-                      Core_models.Option.t_Option Golden_rs.Types.t_Ciphertext)
-                    (ReshareError_MissingCiphertext ({ f_sender = sender_id; f_recipient = new_id })
+                      Core_models.Option.t_Option Golden_dkg.Types.t_Ciphertext)
+                    (Golden_dkg.Error.ReshareError_MissingCiphertext
+                      ({
+                          Golden_dkg.Error.f_sender = sender_id;
+                          Golden_dkg.Error.f_recipient = new_id
+                        })
                       <:
-                      t_ReshareError)
+                      Golden_dkg.Error.t_ReshareError)
                   <:
-                  Core_models.Result.t_Result Golden_rs.Types.t_Ciphertext t_ReshareError
+                  Core_models.Result.t_Result Golden_dkg.Types.t_Ciphertext
+                    Golden_dkg.Error.t_ReshareError
                 with
                 | Core_models.Result.Result_Ok ct ->
                   let sender_pk:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -749,9 +699,9 @@ let reshare_receive
                   (_:
                     Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                     Ark_bls12_381_.Curves.G1.t_Config) =
-                    Golden_rs.Evrf.derive_pad new_sk_identity
+                    Golden_dkg.Evrf.derive_pad new_sk_identity
                       sender_pk
-                      (msg.Golden_rs.Types.f_random_msg <: t_Slice u8)
+                      (msg.Golden_dkg.Types.f_random_msg <: t_Slice u8)
                       beta
                   in
                   let decrypted:Ark_ff.Fields.Models.Fp.t_Fp
@@ -764,7 +714,7 @@ let reshare_receive
                           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
                       #FStar.Tactics.Typeclasses.solve
-                      ct.Golden_rs.Types.f_encrypted_share
+                      ct.Golden_dkg.Types.f_encrypted_share
                       r_pad
                   in
                   let sub_shares:Alloc.Vec.t_Vec
@@ -790,7 +740,8 @@ let reshare_receive
                   <:
                   Core_models.Ops.Control_flow.t_ControlFlow
                     (Core_models.Ops.Control_flow.t_ControlFlow
-                        (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                        (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                            Golden_dkg.Error.t_ReshareError)
                         (Prims.unit &
                           Alloc.Vec.t_Vec
                             (u32 &
@@ -809,10 +760,12 @@ let reshare_receive
                   (Core_models.Ops.Control_flow.ControlFlow_Break
                     (Core_models.Result.Result_Err err
                       <:
-                      Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                      Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                        Golden_dkg.Error.t_ReshareError)
                     <:
                     Core_models.Ops.Control_flow.t_ControlFlow
-                      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                          Golden_dkg.Error.t_ReshareError)
                       (Prims.unit &
                         Alloc.Vec.t_Vec
                           (u32 &
@@ -823,7 +776,8 @@ let reshare_receive
                   <:
                   Core_models.Ops.Control_flow.t_ControlFlow
                     (Core_models.Ops.Control_flow.t_ControlFlow
-                        (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                        (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                            Golden_dkg.Error.t_ReshareError)
                         (Prims.unit &
                           Alloc.Vec.t_Vec
                             (u32 &
@@ -839,7 +793,8 @@ let reshare_receive
                         Alloc.Alloc.t_Global))
           <:
           Core_models.Ops.Control_flow.t_ControlFlow
-            (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+            (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                Golden_dkg.Error.t_ReshareError)
             (Alloc.Vec.t_Vec
                 (u32 &
                   Ark_ff.Fields.Models.Fp.t_Fp
@@ -952,8 +907,8 @@ let reshare_receive
                             <:
                             Core_models.Ops.Control_flow.t_ControlFlow
                               (Core_models.Ops.Control_flow.t_ControlFlow
-                                  (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                      t_ReshareError)
+                                  (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                      Golden_dkg.Error.t_ReshareError)
                                   (Prims.unit &
                                     Ark_ff.Fields.Models.Fp.t_Fp
                                       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -980,7 +935,7 @@ let reshare_receive
                                     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                         Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
                                     (mk_usize 4))
-                                #t_ReshareError
+                                #Golden_dkg.Error.t_ReshareError
                                 (Ark_ff.Fields.f_inverse #(Ark_ff.Fields.Models.Fp.t_Fp
                                         (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                             Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
@@ -1008,17 +963,18 @@ let reshare_receive
                                       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                           Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
                                       (mk_usize 4)))
-                                (ReshareError_DuplicateNodeIndex ({ f_index = xi_id })
+                                (Golden_dkg.Error.ReshareError_DuplicateNodeIndex
+                                  ({ Golden_dkg.Error.f_index = xi_id })
                                   <:
-                                  t_ReshareError)
+                                  Golden_dkg.Error.t_ReshareError)
                               <:
                               Core_models.Result.t_Result
                                 (Ark_ff.Fields.Models.Fp.t_Fp
                                     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                         Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
-                                    (mk_usize 4)) t_ReshareError
+                                    (mk_usize 4)) Golden_dkg.Error.t_ReshareError
                             with
-                            | Core_models.Result.Result_Ok hoist16 ->
+                            | Core_models.Result.Result_Ok hoist41 ->
                               let li:Ark_ff.Fields.Models.Fp.t_Fp
                                 (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                     Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
@@ -1042,7 +998,7 @@ let reshare_receive
                                           (mk_usize 4))
                                       #FStar.Tactics.Typeclasses.solve
                                       xj
-                                      hoist16
+                                      hoist41
                                     <:
                                     Ark_ff.Fields.Models.Fp.t_Fp
                                       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1053,8 +1009,8 @@ let reshare_receive
                               <:
                               Core_models.Ops.Control_flow.t_ControlFlow
                                 (Core_models.Ops.Control_flow.t_ControlFlow
-                                    (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                        t_ReshareError)
+                                    (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                        Golden_dkg.Error.t_ReshareError)
                                     (Prims.unit &
                                       Ark_ff.Fields.Models.Fp.t_Fp
                                         (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1069,12 +1025,12 @@ let reshare_receive
                               (Core_models.Ops.Control_flow.ControlFlow_Break
                                 (Core_models.Result.Result_Err err
                                   <:
-                                  Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                    t_ReshareError)
+                                  Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                    Golden_dkg.Error.t_ReshareError)
                                 <:
                                 Core_models.Ops.Control_flow.t_ControlFlow
-                                  (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                      t_ReshareError)
+                                  (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                      Golden_dkg.Error.t_ReshareError)
                                   (Prims.unit &
                                     Ark_ff.Fields.Models.Fp.t_Fp
                                       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1083,8 +1039,8 @@ let reshare_receive
                               <:
                               Core_models.Ops.Control_flow.t_ControlFlow
                                 (Core_models.Ops.Control_flow.t_ControlFlow
-                                    (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                        t_ReshareError)
+                                    (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                        Golden_dkg.Error.t_ReshareError)
                                     (Prims.unit &
                                       Ark_ff.Fields.Models.Fp.t_Fp
                                         (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1096,7 +1052,8 @@ let reshare_receive
                                     (mk_usize 4)))
                     <:
                     Core_models.Ops.Control_flow.t_ControlFlow
-                      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                          Golden_dkg.Error.t_ReshareError)
                       (Ark_ff.Fields.Models.Fp.t_Fp
                           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
@@ -1106,7 +1063,8 @@ let reshare_receive
                     (Core_models.Ops.Control_flow.ControlFlow_Break ret
                       <:
                       Core_models.Ops.Control_flow.t_ControlFlow
-                        (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                        (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                            Golden_dkg.Error.t_ReshareError)
                         (Prims.unit &
                           Ark_ff.Fields.Models.Fp.t_Fp
                             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1114,7 +1072,8 @@ let reshare_receive
                     <:
                     Core_models.Ops.Control_flow.t_ControlFlow
                       (Core_models.Ops.Control_flow.t_ControlFlow
-                          (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                          (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                              Golden_dkg.Error.t_ReshareError)
                           (Prims.unit &
                             Ark_ff.Fields.Models.Fp.t_Fp
                               (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1148,7 +1107,8 @@ let reshare_receive
                     <:
                     Core_models.Ops.Control_flow.t_ControlFlow
                       (Core_models.Ops.Control_flow.t_ControlFlow
-                          (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                          (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                              Golden_dkg.Error.t_ReshareError)
                           (Prims.unit &
                             Ark_ff.Fields.Models.Fp.t_Fp
                               (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1158,7 +1118,8 @@ let reshare_receive
                               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
             <:
             Core_models.Ops.Control_flow.t_ControlFlow
-              (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+              (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                  Golden_dkg.Error.t_ReshareError)
               (Ark_ff.Fields.Models.Fp.t_Fp
                   (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                       Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
@@ -1166,46 +1127,47 @@ let reshare_receive
           | Core_models.Ops.Control_flow.ControlFlow_Break ret -> ret
           | Core_models.Ops.Control_flow.ControlFlow_Continue new_secret_share ->
             let
-            (_: Std.Collections.Hash.Map.t_Values u32 Golden_rs.Types.t_ReshareMsg),
-            (out: Core_models.Option.t_Option Golden_rs.Types.t_ReshareMsg) =
+            (_: Std.Collections.Hash.Map.t_Values u32 Golden_dkg.Types.t_ReshareMsg),
+            (out: Core_models.Option.t_Option Golden_dkg.Types.t_ReshareMsg) =
               Core_models.Iter.Traits.Iterator.f_next #(Std.Collections.Hash.Map.t_Values u32
-                    Golden_rs.Types.t_ReshareMsg)
+                    Golden_dkg.Types.t_ReshareMsg)
                 #FStar.Tactics.Typeclasses.solve
                 (Std.Collections.Hash.Map.impl_1__values #u32
-                    #Golden_rs.Types.t_ReshareMsg
+                    #Golden_dkg.Types.t_ReshareMsg
                     #Std.Hash.Random.t_RandomState
                     received
                   <:
-                  Std.Collections.Hash.Map.t_Values u32 Golden_rs.Types.t_ReshareMsg)
+                  Std.Collections.Hash.Map.t_Values u32 Golden_dkg.Types.t_ReshareMsg)
             in
             match
-              Core_models.Option.impl__ok_or #Golden_rs.Types.t_ReshareMsg
-                #t_ReshareError
+              Core_models.Option.impl__ok_or #Golden_dkg.Types.t_ReshareMsg
+                #Golden_dkg.Error.t_ReshareError
                 out
-                (ReshareError_NoMessages <: t_ReshareError)
+                (Golden_dkg.Error.ReshareError_NoMessages <: Golden_dkg.Error.t_ReshareError)
               <:
-              Core_models.Result.t_Result Golden_rs.Types.t_ReshareMsg t_ReshareError
+              Core_models.Result.t_Result Golden_dkg.Types.t_ReshareMsg
+                Golden_dkg.Error.t_ReshareError
             with
             | Core_models.Result.Result_Ok first_msg ->
               let (new_member_ids: Alloc.Vec.t_Vec u32 Alloc.Alloc.t_Global):Alloc.Vec.t_Vec u32
                 Alloc.Alloc.t_Global =
                 Core_models.Iter.Traits.Iterator.f_collect #(Core_models.Iter.Adapters.Copied.t_Copied
-                    (Std.Collections.Hash.Map.t_Keys u32 Golden_rs.Types.t_Ciphertext))
+                    (Std.Collections.Hash.Map.t_Keys u32 Golden_dkg.Types.t_Ciphertext))
                   #FStar.Tactics.Typeclasses.solve
                   #(Alloc.Vec.t_Vec u32 Alloc.Alloc.t_Global)
                   (Core_models.Iter.Traits.Iterator.f_copied #(Std.Collections.Hash.Map.t_Keys u32
-                          Golden_rs.Types.t_Ciphertext)
+                          Golden_dkg.Types.t_Ciphertext)
                       #FStar.Tactics.Typeclasses.solve
                       #u32
                       (Std.Collections.Hash.Map.impl_1__keys #u32
-                          #Golden_rs.Types.t_Ciphertext
+                          #Golden_dkg.Types.t_Ciphertext
                           #Std.Hash.Random.t_RandomState
-                          first_msg.Golden_rs.Types.f_ciphertexts
+                          first_msg.Golden_dkg.Types.f_ciphertexts
                         <:
-                        Std.Collections.Hash.Map.t_Keys u32 Golden_rs.Types.t_Ciphertext)
+                        Std.Collections.Hash.Map.t_Keys u32 Golden_dkg.Types.t_Ciphertext)
                     <:
                     Core_models.Iter.Adapters.Copied.t_Copied
-                    (Std.Collections.Hash.Map.t_Keys u32 Golden_rs.Types.t_Ciphertext))
+                    (Std.Collections.Hash.Map.t_Keys u32 Golden_dkg.Types.t_Ciphertext))
               in
               let public_key_shares:Std.Collections.Hash.Map.t_HashMap u32
                 (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
@@ -1339,7 +1301,8 @@ let reshare_receive
                                           Core_models.Ops.Control_flow.t_ControlFlow
                                             (Core_models.Ops.Control_flow.t_ControlFlow
                                                 (Core_models.Result.t_Result
-                                                    Golden_rs.Types.t_DkgOutput t_ReshareError)
+                                                    Golden_dkg.Types.t_DkgOutput
+                                                    Golden_dkg.Error.t_ReshareError)
                                                 (Prims.unit &
                                                   Ark_ff.Fields.Models.Fp.t_Fp
                                                     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1367,7 +1330,7 @@ let reshare_receive
                                                   (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                                       Ark_bls12_381_.Fields.Fr.t_FrConfig
                                                       (mk_usize 4)) (mk_usize 4))
-                                              #t_ReshareError
+                                              #Golden_dkg.Error.t_ReshareError
                                               (Ark_ff.Fields.f_inverse #(Ark_ff.Fields.Models.Fp.t_Fp
                                                       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                                           Ark_bls12_381_.Fields.Fr.t_FrConfig
@@ -1395,18 +1358,19 @@ let reshare_receive
                                                     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                                         Ark_bls12_381_.Fields.Fr.t_FrConfig
                                                         (mk_usize 4)) (mk_usize 4)))
-                                              (ReshareError_DuplicateNodeIndex
-                                                ({ f_index = sender_id })
+                                              (Golden_dkg.Error.ReshareError_DuplicateNodeIndex
+                                                ({ Golden_dkg.Error.f_index = sender_id })
                                                 <:
-                                                t_ReshareError)
+                                                Golden_dkg.Error.t_ReshareError)
                                             <:
                                             Core_models.Result.t_Result
                                               (Ark_ff.Fields.Models.Fp.t_Fp
                                                   (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                                       Ark_bls12_381_.Fields.Fr.t_FrConfig
-                                                      (mk_usize 4)) (mk_usize 4)) t_ReshareError
+                                                      (mk_usize 4)) (mk_usize 4))
+                                              Golden_dkg.Error.t_ReshareError
                                           with
-                                          | Core_models.Result.Result_Ok hoist20 ->
+                                          | Core_models.Result.Result_Ok hoist45 ->
                                             let li:Ark_ff.Fields.Models.Fp.t_Fp
                                               (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                                   Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
@@ -1431,7 +1395,7 @@ let reshare_receive
                                                             (mk_usize 4)) (mk_usize 4))
                                                     #FStar.Tactics.Typeclasses.solve
                                                     xj
-                                                    hoist20
+                                                    hoist45
                                                   <:
                                                   Ark_ff.Fields.Models.Fp.t_Fp
                                                     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1443,7 +1407,8 @@ let reshare_receive
                                             Core_models.Ops.Control_flow.t_ControlFlow
                                               (Core_models.Ops.Control_flow.t_ControlFlow
                                                   (Core_models.Result.t_Result
-                                                      Golden_rs.Types.t_DkgOutput t_ReshareError)
+                                                      Golden_dkg.Types.t_DkgOutput
+                                                      Golden_dkg.Error.t_ReshareError)
                                                   (Prims.unit &
                                                     Ark_ff.Fields.Models.Fp.t_Fp
                                                       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1459,11 +1424,13 @@ let reshare_receive
                                               (Core_models.Result.Result_Err err
                                                 <:
                                                 Core_models.Result.t_Result
-                                                  Golden_rs.Types.t_DkgOutput t_ReshareError)
+                                                  Golden_dkg.Types.t_DkgOutput
+                                                  Golden_dkg.Error.t_ReshareError)
                                               <:
                                               Core_models.Ops.Control_flow.t_ControlFlow
                                                 (Core_models.Result.t_Result
-                                                    Golden_rs.Types.t_DkgOutput t_ReshareError)
+                                                    Golden_dkg.Types.t_DkgOutput
+                                                    Golden_dkg.Error.t_ReshareError)
                                                 (Prims.unit &
                                                   Ark_ff.Fields.Models.Fp.t_Fp
                                                     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1473,7 +1440,8 @@ let reshare_receive
                                             Core_models.Ops.Control_flow.t_ControlFlow
                                               (Core_models.Ops.Control_flow.t_ControlFlow
                                                   (Core_models.Result.t_Result
-                                                      Golden_rs.Types.t_DkgOutput t_ReshareError)
+                                                      Golden_dkg.Types.t_DkgOutput
+                                                      Golden_dkg.Error.t_ReshareError)
                                                   (Prims.unit &
                                                     Ark_ff.Fields.Models.Fp.t_Fp
                                                       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1485,8 +1453,8 @@ let reshare_receive
                                                       (mk_usize 4)) (mk_usize 4)))
                                   <:
                                   Core_models.Ops.Control_flow.t_ControlFlow
-                                    (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                        t_ReshareError)
+                                    (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                        Golden_dkg.Error.t_ReshareError)
                                     (Ark_ff.Fields.Models.Fp.t_Fp
                                         (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                             Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
@@ -1497,27 +1465,27 @@ let reshare_receive
                                   (Core_models.Ops.Control_flow.ControlFlow_Break ret
                                     <:
                                     Core_models.Ops.Control_flow.t_ControlFlow
-                                      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                          t_ReshareError)
+                                      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                          Golden_dkg.Error.t_ReshareError)
                                       (Prims.unit &
                                         Ark_ec.Models.Short_weierstrass.Group.t_Projective
                                         Ark_bls12_381_.Curves.G1.t_Config))
                                   <:
                                   Core_models.Ops.Control_flow.t_ControlFlow
                                     (Core_models.Ops.Control_flow.t_ControlFlow
-                                        (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                            t_ReshareError)
+                                        (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                            Golden_dkg.Error.t_ReshareError)
                                         (Prims.unit &
                                           Ark_ec.Models.Short_weierstrass.Group.t_Projective
                                           Ark_bls12_381_.Curves.G1.t_Config))
                                     (Ark_ec.Models.Short_weierstrass.Group.t_Projective
                                       Ark_bls12_381_.Curves.G1.t_Config)
                                 | Core_models.Ops.Control_flow.ControlFlow_Continue li ->
-                                  let msg:Golden_rs.Types.t_ReshareMsg = received.[ sender_id ] in
+                                  let msg:Golden_dkg.Types.t_ReshareMsg = received.[ sender_id ] in
                                   let share_comm:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                   Ark_bls12_381_.Curves.G1.t_Config =
-                                    Golden_rs.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice
-                                          msg.Golden_rs.Types.f_vss_commitment
+                                    Golden_dkg.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice
+                                          msg.Golden_dkg.Types.f_vss_commitment
                                         <:
                                         t_Slice
                                         (Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -1552,8 +1520,8 @@ let reshare_receive
                                   <:
                                   Core_models.Ops.Control_flow.t_ControlFlow
                                     (Core_models.Ops.Control_flow.t_ControlFlow
-                                        (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                            t_ReshareError)
+                                        (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                            Golden_dkg.Error.t_ReshareError)
                                         (Prims.unit &
                                           Ark_ec.Models.Short_weierstrass.Group.t_Projective
                                           Ark_bls12_381_.Curves.G1.t_Config))
@@ -1561,7 +1529,8 @@ let reshare_receive
                                       Ark_bls12_381_.Curves.G1.t_Config))
                           <:
                           Core_models.Ops.Control_flow.t_ControlFlow
-                            (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                            (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                Golden_dkg.Error.t_ReshareError)
                             (Ark_ec.Models.Short_weierstrass.Group.t_Projective
                               Ark_bls12_381_.Curves.G1.t_Config)
                         with
@@ -1570,8 +1539,8 @@ let reshare_receive
                           (Core_models.Ops.Control_flow.ControlFlow_Break ret
                             <:
                             Core_models.Ops.Control_flow.t_ControlFlow
-                              (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                  t_ReshareError)
+                              (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                  Golden_dkg.Error.t_ReshareError)
                               (Prims.unit &
                                 Std.Collections.Hash.Map.t_HashMap u32
                                   (Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -1580,8 +1549,8 @@ let reshare_receive
                           <:
                           Core_models.Ops.Control_flow.t_ControlFlow
                             (Core_models.Ops.Control_flow.t_ControlFlow
-                                (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                    t_ReshareError)
+                                (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                    Golden_dkg.Error.t_ReshareError)
                                 (Prims.unit &
                                   Std.Collections.Hash.Map.t_HashMap u32
                                     (Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -1631,8 +1600,8 @@ let reshare_receive
                           <:
                           Core_models.Ops.Control_flow.t_ControlFlow
                             (Core_models.Ops.Control_flow.t_ControlFlow
-                                (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                    t_ReshareError)
+                                (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                    Golden_dkg.Error.t_ReshareError)
                                 (Prims.unit &
                                   Std.Collections.Hash.Map.t_HashMap u32
                                     (Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -1644,7 +1613,8 @@ let reshare_receive
                                 Std.Hash.Random.t_RandomState))
                   <:
                   Core_models.Ops.Control_flow.t_ControlFlow
-                    (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                    (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                        Golden_dkg.Error.t_ReshareError)
                     (Std.Collections.Hash.Map.t_HashMap u32
                         (Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                           Ark_bls12_381_.Curves.G1.t_Config)
@@ -1654,15 +1624,17 @@ let reshare_receive
                 | Core_models.Ops.Control_flow.ControlFlow_Continue public_key_shares ->
                   Core_models.Result.Result_Ok
                   ({
-                      Golden_rs.Types.f_public_key = original_pk;
-                      Golden_rs.Types.f_public_key_shares = public_key_shares;
-                      Golden_rs.Types.f_secret_share = new_secret_share
+                      Golden_dkg.Types.f_public_key = original_pk;
+                      Golden_dkg.Types.f_public_key_shares = public_key_shares;
+                      Golden_dkg.Types.f_secret_share = new_secret_share
                     }
                     <:
-                    Golden_rs.Types.t_DkgOutput)
+                    Golden_dkg.Types.t_DkgOutput)
                   <:
-                  Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError)
+                  Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                    Golden_dkg.Error.t_ReshareError)
             | Core_models.Result.Result_Err err ->
               Core_models.Result.Result_Err err
               <:
-              Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ReshareError
+              Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                Golden_dkg.Error.t_ReshareError

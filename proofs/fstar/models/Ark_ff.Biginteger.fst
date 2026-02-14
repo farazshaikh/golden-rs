@@ -17,5 +17,7 @@ class t_BigInteger (v_Self : Type0) = {
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume val impl_bigint (n : usize) : t_BigInteger (t_BigInt n)
 
-open Rust_primitives
-assume val f_to_bits_le : #a:Type0 -> a -> Alloc.Vec.t_Vec bool Alloc.Alloc.t_Global
+/// f_to_bits_le: hax calls with #type #solve value
+assume val f_to_bits_le : #a:Type0
+  -> #[FStar.Tactics.Typeclasses.tcresolve ()] _inst:t_BigInteger a
+  -> a -> Alloc.Vec.t_Vec bool Alloc.Alloc.t_Global

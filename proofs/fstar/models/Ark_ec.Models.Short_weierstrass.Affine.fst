@@ -15,3 +15,11 @@ type t_Affine (config : Type0) = {
   f_y : t_Fp (t_MontBackend Ark_bls12_381_.Fields.Fq.t_FqConfig (mk_usize 6)) (mk_usize 6);
   f_infinity : bool;
 }
+
+/// Default instance (point at infinity)
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume val impl_affine_default (config : Type0) : Core_models.Default.t_Default (t_Affine config)
+
+/// PartialEq instance
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume val impl_affine_partial_eq (config : Type0) : Core_models.Cmp.t_PartialEq (t_Affine config) (t_Affine config)

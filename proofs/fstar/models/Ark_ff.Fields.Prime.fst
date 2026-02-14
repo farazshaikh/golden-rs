@@ -5,10 +5,11 @@ open Rust_primitives
 /// PrimeField trait operations: into_bigint, from_le_bytes_mod_order.
 
 class t_PrimeField (v_Self : Type0) = {
+  [@@@ FStar.Tactics.Typeclasses.no_method] f_BigIntN : Rust_primitives.Integers.usize;
   f_into_bigint_pre : v_Self -> Type0;
-  f_into_bigint_post : v_Self -> Ark_ff.Biginteger.t_BigInt (Rust_primitives.Integers.mk_usize 6) -> Type0;
+  f_into_bigint_post : v_Self -> Ark_ff.Biginteger.t_BigInt f_BigIntN -> Type0;
   f_into_bigint : x0: v_Self
-    -> Prims.Pure (Ark_ff.Biginteger.t_BigInt (Rust_primitives.Integers.mk_usize 6))
+    -> Prims.Pure (Ark_ff.Biginteger.t_BigInt f_BigIntN)
        (f_into_bigint_pre x0) (fun result -> f_into_bigint_post x0 result);
   f_from_le_bytes_mod_order_pre : t_Slice u8 -> Type0;
   f_from_le_bytes_mod_order_post : t_Slice u8 -> v_Self -> Type0;

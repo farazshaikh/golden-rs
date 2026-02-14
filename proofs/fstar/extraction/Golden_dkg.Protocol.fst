@@ -1,4 +1,4 @@
-module Golden_rs.Protocol
+module Golden_dkg.Protocol
 #set-options "--fuel 0 --ifuel 1 --z3rlimit 15"
 open FStar.Mul
 open Core_models
@@ -18,6 +18,7 @@ let _ =
   let open Ark_ff.Fields.Models.Fp in
   let open Ark_ff.Fields.Models.Fp.Montgomery_backend in
   let open Ark_std.Rand_helper in
+  let open Golden_dkg.Types in
   let open Rand.Distributions.Distribution in
   let open Rand.Rng in
   let open Std.Collections.Hash.Map in
@@ -52,9 +53,9 @@ let round0
             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                 Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
       (rng: iimpl_1039969868_)
-      (session_id: t_Array u8 (mk_usize 32))
+      (session_id: Golden_dkg.Types.t_SessionId)
     : (iimpl_1039969868_ &
-      (Golden_rs.Types.t_Round0Msg &
+      (Golden_dkg.Types.t_Round0Msg &
         Ark_ff.Fields.Models.Fp.t_Fp
           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))) =
@@ -72,10 +73,10 @@ let round0
       rng
   in
   let rng:iimpl_1039969868_ = tmp0 in
-  let omega:Golden_rs.Types.t_SecretScalar = Golden_rs.Types.impl_SecretScalar__new out in
-  let (tmp0: iimpl_1039969868_), (out: Golden_rs.Shamir.t_Polynomial) =
-    Golden_rs.Shamir.impl_Polynomial__new_random #iimpl_1039969868_
-      (Golden_rs.Types.impl_SecretScalar__inner omega
+  let omega:Golden_dkg.Types.t_SecretScalar = Golden_dkg.Types.impl_SecretScalar__new out in
+  let (tmp0: iimpl_1039969868_), (out: Golden_dkg.Shamir.t_Polynomial) =
+    Golden_dkg.Shamir.impl_Polynomial__new_random #iimpl_1039969868_
+      (Golden_dkg.Types.impl_SecretScalar__inner omega
         <:
         Ark_ff.Fields.Models.Fp.t_Fp
           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -84,11 +85,11 @@ let round0
       rng
   in
   let rng:iimpl_1039969868_ = tmp0 in
-  let poly:Golden_rs.Shamir.t_Polynomial = out in
+  let poly:Golden_dkg.Shamir.t_Polynomial = out in
   let vss_commitment:Alloc.Vec.t_Vec
     (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
     Alloc.Alloc.t_Global =
-    Golden_rs.Vss.commit poly
+    Golden_dkg.Vss.commit poly
   in
   let
   (all_shares:
@@ -131,7 +132,7 @@ let round0
           (fun j ->
               let j:u32 = j in
               j,
-              (Golden_rs.Shamir.impl_Polynomial__evaluate poly
+              (Golden_dkg.Shamir.impl_Polynomial__evaluate poly
                   (Core_models.Convert.f_from #(Ark_ff.Fields.Models.Fp.t_Fp
                           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
@@ -182,9 +183,9 @@ let round0
   in
   let _:Prims.unit = () in
   let ciphertexts:Std.Collections.Hash.Map.t_HashMap u32
-    Golden_rs.Types.t_Ciphertext
+    Golden_dkg.Types.t_Ciphertext
     Std.Hash.Random.t_RandomState =
-    Std.Collections.Hash.Map.impl__new #u32 #Golden_rs.Types.t_Ciphertext ()
+    Std.Collections.Hash.Map.impl__new #u32 #Golden_dkg.Types.t_Ciphertext ()
   in
   let
   (peer_pads:
@@ -209,7 +210,7 @@ let round0
   let
   (ciphertexts:
     Std.Collections.Hash.Map.t_HashMap u32
-      Golden_rs.Types.t_Ciphertext
+      Golden_dkg.Types.t_Ciphertext
       Std.Hash.Random.t_RandomState),
   (peer_pads:
     Std.Collections.Hash.Map.t_HashMap u32
@@ -230,7 +231,7 @@ let round0
       (ciphertexts, peer_pads
         <:
         (Std.Collections.Hash.Map.t_HashMap u32
-            Golden_rs.Types.t_Ciphertext
+            Golden_dkg.Types.t_Ciphertext
             Std.Hash.Random.t_RandomState &
           Std.Collections.Hash.Map.t_HashMap u32
             (Ark_ff.Fields.Models.Fp.t_Fp
@@ -242,7 +243,7 @@ let round0
           let
           (ciphertexts:
             Std.Collections.Hash.Map.t_HashMap u32
-              Golden_rs.Types.t_Ciphertext
+              Golden_dkg.Types.t_Ciphertext
               Std.Hash.Random.t_RandomState),
           (peer_pads:
             Std.Collections.Hash.Map.t_HashMap u32
@@ -264,7 +265,7 @@ let round0
             ciphertexts, peer_pads
             <:
             (Std.Collections.Hash.Map.t_HashMap u32
-                Golden_rs.Types.t_Ciphertext
+                Golden_dkg.Types.t_Ciphertext
                 Std.Hash.Random.t_RandomState &
               Std.Collections.Hash.Map.t_HashMap u32
                 (Ark_ff.Fields.Models.Fp.t_Fp
@@ -280,7 +281,7 @@ let round0
                     Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)),
             (r_commitment:
               Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config) =
-              Golden_rs.Evrf.derive_pad sk peer_pk (random_msg <: t_Slice u8) beta
+              Golden_dkg.Evrf.derive_pad sk peer_pk (random_msg <: t_Slice u8) beta
             in
             let
             (tmp0:
@@ -348,31 +349,31 @@ let round0
             let
             (tmp0:
               Std.Collections.Hash.Map.t_HashMap u32
-                Golden_rs.Types.t_Ciphertext
+                Golden_dkg.Types.t_Ciphertext
                 Std.Hash.Random.t_RandomState),
-            (out: Core_models.Option.t_Option Golden_rs.Types.t_Ciphertext) =
+            (out: Core_models.Option.t_Option Golden_dkg.Types.t_Ciphertext) =
               Std.Collections.Hash.Map.impl_2__insert #u32
-                #Golden_rs.Types.t_Ciphertext
+                #Golden_dkg.Types.t_Ciphertext
                 #Std.Hash.Random.t_RandomState
                 ciphertexts
                 peer_id
                 ({
-                    Golden_rs.Types.f_r_commitment = r_commitment;
-                    Golden_rs.Types.f_encrypted_share = encrypted_share
+                    Golden_dkg.Types.f_r_commitment = r_commitment;
+                    Golden_dkg.Types.f_encrypted_share = encrypted_share
                   }
                   <:
-                  Golden_rs.Types.t_Ciphertext)
+                  Golden_dkg.Types.t_Ciphertext)
             in
             let ciphertexts:Std.Collections.Hash.Map.t_HashMap u32
-              Golden_rs.Types.t_Ciphertext
+              Golden_dkg.Types.t_Ciphertext
               Std.Hash.Random.t_RandomState =
               tmp0
             in
-            let _:Core_models.Option.t_Option Golden_rs.Types.t_Ciphertext = out in
+            let _:Core_models.Option.t_Option Golden_dkg.Types.t_Ciphertext = out in
             ciphertexts, peer_pads
             <:
             (Std.Collections.Hash.Map.t_HashMap u32
-                Golden_rs.Types.t_Ciphertext
+                Golden_dkg.Types.t_Ciphertext
                 Std.Hash.Random.t_RandomState &
               Std.Collections.Hash.Map.t_HashMap u32
                 (Ark_ff.Fields.Models.Fp.t_Fp
@@ -611,14 +612,14 @@ let round0
           ))
   in
   let evrf_proofs:Std.Collections.Hash.Map.t_HashMap u32
-    Golden_rs.Zk_evrf.t_EVRFProof
+    Golden_dkg.Zk_evrf.t_EVRFProof
     Std.Hash.Random.t_RandomState =
-    Std.Collections.Hash.Map.impl__new #u32 #Golden_rs.Zk_evrf.t_EVRFProof ()
+    Std.Collections.Hash.Map.impl__new #u32 #Golden_dkg.Zk_evrf.t_EVRFProof ()
   in
-  let batch_evrf_proof:Core_models.Option.t_Option Golden_rs.Zk_evrf.t_EVRFProof =
-    Core_models.Result.impl__ok #Golden_rs.Zk_evrf.t_EVRFProof
+  let batch_evrf_proof:Core_models.Option.t_Option Golden_dkg.Zk_evrf.t_EVRFProof =
+    Core_models.Result.impl__ok #Golden_dkg.Zk_evrf.t_EVRFProof
       #Alloc.String.t_String
-      (Golden_rs.Zk_evrf.prove_evrf_batch sk
+      (Golden_dkg.Zk_evrf.prove_evrf_batch sk
           my_pk
           (Alloc.Vec.impl_1__as_slice peers_for_proof
             <:
@@ -635,28 +636,28 @@ let round0
               Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config))
           beta
         <:
-        Core_models.Result.t_Result Golden_rs.Zk_evrf.t_EVRFProof Alloc.String.t_String)
+        Core_models.Result.t_Result Golden_dkg.Zk_evrf.t_EVRFProof Alloc.String.t_String)
   in
-  let msg:Golden_rs.Types.t_Round0Msg =
+  let msg:Golden_dkg.Types.t_Round0Msg =
     {
-      Golden_rs.Types.f_session_id = session_id;
-      Golden_rs.Types.f_from = id;
-      Golden_rs.Types.f_random_msg = random_msg;
-      Golden_rs.Types.f_vss_commitment = vss_commitment;
-      Golden_rs.Types.f_ciphertexts = ciphertexts;
-      Golden_rs.Types.f_evrf_proofs = evrf_proofs;
-      Golden_rs.Types.f_batch_evrf_proof = batch_evrf_proof
+      Golden_dkg.Types.f_session_id = session_id;
+      Golden_dkg.Types.f_from = id;
+      Golden_dkg.Types.f_random_msg = random_msg;
+      Golden_dkg.Types.f_vss_commitment = vss_commitment;
+      Golden_dkg.Types.f_ciphertexts = ciphertexts;
+      Golden_dkg.Types.f_evrf_proofs = evrf_proofs;
+      Golden_dkg.Types.f_batch_evrf_proof = batch_evrf_proof
     }
     <:
-    Golden_rs.Types.t_Round0Msg
+    Golden_dkg.Types.t_Round0Msg
   in
-  let hax_temp_output:(Golden_rs.Types.t_Round0Msg &
+  let hax_temp_output:(Golden_dkg.Types.t_Round0Msg &
     Ark_ff.Fields.Models.Fp.t_Fp
       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig
           (mk_usize 4)) (mk_usize 4)) =
     msg, own_share
     <:
-    (Golden_rs.Types.t_Round0Msg &
+    (Golden_dkg.Types.t_Round0Msg &
       Ark_ff.Fields.Models.Fp.t_Fp
         (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
             Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
@@ -664,89 +665,10 @@ let round0
   rng, hax_temp_output
   <:
   (iimpl_1039969868_ &
-    (Golden_rs.Types.t_Round0Msg &
+    (Golden_dkg.Types.t_Round0Msg &
       Ark_ff.Fields.Models.Fp.t_Fp
         (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
             Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-
-/// Error type for protocol verification failures.
-type t_ProtocolError =
-  | ProtocolError_CiphertextVerificationFailed {
-    f_sender:u32;
-    f_recipient:u32
-  }: t_ProtocolError
-  | ProtocolError_MissingCiphertext {
-    f_sender:u32;
-    f_recipient:u32
-  }: t_ProtocolError
-  | ProtocolError_ZeroSecretViolation { f_sender:u32 }: t_ProtocolError
-  | ProtocolError_PeerCountMismatch {
-    f_expected:u32;
-    f_got:usize
-  }: t_ProtocolError
-  | ProtocolError_BroadcastReceiveFailed {
-    f_node:u32;
-    f_reason:Alloc.String.t_String
-  }: t_ProtocolError
-  | ProtocolError_RegistrationFailed {
-    f_node:u32;
-    f_reason:Alloc.String.t_String
-  }: t_ProtocolError
-  | ProtocolError_SessionMismatch { f_sender:u32 }: t_ProtocolError
-
-[@@ FStar.Tactics.Typeclasses.tcinstance]
-assume
-val impl_2': Core_models.Fmt.t_Debug t_ProtocolError
-
-unfold
-let impl_2 = impl_2'
-
-[@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl: Core_models.Fmt.t_Display t_ProtocolError =
-  {
-    f_fmt_pre = (fun (self: t_ProtocolError) (f: Core_models.Fmt.t_Formatter) -> true);
-    f_fmt_post
-    =
-    (fun
-        (self: t_ProtocolError)
-        (f: Core_models.Fmt.t_Formatter)
-        (out1:
-          (Core_models.Fmt.t_Formatter &
-            Core_models.Result.t_Result Prims.unit Core_models.Fmt.t_Error))
-        ->
-        true);
-    f_fmt
-    =
-    fun (self: t_ProtocolError) (f: Core_models.Fmt.t_Formatter) ->
-      let args:t_ProtocolError = self <: t_ProtocolError in
-      let args:t_Array Core_models.Fmt.Rt.t_Argument (mk_usize 1) =
-        let list = [Core_models.Fmt.Rt.impl__new_debug #t_ProtocolError args] in
-        FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
-        Rust_primitives.Hax.array_of_list 1 list
-      in
-      let
-      (tmp0: Core_models.Fmt.t_Formatter),
-      (out: Core_models.Result.t_Result Prims.unit Core_models.Fmt.t_Error) =
-        Core_models.Fmt.impl_11__write_fmt f
-          (Core_models.Fmt.Rt.impl_1__new_v1 (mk_usize 1)
-              (mk_usize 1)
-              (let list = [""] in
-                FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
-                Rust_primitives.Hax.array_of_list 1 list)
-              args
-            <:
-            Core_models.Fmt.t_Arguments)
-      in
-      let f:Core_models.Fmt.t_Formatter = tmp0 in
-      let hax_temp_output:Core_models.Result.t_Result Prims.unit Core_models.Fmt.t_Error = out in
-      f, hax_temp_output
-      <:
-      (Core_models.Fmt.t_Formatter & Core_models.Result.t_Result Prims.unit Core_models.Fmt.t_Error)
-  }
-
-[@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_1: Core_models.Error.t_Error t_ProtocolError =
-  { _super_i0 = FStar.Tactics.Typeclasses.solve; _super_i1 = FStar.Tactics.Typeclasses.solve }
 
 /// Execute Round 0 for key refresh (zero secret sharing).
 /// Per Section 5.2 of the Golden paper (IACR 2025/1924):
@@ -771,22 +693,22 @@ let round0_refresh
             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                 Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
       (rng: iimpl_1039969868_)
-      (session_id: t_Array u8 (mk_usize 32))
+      (session_id: Golden_dkg.Types.t_SessionId)
     : (iimpl_1039969868_ &
-      (Golden_rs.Types.t_Round0Msg &
+      (Golden_dkg.Types.t_Round0Msg &
         Ark_ff.Fields.Models.Fp.t_Fp
           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))) =
-  let omega:Golden_rs.Types.t_SecretScalar =
-    Golden_rs.Types.impl_SecretScalar__new (Ark_ff.Fields.f_ZERO #FStar.Tactics.Typeclasses.solve
+  let omega:Golden_dkg.Types.t_SecretScalar =
+    Golden_dkg.Types.impl_SecretScalar__new (Ark_ff.Fields.f_ZERO #FStar.Tactics.Typeclasses.solve
         <:
         Ark_ff.Fields.Models.Fp.t_Fp
           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
   in
-  let (tmp0: iimpl_1039969868_), (out: Golden_rs.Shamir.t_Polynomial) =
-    Golden_rs.Shamir.impl_Polynomial__new_random #iimpl_1039969868_
-      (Golden_rs.Types.impl_SecretScalar__inner omega
+  let (tmp0: iimpl_1039969868_), (out: Golden_dkg.Shamir.t_Polynomial) =
+    Golden_dkg.Shamir.impl_Polynomial__new_random #iimpl_1039969868_
+      (Golden_dkg.Types.impl_SecretScalar__inner omega
         <:
         Ark_ff.Fields.Models.Fp.t_Fp
           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -795,11 +717,11 @@ let round0_refresh
       rng
   in
   let rng:iimpl_1039969868_ = tmp0 in
-  let poly:Golden_rs.Shamir.t_Polynomial = out in
+  let poly:Golden_dkg.Shamir.t_Polynomial = out in
   let vss_commitment:Alloc.Vec.t_Vec
     (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
     Alloc.Alloc.t_Global =
-    Golden_rs.Vss.commit poly
+    Golden_dkg.Vss.commit poly
   in
   let
   (all_shares:
@@ -842,7 +764,7 @@ let round0_refresh
           (fun j ->
               let j:u32 = j in
               j,
-              (Golden_rs.Shamir.impl_Polynomial__evaluate poly
+              (Golden_dkg.Shamir.impl_Polynomial__evaluate poly
                   (Core_models.Convert.f_from #(Ark_ff.Fields.Models.Fp.t_Fp
                           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
@@ -893,9 +815,9 @@ let round0_refresh
   in
   let _:Prims.unit = () in
   let ciphertexts:Std.Collections.Hash.Map.t_HashMap u32
-    Golden_rs.Types.t_Ciphertext
+    Golden_dkg.Types.t_Ciphertext
     Std.Hash.Random.t_RandomState =
-    Std.Collections.Hash.Map.impl__new #u32 #Golden_rs.Types.t_Ciphertext ()
+    Std.Collections.Hash.Map.impl__new #u32 #Golden_dkg.Types.t_Ciphertext ()
   in
   let
   (peer_pads:
@@ -920,7 +842,7 @@ let round0_refresh
   let
   (ciphertexts:
     Std.Collections.Hash.Map.t_HashMap u32
-      Golden_rs.Types.t_Ciphertext
+      Golden_dkg.Types.t_Ciphertext
       Std.Hash.Random.t_RandomState),
   (peer_pads:
     Std.Collections.Hash.Map.t_HashMap u32
@@ -941,7 +863,7 @@ let round0_refresh
       (ciphertexts, peer_pads
         <:
         (Std.Collections.Hash.Map.t_HashMap u32
-            Golden_rs.Types.t_Ciphertext
+            Golden_dkg.Types.t_Ciphertext
             Std.Hash.Random.t_RandomState &
           Std.Collections.Hash.Map.t_HashMap u32
             (Ark_ff.Fields.Models.Fp.t_Fp
@@ -953,7 +875,7 @@ let round0_refresh
           let
           (ciphertexts:
             Std.Collections.Hash.Map.t_HashMap u32
-              Golden_rs.Types.t_Ciphertext
+              Golden_dkg.Types.t_Ciphertext
               Std.Hash.Random.t_RandomState),
           (peer_pads:
             Std.Collections.Hash.Map.t_HashMap u32
@@ -975,7 +897,7 @@ let round0_refresh
             ciphertexts, peer_pads
             <:
             (Std.Collections.Hash.Map.t_HashMap u32
-                Golden_rs.Types.t_Ciphertext
+                Golden_dkg.Types.t_Ciphertext
                 Std.Hash.Random.t_RandomState &
               Std.Collections.Hash.Map.t_HashMap u32
                 (Ark_ff.Fields.Models.Fp.t_Fp
@@ -991,7 +913,7 @@ let round0_refresh
                     Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)),
             (r_commitment:
               Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config) =
-              Golden_rs.Evrf.derive_pad sk peer_pk (random_msg <: t_Slice u8) beta
+              Golden_dkg.Evrf.derive_pad sk peer_pk (random_msg <: t_Slice u8) beta
             in
             let
             (tmp0:
@@ -1059,31 +981,31 @@ let round0_refresh
             let
             (tmp0:
               Std.Collections.Hash.Map.t_HashMap u32
-                Golden_rs.Types.t_Ciphertext
+                Golden_dkg.Types.t_Ciphertext
                 Std.Hash.Random.t_RandomState),
-            (out: Core_models.Option.t_Option Golden_rs.Types.t_Ciphertext) =
+            (out: Core_models.Option.t_Option Golden_dkg.Types.t_Ciphertext) =
               Std.Collections.Hash.Map.impl_2__insert #u32
-                #Golden_rs.Types.t_Ciphertext
+                #Golden_dkg.Types.t_Ciphertext
                 #Std.Hash.Random.t_RandomState
                 ciphertexts
                 peer_id
                 ({
-                    Golden_rs.Types.f_r_commitment = r_commitment;
-                    Golden_rs.Types.f_encrypted_share = encrypted_share
+                    Golden_dkg.Types.f_r_commitment = r_commitment;
+                    Golden_dkg.Types.f_encrypted_share = encrypted_share
                   }
                   <:
-                  Golden_rs.Types.t_Ciphertext)
+                  Golden_dkg.Types.t_Ciphertext)
             in
             let ciphertexts:Std.Collections.Hash.Map.t_HashMap u32
-              Golden_rs.Types.t_Ciphertext
+              Golden_dkg.Types.t_Ciphertext
               Std.Hash.Random.t_RandomState =
               tmp0
             in
-            let _:Core_models.Option.t_Option Golden_rs.Types.t_Ciphertext = out in
+            let _:Core_models.Option.t_Option Golden_dkg.Types.t_Ciphertext = out in
             ciphertexts, peer_pads
             <:
             (Std.Collections.Hash.Map.t_HashMap u32
-                Golden_rs.Types.t_Ciphertext
+                Golden_dkg.Types.t_Ciphertext
                 Std.Hash.Random.t_RandomState &
               Std.Collections.Hash.Map.t_HashMap u32
                 (Ark_ff.Fields.Models.Fp.t_Fp
@@ -1322,14 +1244,14 @@ let round0_refresh
           ))
   in
   let evrf_proofs:Std.Collections.Hash.Map.t_HashMap u32
-    Golden_rs.Zk_evrf.t_EVRFProof
+    Golden_dkg.Zk_evrf.t_EVRFProof
     Std.Hash.Random.t_RandomState =
-    Std.Collections.Hash.Map.impl__new #u32 #Golden_rs.Zk_evrf.t_EVRFProof ()
+    Std.Collections.Hash.Map.impl__new #u32 #Golden_dkg.Zk_evrf.t_EVRFProof ()
   in
-  let batch_evrf_proof:Core_models.Option.t_Option Golden_rs.Zk_evrf.t_EVRFProof =
-    Core_models.Result.impl__ok #Golden_rs.Zk_evrf.t_EVRFProof
+  let batch_evrf_proof:Core_models.Option.t_Option Golden_dkg.Zk_evrf.t_EVRFProof =
+    Core_models.Result.impl__ok #Golden_dkg.Zk_evrf.t_EVRFProof
       #Alloc.String.t_String
-      (Golden_rs.Zk_evrf.prove_evrf_batch sk
+      (Golden_dkg.Zk_evrf.prove_evrf_batch sk
           my_pk
           (Alloc.Vec.impl_1__as_slice peers_for_proof
             <:
@@ -1346,28 +1268,28 @@ let round0_refresh
               Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config))
           beta
         <:
-        Core_models.Result.t_Result Golden_rs.Zk_evrf.t_EVRFProof Alloc.String.t_String)
+        Core_models.Result.t_Result Golden_dkg.Zk_evrf.t_EVRFProof Alloc.String.t_String)
   in
-  let msg:Golden_rs.Types.t_Round0Msg =
+  let msg:Golden_dkg.Types.t_Round0Msg =
     {
-      Golden_rs.Types.f_session_id = session_id;
-      Golden_rs.Types.f_from = id;
-      Golden_rs.Types.f_random_msg = random_msg;
-      Golden_rs.Types.f_vss_commitment = vss_commitment;
-      Golden_rs.Types.f_ciphertexts = ciphertexts;
-      Golden_rs.Types.f_evrf_proofs = evrf_proofs;
-      Golden_rs.Types.f_batch_evrf_proof = batch_evrf_proof
+      Golden_dkg.Types.f_session_id = session_id;
+      Golden_dkg.Types.f_from = id;
+      Golden_dkg.Types.f_random_msg = random_msg;
+      Golden_dkg.Types.f_vss_commitment = vss_commitment;
+      Golden_dkg.Types.f_ciphertexts = ciphertexts;
+      Golden_dkg.Types.f_evrf_proofs = evrf_proofs;
+      Golden_dkg.Types.f_batch_evrf_proof = batch_evrf_proof
     }
     <:
-    Golden_rs.Types.t_Round0Msg
+    Golden_dkg.Types.t_Round0Msg
   in
-  let hax_temp_output:(Golden_rs.Types.t_Round0Msg &
+  let hax_temp_output:(Golden_dkg.Types.t_Round0Msg &
     Ark_ff.Fields.Models.Fp.t_Fp
       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig
           (mk_usize 4)) (mk_usize 4)) =
     msg, own_share
     <:
-    (Golden_rs.Types.t_Round0Msg &
+    (Golden_dkg.Types.t_Round0Msg &
       Ark_ff.Fields.Models.Fp.t_Fp
         (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
             Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
@@ -1375,18 +1297,20 @@ let round0_refresh
   rng, hax_temp_output
   <:
   (iimpl_1039969868_ &
-    (Golden_rs.Types.t_Round0Msg &
+    (Golden_dkg.Types.t_Round0Msg &
       Ark_ff.Fields.Models.Fp.t_Fp
         (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
             Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
 
 let rec round1__e_ee_CALLSITE__v_META: Tracing_core.Metadata.t_Metadata =
-  Tracing_core.Metadata.impl__new "event src/protocol.rs:252"
-    "golden_rs::protocol"
+  Tracing_core.Metadata.impl__new "event golden-dkg/src/protocol.rs:196"
+    "golden_dkg::protocol"
     Tracing_core.Metadata.impl_Level__WARN
-    (Core_models.Option.Option_Some "src/protocol.rs" <: Core_models.Option.t_Option string)
-    (Core_models.Option.Option_Some (mk_u32 252) <: Core_models.Option.t_Option u32)
-    (Core_models.Option.Option_Some "golden_rs::protocol" <: Core_models.Option.t_Option string)
+    (Core_models.Option.Option_Some "golden-dkg/src/protocol.rs"
+      <:
+      Core_models.Option.t_Option string)
+    (Core_models.Option.Option_Some (mk_u32 196) <: Core_models.Option.t_Option u32)
+    (Core_models.Option.Option_Some "golden_dkg::protocol" <: Core_models.Option.t_Option string)
     (Tracing_core.Field.impl_FieldSet__new ((let list = ["message"] in
             FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
             Rust_primitives.Hax.array_of_list 1 list)
@@ -1406,12 +1330,14 @@ and round1__e_ee_CALLSITE: Tracing_core.Callsite.t_DefaultCallsite =
   Tracing_core.Callsite.impl_DefaultCallsite__new round1__e_ee_CALLSITE__v_META
 
 let rec round1__e_ee_CALLSITE_1__v_META: Tracing_core.Metadata.t_Metadata =
-  Tracing_core.Metadata.impl__new "event src/protocol.rs:272"
-    "golden_rs::protocol"
+  Tracing_core.Metadata.impl__new "event golden-dkg/src/protocol.rs:216"
+    "golden_dkg::protocol"
     Tracing_core.Metadata.impl_Level__WARN
-    (Core_models.Option.Option_Some "src/protocol.rs" <: Core_models.Option.t_Option string)
-    (Core_models.Option.Option_Some (mk_u32 272) <: Core_models.Option.t_Option u32)
-    (Core_models.Option.Option_Some "golden_rs::protocol" <: Core_models.Option.t_Option string)
+    (Core_models.Option.Option_Some "golden-dkg/src/protocol.rs"
+      <:
+      Core_models.Option.t_Option string)
+    (Core_models.Option.Option_Some (mk_u32 216) <: Core_models.Option.t_Option u32)
+    (Core_models.Option.Option_Some "golden_dkg::protocol" <: Core_models.Option.t_Option string)
     (Tracing_core.Field.impl_FieldSet__new ((let list = ["message"] in
             FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
             Rust_primitives.Hax.array_of_list 1 list)
@@ -1431,12 +1357,14 @@ and round1__e_ee_CALLSITE_1: Tracing_core.Callsite.t_DefaultCallsite =
   Tracing_core.Callsite.impl_DefaultCallsite__new round1__e_ee_CALLSITE_1__v_META
 
 let rec round1_refresh__e_ee_CALLSITE__v_META: Tracing_core.Metadata.t_Metadata =
-  Tracing_core.Metadata.impl__new "event src/protocol.rs:503"
-    "golden_rs::protocol"
+  Tracing_core.Metadata.impl__new "event golden-dkg/src/protocol.rs:447"
+    "golden_dkg::protocol"
     Tracing_core.Metadata.impl_Level__WARN
-    (Core_models.Option.Option_Some "src/protocol.rs" <: Core_models.Option.t_Option string)
-    (Core_models.Option.Option_Some (mk_u32 503) <: Core_models.Option.t_Option u32)
-    (Core_models.Option.Option_Some "golden_rs::protocol" <: Core_models.Option.t_Option string)
+    (Core_models.Option.Option_Some "golden-dkg/src/protocol.rs"
+      <:
+      Core_models.Option.t_Option string)
+    (Core_models.Option.Option_Some (mk_u32 447) <: Core_models.Option.t_Option u32)
+    (Core_models.Option.Option_Some "golden_dkg::protocol" <: Core_models.Option.t_Option string)
     (Tracing_core.Field.impl_FieldSet__new ((let list = ["message"] in
             FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
             Rust_primitives.Hax.array_of_list 1 list)
@@ -1456,12 +1384,14 @@ and round1_refresh__e_ee_CALLSITE: Tracing_core.Callsite.t_DefaultCallsite =
   Tracing_core.Callsite.impl_DefaultCallsite__new round1_refresh__e_ee_CALLSITE__v_META
 
 let rec round1_refresh__e_ee_CALLSITE_1__v_META: Tracing_core.Metadata.t_Metadata =
-  Tracing_core.Metadata.impl__new "event src/protocol.rs:522"
-    "golden_rs::protocol"
+  Tracing_core.Metadata.impl__new "event golden-dkg/src/protocol.rs:466"
+    "golden_dkg::protocol"
     Tracing_core.Metadata.impl_Level__WARN
-    (Core_models.Option.Option_Some "src/protocol.rs" <: Core_models.Option.t_Option string)
-    (Core_models.Option.Option_Some (mk_u32 522) <: Core_models.Option.t_Option u32)
-    (Core_models.Option.Option_Some "golden_rs::protocol" <: Core_models.Option.t_Option string)
+    (Core_models.Option.Option_Some "golden-dkg/src/protocol.rs"
+      <:
+      Core_models.Option.t_Option string)
+    (Core_models.Option.Option_Some (mk_u32 466) <: Core_models.Option.t_Option u32)
+    (Core_models.Option.Option_Some "golden_dkg::protocol" <: Core_models.Option.t_Option string)
     (Tracing_core.Field.impl_FieldSet__new ((let list = ["message"] in
             FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
             Rust_primitives.Hax.array_of_list 1 list)
@@ -1512,14 +1442,14 @@ let round1
             Alloc.Alloc.t_Global)
       (received:
           Std.Collections.Hash.Map.t_HashMap u32
-            Golden_rs.Types.t_Round0Msg
+            Golden_dkg.Types.t_Round0Msg
             Std.Hash.Random.t_RandomState)
       (beta:
           Ark_ff.Fields.Models.Fp.t_Fp
             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                 Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
-      (session_id: t_Array u8 (mk_usize 32))
-    : Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError =
+      (session_id: Golden_dkg.Types.t_SessionId)
+    : Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError =
   let n:u32 =
     cast (Std.Collections.Hash.Map.impl_1__len #u32
           #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
@@ -1532,71 +1462,76 @@ let round1
   in
   match
     Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_HashMap
-              u32 Golden_rs.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
+              u32 Golden_dkg.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
           #FStar.Tactics.Typeclasses.solve
           received
         <:
-        Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Round0Msg)
+        Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Round0Msg)
       ()
       (fun temp_0_ temp_1_ ->
           let _:Prims.unit = temp_0_ in
-          let (sender_id: u32), (msg: Golden_rs.Types.t_Round0Msg) = temp_1_ in
-          if msg.Golden_rs.Types.f_session_id <>. session_id <: bool
+          let (sender_id: u32), (msg: Golden_dkg.Types.t_Round0Msg) = temp_1_ in
+          if msg.Golden_dkg.Types.f_session_id <>. session_id <: bool
           then
             Core_models.Ops.Control_flow.ControlFlow_Break
             (Core_models.Ops.Control_flow.ControlFlow_Break
               (Core_models.Result.Result_Err
-                (ProtocolError_SessionMismatch ({ f_sender = sender_id }) <: t_ProtocolError)
+                (Golden_dkg.Error.DkgError_SessionMismatch
+                  ({ Golden_dkg.Error.f_sender = sender_id })
+                  <:
+                  Golden_dkg.Error.t_DkgError)
                 <:
-                Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+                Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError
+              )
               <:
               Core_models.Ops.Control_flow.t_ControlFlow
-                (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                (Prims.unit & Prims.unit))
+                (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                    Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit))
             <:
             Core_models.Ops.Control_flow.t_ControlFlow
               (Core_models.Ops.Control_flow.t_ControlFlow
-                  (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                  (Prims.unit & Prims.unit)) Prims.unit
+                  (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                      Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit
           else
             Core_models.Ops.Control_flow.ControlFlow_Continue ()
             <:
             Core_models.Ops.Control_flow.t_ControlFlow
               (Core_models.Ops.Control_flow.t_ControlFlow
-                  (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                  (Prims.unit & Prims.unit)) Prims.unit)
+                  (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                      Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit)
     <:
     Core_models.Ops.Control_flow.t_ControlFlow
-      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError) Prims.unit
+      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError)
+      Prims.unit
   with
   | Core_models.Ops.Control_flow.ControlFlow_Break ret -> ret
   | Core_models.Ops.Control_flow.ControlFlow_Continue _ ->
     match
       Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_HashMap
-                u32 Golden_rs.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
+                u32 Golden_dkg.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
             #FStar.Tactics.Typeclasses.solve
             received
           <:
-          Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Round0Msg)
+          Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Round0Msg)
         ()
         (fun temp_0_ temp_1_ ->
             let _:Prims.unit = temp_0_ in
-            let (sender_id: u32), (msg: Golden_rs.Types.t_Round0Msg) = temp_1_ in
+            let (sender_id: u32), (msg: Golden_dkg.Types.t_Round0Msg) = temp_1_ in
             match
               Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_HashMap
-                        u32 Golden_rs.Types.t_Ciphertext Std.Hash.Random.t_RandomState)
+                        u32 Golden_dkg.Types.t_Ciphertext Std.Hash.Random.t_RandomState)
                     #FStar.Tactics.Typeclasses.solve
-                    msg.Golden_rs.Types.f_ciphertexts
+                    msg.Golden_dkg.Types.f_ciphertexts
                   <:
-                  Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Ciphertext)
+                  Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Ciphertext)
                 ()
                 (fun temp_0_ temp_1_ ->
                     let _:Prims.unit = temp_0_ in
-                    let (recipient_id: u32), (ct: Golden_rs.Types.t_Ciphertext) = temp_1_ in
+                    let (recipient_id: u32), (ct: Golden_dkg.Types.t_Ciphertext) = temp_1_ in
                     let expected_share_comm:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                     Ark_bls12_381_.Curves.G1.t_Config =
-                      Golden_rs.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice msg
-                              .Golden_rs.Types.f_vss_commitment
+                      Golden_dkg.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice msg
+                              .Golden_dkg.Types.f_vss_commitment
                           <:
                           t_Slice
                           (Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -1621,7 +1556,7 @@ let round1
                               <:
                               Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                               Ark_bls12_381_.Curves.G1.t_Config)
-                            ct.Golden_rs.Types.f_encrypted_share
+                            ct.Golden_dkg.Types.f_encrypted_share
                           <:
                           Ark_ec.Models.Short_weierstrass.Group.t_Projective
                           Ark_bls12_381_.Curves.G1.t_Config)
@@ -1639,7 +1574,7 @@ let round1
                             (Ark_ec.f_into_group #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                   Ark_bls12_381_.Curves.G1.t_Config)
                                 #FStar.Tactics.Typeclasses.solve
-                                ct.Golden_rs.Types.f_r_commitment
+                                ct.Golden_dkg.Types.f_r_commitment
                               <:
                               Ark_ec.Models.Short_weierstrass.Group.t_Projective
                               Ark_bls12_381_.Curves.G1.t_Config)
@@ -1659,53 +1594,58 @@ let round1
                       Core_models.Ops.Control_flow.ControlFlow_Break
                       (Core_models.Ops.Control_flow.ControlFlow_Break
                         (Core_models.Result.Result_Err
-                          (ProtocolError_CiphertextVerificationFailed
-                            ({ f_sender = sender_id; f_recipient = recipient_id })
+                          (Golden_dkg.Error.DkgError_CiphertextVerificationFailed
+                            ({
+                                Golden_dkg.Error.f_sender = sender_id;
+                                Golden_dkg.Error.f_recipient = recipient_id
+                              })
                             <:
-                            t_ProtocolError)
+                            Golden_dkg.Error.t_DkgError)
                           <:
-                          Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+                          Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                            Golden_dkg.Error.t_DkgError)
                         <:
                         Core_models.Ops.Control_flow.t_ControlFlow
-                          (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                          (Prims.unit & Prims.unit))
+                          (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                              Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit))
                       <:
                       Core_models.Ops.Control_flow.t_ControlFlow
                         (Core_models.Ops.Control_flow.t_ControlFlow
-                            (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError
-                            ) (Prims.unit & Prims.unit)) Prims.unit
+                            (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit
                     else
                       Core_models.Ops.Control_flow.ControlFlow_Continue ()
                       <:
                       Core_models.Ops.Control_flow.t_ControlFlow
                         (Core_models.Ops.Control_flow.t_ControlFlow
-                            (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError
-                            ) (Prims.unit & Prims.unit)) Prims.unit)
+                            (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit)
               <:
               Core_models.Ops.Control_flow.t_ControlFlow
-                (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError) Prims.unit
+                (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                    Golden_dkg.Error.t_DkgError) Prims.unit
             with
             | Core_models.Ops.Control_flow.ControlFlow_Break ret ->
               Core_models.Ops.Control_flow.ControlFlow_Break
               (Core_models.Ops.Control_flow.ControlFlow_Break ret
                 <:
                 Core_models.Ops.Control_flow.t_ControlFlow
-                  (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                  (Prims.unit & Prims.unit))
+                  (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                      Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit))
               <:
               Core_models.Ops.Control_flow.t_ControlFlow
                 (Core_models.Ops.Control_flow.t_ControlFlow
-                    (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                    (Prims.unit & Prims.unit)) Prims.unit
+                    (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                        Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit
             | Core_models.Ops.Control_flow.ControlFlow_Continue _ ->
               let sender_pk:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
               Ark_bls12_381_.Curves.G1.t_Config =
                 peers.[ sender_id ]
               in
               match
-                msg.Golden_rs.Types.f_batch_evrf_proof
+                msg.Golden_dkg.Types.f_batch_evrf_proof
                 <:
-                Core_models.Option.t_Option Golden_rs.Zk_evrf.t_EVRFProof
+                Core_models.Option.t_Option Golden_dkg.Zk_evrf.t_EVRFProof
               with
               | Core_models.Option.Option_Some batch_proof ->
                 let
@@ -1718,7 +1658,7 @@ let round1
                     Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                     Ark_bls12_381_.Curves.G1.t_Config) Alloc.Alloc.t_Global =
                   Core_models.Iter.Traits.Iterator.f_collect #(Core_models.Iter.Adapters.Map.t_Map
-                        (Std.Collections.Hash.Map.t_Keys u32 Golden_rs.Types.t_Ciphertext)
+                        (Std.Collections.Hash.Map.t_Keys u32 Golden_dkg.Types.t_Ciphertext)
                         (u32
                             -> (u32 &
                                 Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -1729,7 +1669,7 @@ let round1
                           Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                           Ark_bls12_381_.Curves.G1.t_Config) Alloc.Alloc.t_Global)
                     (Core_models.Iter.Traits.Iterator.f_map #(Std.Collections.Hash.Map.t_Keys u32
-                            Golden_rs.Types.t_Ciphertext)
+                            Golden_dkg.Types.t_Ciphertext)
                         #FStar.Tactics.Typeclasses.solve
                         #(u32 &
                           Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -1739,11 +1679,11 @@ let round1
                                 Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                 Ark_bls12_381_.Curves.G1.t_Config))
                         (Std.Collections.Hash.Map.impl_1__keys #u32
-                            #Golden_rs.Types.t_Ciphertext
+                            #Golden_dkg.Types.t_Ciphertext
                             #Std.Hash.Random.t_RandomState
-                            msg.Golden_rs.Types.f_ciphertexts
+                            msg.Golden_dkg.Types.f_ciphertexts
                           <:
-                          Std.Collections.Hash.Map.t_Keys u32 Golden_rs.Types.t_Ciphertext)
+                          Std.Collections.Hash.Map.t_Keys u32 Golden_dkg.Types.t_Ciphertext)
                         (fun pid ->
                             let pid:u32 = pid in
                             pid,
@@ -1757,7 +1697,7 @@ let round1
                               Ark_bls12_381_.Curves.G1.t_Config))
                       <:
                       Core_models.Iter.Adapters.Map.t_Map
-                        (Std.Collections.Hash.Map.t_Keys u32 Golden_rs.Types.t_Ciphertext)
+                        (Std.Collections.Hash.Map.t_Keys u32 Golden_dkg.Types.t_Ciphertext)
                         (u32
                             -> (u32 &
                                 Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -1773,8 +1713,8 @@ let round1
                     Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                     Ark_bls12_381_.Curves.G1.t_Config) Alloc.Alloc.t_Global =
                   Core_models.Iter.Traits.Iterator.f_collect #(Core_models.Iter.Adapters.Map.t_Map
-                        (Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Ciphertext)
-                        ((u32 & Golden_rs.Types.t_Ciphertext)
+                        (Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Ciphertext)
+                        ((u32 & Golden_dkg.Types.t_Ciphertext)
                             -> (u32 &
                                 Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                 Ark_bls12_381_.Curves.G1.t_Config)))
@@ -1784,38 +1724,38 @@ let round1
                           Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                           Ark_bls12_381_.Curves.G1.t_Config) Alloc.Alloc.t_Global)
                     (Core_models.Iter.Traits.Iterator.f_map #(Std.Collections.Hash.Map.t_Iter u32
-                            Golden_rs.Types.t_Ciphertext)
+                            Golden_dkg.Types.t_Ciphertext)
                         #FStar.Tactics.Typeclasses.solve
                         #(u32 &
                           Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                           Ark_bls12_381_.Curves.G1.t_Config)
-                        #((u32 & Golden_rs.Types.t_Ciphertext)
+                        #((u32 & Golden_dkg.Types.t_Ciphertext)
                             -> (u32 &
                                 Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                 Ark_bls12_381_.Curves.G1.t_Config))
                         (Std.Collections.Hash.Map.impl_1__iter #u32
-                            #Golden_rs.Types.t_Ciphertext
+                            #Golden_dkg.Types.t_Ciphertext
                             #Std.Hash.Random.t_RandomState
-                            msg.Golden_rs.Types.f_ciphertexts
+                            msg.Golden_dkg.Types.f_ciphertexts
                           <:
-                          Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Ciphertext)
+                          Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Ciphertext)
                         (fun temp_0_ ->
-                            let (pid: u32), (ct: Golden_rs.Types.t_Ciphertext) = temp_0_ in
-                            pid, ct.Golden_rs.Types.f_r_commitment
+                            let (pid: u32), (ct: Golden_dkg.Types.t_Ciphertext) = temp_0_ in
+                            pid, ct.Golden_dkg.Types.f_r_commitment
                             <:
                             (u32 &
                               Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                               Ark_bls12_381_.Curves.G1.t_Config))
                       <:
                       Core_models.Iter.Adapters.Map.t_Map
-                        (Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Ciphertext)
-                        ((u32 & Golden_rs.Types.t_Ciphertext)
+                        (Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Ciphertext)
+                        ((u32 & Golden_dkg.Types.t_Ciphertext)
                             -> (u32 &
                                 Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                 Ark_bls12_381_.Curves.G1.t_Config)))
                 in
                 (match
-                    Golden_rs.Zk_evrf.verify_evrf_batch sender_pk
+                    Golden_dkg.Zk_evrf.verify_evrf_batch sender_pk
                       (Alloc.Vec.impl_1__as_slice peers_for_verify
                         <:
                         t_Slice
@@ -1838,8 +1778,8 @@ let round1
                     <:
                     Core_models.Ops.Control_flow.t_ControlFlow
                       (Core_models.Ops.Control_flow.t_ControlFlow
-                          (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                          (Prims.unit & Prims.unit)) Prims.unit
+                          (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                              Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit
                   | _ ->
                     let interest:Tracing_core.Subscriber.t_Interest =
                       Tracing_core.Callsite.impl_DefaultCallsite__interest round1__e_ee_CALLSITE
@@ -1940,33 +1880,35 @@ let round1
                     <:
                     Core_models.Ops.Control_flow.t_ControlFlow
                       (Core_models.Ops.Control_flow.t_ControlFlow
-                          (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                          (Prims.unit & Prims.unit)) Prims.unit)
+                          (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                              Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit)
               | _ ->
                 Core_models.Ops.Control_flow.ControlFlow_Continue
                 (Core_models.Iter.Traits.Iterator.f_fold (Core_models.Iter.Traits.Collect.f_into_iter
                         #(Std.Collections.Hash.Map.t_HashMap u32
-                            Golden_rs.Zk_evrf.t_EVRFProof
+                            Golden_dkg.Zk_evrf.t_EVRFProof
                             Std.Hash.Random.t_RandomState)
                         #FStar.Tactics.Typeclasses.solve
-                        msg.Golden_rs.Types.f_evrf_proofs
+                        msg.Golden_dkg.Types.f_evrf_proofs
                       <:
-                      Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Zk_evrf.t_EVRFProof)
+                      Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Zk_evrf.t_EVRFProof)
                     ()
                     (fun temp_0_ temp_1_ ->
                         let _:Prims.unit = temp_0_ in
-                        let (recipient_id: u32), (proof: Golden_rs.Zk_evrf.t_EVRFProof) = temp_1_ in
+                        let (recipient_id: u32), (proof: Golden_dkg.Zk_evrf.t_EVRFProof) =
+                          temp_1_
+                        in
                         let recipient_pk:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                         Ark_bls12_381_.Curves.G1.t_Config =
                           peers.[ recipient_id ]
                         in
                         let r_commitment:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                         Ark_bls12_381_.Curves.G1.t_Config =
-                          (msg.Golden_rs.Types.f_ciphertexts.[ recipient_id ])
-                            .Golden_rs.Types.f_r_commitment
+                          (msg.Golden_dkg.Types.f_ciphertexts.[ recipient_id ])
+                            .Golden_dkg.Types.f_r_commitment
                         in
                         match
-                          Golden_rs.Zk_evrf.verify_evrf sender_pk
+                          Golden_dkg.Zk_evrf.verify_evrf sender_pk
                             recipient_pk
                             r_commitment
                             beta
@@ -2085,11 +2027,12 @@ let round1
                 <:
                 Core_models.Ops.Control_flow.t_ControlFlow
                   (Core_models.Ops.Control_flow.t_ControlFlow
-                      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                      (Prims.unit & Prims.unit)) Prims.unit)
+                      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                          Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit)
       <:
       Core_models.Ops.Control_flow.t_ControlFlow
-        (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError) Prims.unit
+        (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError)
+        Prims.unit
     with
     | Core_models.Ops.Control_flow.ControlFlow_Break ret -> ret
     | Core_models.Ops.Control_flow.ControlFlow_Continue _ ->
@@ -2100,11 +2043,11 @@ let round1
       in
       match
         Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_HashMap
-                  u32 Golden_rs.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
+                  u32 Golden_dkg.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
               #FStar.Tactics.Typeclasses.solve
               received
             <:
-            Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Round0Msg)
+            Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Round0Msg)
           secret_share
           (fun secret_share temp_1_ ->
               let secret_share:Ark_ff.Fields.Models.Fp.t_Fp
@@ -2112,23 +2055,25 @@ let round1
                     Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
                 secret_share
               in
-              let (sender_id: u32), (msg: Golden_rs.Types.t_Round0Msg) = temp_1_ in
+              let (sender_id: u32), (msg: Golden_dkg.Types.t_Round0Msg) = temp_1_ in
               match
-                Core_models.Option.impl__ok_or #Golden_rs.Types.t_Ciphertext
-                  #t_ProtocolError
+                Core_models.Option.impl__ok_or #Golden_dkg.Types.t_Ciphertext
+                  #Golden_dkg.Error.t_DkgError
                   (Std.Collections.Hash.Map.impl_2__get #u32
-                      #Golden_rs.Types.t_Ciphertext
+                      #Golden_dkg.Types.t_Ciphertext
                       #Std.Hash.Random.t_RandomState
                       #u32
-                      msg.Golden_rs.Types.f_ciphertexts
+                      msg.Golden_dkg.Types.f_ciphertexts
                       id
                     <:
-                    Core_models.Option.t_Option Golden_rs.Types.t_Ciphertext)
-                  (ProtocolError_MissingCiphertext ({ f_sender = sender_id; f_recipient = id })
+                    Core_models.Option.t_Option Golden_dkg.Types.t_Ciphertext)
+                  (Golden_dkg.Error.DkgError_MissingCiphertext
+                    ({ Golden_dkg.Error.f_sender = sender_id; Golden_dkg.Error.f_recipient = id })
                     <:
-                    t_ProtocolError)
+                    Golden_dkg.Error.t_DkgError)
                 <:
-                Core_models.Result.t_Result Golden_rs.Types.t_Ciphertext t_ProtocolError
+                Core_models.Result.t_Result Golden_dkg.Types.t_Ciphertext
+                  Golden_dkg.Error.t_DkgError
               with
               | Core_models.Result.Result_Ok ct ->
                 let sender_pk:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -2143,9 +2088,9 @@ let round1
                 (_:
                   Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
                 =
-                  Golden_rs.Evrf.derive_pad sk
+                  Golden_dkg.Evrf.derive_pad sk
                     sender_pk
-                    (msg.Golden_rs.Types.f_random_msg <: t_Slice u8)
+                    (msg.Golden_dkg.Types.f_random_msg <: t_Slice u8)
                     beta
                 in
                 let decrypted_share:Ark_ff.Fields.Models.Fp.t_Fp
@@ -2158,7 +2103,7 @@ let round1
                         (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                             Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
                     #FStar.Tactics.Typeclasses.solve
-                    ct.Golden_rs.Types.f_encrypted_share
+                    ct.Golden_dkg.Types.f_encrypted_share
                     r_pad
                 in
                 let secret_share:Ark_ff.Fields.Models.Fp.t_Fp
@@ -2178,7 +2123,8 @@ let round1
                 <:
                 Core_models.Ops.Control_flow.t_ControlFlow
                   (Core_models.Ops.Control_flow.t_ControlFlow
-                      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+                      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                          Golden_dkg.Error.t_DkgError)
                       (Prims.unit &
                         Ark_ff.Fields.Models.Fp.t_Fp
                           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -2191,10 +2137,12 @@ let round1
                 (Core_models.Ops.Control_flow.ControlFlow_Break
                   (Core_models.Result.Result_Err err
                     <:
-                    Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+                    Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                      Golden_dkg.Error.t_DkgError)
                   <:
                   Core_models.Ops.Control_flow.t_ControlFlow
-                    (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+                    (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                        Golden_dkg.Error.t_DkgError)
                     (Prims.unit &
                       Ark_ff.Fields.Models.Fp.t_Fp
                         (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -2202,7 +2150,8 @@ let round1
                 <:
                 Core_models.Ops.Control_flow.t_ControlFlow
                   (Core_models.Ops.Control_flow.t_ControlFlow
-                      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+                      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                          Golden_dkg.Error.t_DkgError)
                       (Prims.unit &
                         Ark_ff.Fields.Models.Fp.t_Fp
                           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -2212,7 +2161,7 @@ let round1
                           Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
         <:
         Core_models.Ops.Control_flow.t_ControlFlow
-          (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+          (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError)
           (Ark_ff.Fields.Models.Fp.t_Fp
               (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                   Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
@@ -2231,30 +2180,30 @@ let round1
         let pk_projective:Ark_ec.Models.Short_weierstrass.Group.t_Projective
         Ark_bls12_381_.Curves.G1.t_Config =
           Core_models.Iter.Traits.Iterator.f_fold (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_Values
-                    u32 Golden_rs.Types.t_Round0Msg)
+                    u32 Golden_dkg.Types.t_Round0Msg)
                 #FStar.Tactics.Typeclasses.solve
                 (Std.Collections.Hash.Map.impl_1__values #u32
-                    #Golden_rs.Types.t_Round0Msg
+                    #Golden_dkg.Types.t_Round0Msg
                     #Std.Hash.Random.t_RandomState
                     received
                   <:
-                  Std.Collections.Hash.Map.t_Values u32 Golden_rs.Types.t_Round0Msg)
+                  Std.Collections.Hash.Map.t_Values u32 Golden_dkg.Types.t_Round0Msg)
               <:
-              Std.Collections.Hash.Map.t_Values u32 Golden_rs.Types.t_Round0Msg)
+              Std.Collections.Hash.Map.t_Values u32 Golden_dkg.Types.t_Round0Msg)
             pk_projective
             (fun pk_projective msg ->
                 let pk_projective:Ark_ec.Models.Short_weierstrass.Group.t_Projective
                 Ark_bls12_381_.Curves.G1.t_Config =
                   pk_projective
                 in
-                let msg:Golden_rs.Types.t_Round0Msg = msg in
+                let msg:Golden_dkg.Types.t_Round0Msg = msg in
                 Core_models.Ops.Arith.f_add_assign #(Ark_ec.Models.Short_weierstrass.Group.t_Projective
                     Ark_bls12_381_.Curves.G1.t_Config)
                   #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                     Ark_bls12_381_.Curves.G1.t_Config)
                   #FStar.Tactics.Typeclasses.solve
                   pk_projective
-                  (msg.Golden_rs.Types.f_vss_commitment.[ mk_usize 0 ]
+                  (msg.Golden_dkg.Types.f_vss_commitment.[ mk_usize 0 ]
                     <:
                     Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                     Ark_bls12_381_.Curves.G1.t_Config)
@@ -2301,7 +2250,7 @@ let round1
                   Ark_ec.f_into_group #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                       Ark_bls12_381_.Curves.G1.t_Config)
                     #FStar.Tactics.Typeclasses.solve
-                    (Golden_rs.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice own_vss_commitment
+                    (Golden_dkg.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice own_vss_commitment
 
                           <:
                           t_Slice
@@ -2315,31 +2264,31 @@ let round1
                 let pk_k:Ark_ec.Models.Short_weierstrass.Group.t_Projective
                 Ark_bls12_381_.Curves.G1.t_Config =
                   Core_models.Iter.Traits.Iterator.f_fold (Core_models.Iter.Traits.Collect.f_into_iter
-                        #(Std.Collections.Hash.Map.t_Values u32 Golden_rs.Types.t_Round0Msg)
+                        #(Std.Collections.Hash.Map.t_Values u32 Golden_dkg.Types.t_Round0Msg)
                         #FStar.Tactics.Typeclasses.solve
                         (Std.Collections.Hash.Map.impl_1__values #u32
-                            #Golden_rs.Types.t_Round0Msg
+                            #Golden_dkg.Types.t_Round0Msg
                             #Std.Hash.Random.t_RandomState
                             received
                           <:
-                          Std.Collections.Hash.Map.t_Values u32 Golden_rs.Types.t_Round0Msg)
+                          Std.Collections.Hash.Map.t_Values u32 Golden_dkg.Types.t_Round0Msg)
                       <:
-                      Std.Collections.Hash.Map.t_Values u32 Golden_rs.Types.t_Round0Msg)
+                      Std.Collections.Hash.Map.t_Values u32 Golden_dkg.Types.t_Round0Msg)
                     pk_k
                     (fun pk_k msg ->
                         let pk_k:Ark_ec.Models.Short_weierstrass.Group.t_Projective
                         Ark_bls12_381_.Curves.G1.t_Config =
                           pk_k
                         in
-                        let msg:Golden_rs.Types.t_Round0Msg = msg in
+                        let msg:Golden_dkg.Types.t_Round0Msg = msg in
                         Core_models.Ops.Arith.f_add_assign #(Ark_ec.Models.Short_weierstrass.Group.t_Projective
                             Ark_bls12_381_.Curves.G1.t_Config)
                           #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                             Ark_bls12_381_.Curves.G1.t_Config)
                           #FStar.Tactics.Typeclasses.solve
                           pk_k
-                          (Golden_rs.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice msg
-                                    .Golden_rs.Types.f_vss_commitment
+                          (Golden_dkg.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice msg
+                                    .Golden_dkg.Types.f_vss_commitment
                                 <:
                                 t_Slice
                                 (Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -2391,14 +2340,14 @@ let round1
         in
         Core_models.Result.Result_Ok
         ({
-            Golden_rs.Types.f_public_key = public_key;
-            Golden_rs.Types.f_public_key_shares = public_key_shares;
-            Golden_rs.Types.f_secret_share = secret_share
+            Golden_dkg.Types.f_public_key = public_key;
+            Golden_dkg.Types.f_public_key_shares = public_key_shares;
+            Golden_dkg.Types.f_secret_share = secret_share
           }
           <:
-          Golden_rs.Types.t_DkgOutput)
+          Golden_dkg.Types.t_DkgOutput)
         <:
-        Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError
+        Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError
 
 /// Execute Round 1 for key refresh (zero secret sharing).
 /// Per Section 5.2 of the Golden paper (IACR 2025/1924):
@@ -2426,7 +2375,7 @@ let round1_refresh
             Alloc.Alloc.t_Global)
       (received:
           Std.Collections.Hash.Map.t_HashMap u32
-            Golden_rs.Types.t_Round0Msg
+            Golden_dkg.Types.t_Round0Msg
             Std.Hash.Random.t_RandomState)
       (beta existing_share:
           Ark_ff.Fields.Models.Fp.t_Fp
@@ -2438,8 +2387,8 @@ let round1_refresh
           Std.Collections.Hash.Map.t_HashMap u32
             (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
             Std.Hash.Random.t_RandomState)
-      (session_id: t_Array u8 (mk_usize 32))
-    : Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError =
+      (session_id: Golden_dkg.Types.t_SessionId)
+    : Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError =
   let n:u32 =
     cast (Std.Collections.Hash.Map.impl_1__len #u32
           #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
@@ -2452,42 +2401,47 @@ let round1_refresh
   in
   match
     Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_HashMap
-              u32 Golden_rs.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
+              u32 Golden_dkg.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
           #FStar.Tactics.Typeclasses.solve
           received
         <:
-        Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Round0Msg)
+        Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Round0Msg)
       ()
       (fun temp_0_ temp_1_ ->
           let _:Prims.unit = temp_0_ in
-          let (sender_id: u32), (msg: Golden_rs.Types.t_Round0Msg) = temp_1_ in
-          if msg.Golden_rs.Types.f_session_id <>. session_id <: bool
+          let (sender_id: u32), (msg: Golden_dkg.Types.t_Round0Msg) = temp_1_ in
+          if msg.Golden_dkg.Types.f_session_id <>. session_id <: bool
           then
             Core_models.Ops.Control_flow.ControlFlow_Break
             (Core_models.Ops.Control_flow.ControlFlow_Break
               (Core_models.Result.Result_Err
-                (ProtocolError_SessionMismatch ({ f_sender = sender_id }) <: t_ProtocolError)
+                (Golden_dkg.Error.DkgError_SessionMismatch
+                  ({ Golden_dkg.Error.f_sender = sender_id })
+                  <:
+                  Golden_dkg.Error.t_DkgError)
                 <:
-                Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+                Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError
+              )
               <:
               Core_models.Ops.Control_flow.t_ControlFlow
-                (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                (Prims.unit & Prims.unit))
+                (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                    Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit))
             <:
             Core_models.Ops.Control_flow.t_ControlFlow
               (Core_models.Ops.Control_flow.t_ControlFlow
-                  (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                  (Prims.unit & Prims.unit)) Prims.unit
+                  (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                      Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit
           else
             Core_models.Ops.Control_flow.ControlFlow_Continue ()
             <:
             Core_models.Ops.Control_flow.t_ControlFlow
               (Core_models.Ops.Control_flow.t_ControlFlow
-                  (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                  (Prims.unit & Prims.unit)) Prims.unit)
+                  (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                      Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit)
     <:
     Core_models.Ops.Control_flow.t_ControlFlow
-      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError) Prims.unit
+      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError)
+      Prims.unit
   with
   | Core_models.Ops.Control_flow.ControlFlow_Break ret -> ret
   | Core_models.Ops.Control_flow.ControlFlow_Continue _ ->
@@ -2498,23 +2452,25 @@ let round1_refresh
         .Ark_ec.Models.Short_weierstrass.Affine.f_infinity
     then
       Core_models.Result.Result_Err
-      (ProtocolError_ZeroSecretViolation ({ f_sender = id }) <: t_ProtocolError)
+      (Golden_dkg.Error.DkgError_ZeroSecretViolation ({ Golden_dkg.Error.f_sender = id })
+        <:
+        Golden_dkg.Error.t_DkgError)
       <:
-      Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError
+      Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError
     else
       match
         Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_HashMap
-                  u32 Golden_rs.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
+                  u32 Golden_dkg.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
               #FStar.Tactics.Typeclasses.solve
               received
             <:
-            Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Round0Msg)
+            Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Round0Msg)
           ()
           (fun temp_0_ temp_1_ ->
               let _:Prims.unit = temp_0_ in
-              let (sender_id: u32), (msg: Golden_rs.Types.t_Round0Msg) = temp_1_ in
+              let (sender_id: u32), (msg: Golden_dkg.Types.t_Round0Msg) = temp_1_ in
               if
-                ~.(msg.Golden_rs.Types.f_vss_commitment.[ mk_usize 0 ]
+                ~.(msg.Golden_dkg.Types.f_vss_commitment.[ mk_usize 0 ]
                   <:
                   Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
                   .Ark_ec.Models.Short_weierstrass.Affine.f_infinity
@@ -2524,60 +2480,64 @@ let round1_refresh
                 Core_models.Ops.Control_flow.ControlFlow_Break
                 (Core_models.Ops.Control_flow.ControlFlow_Break
                   (Core_models.Result.Result_Err
-                    (ProtocolError_ZeroSecretViolation ({ f_sender = sender_id }) <: t_ProtocolError
-                    )
+                    (Golden_dkg.Error.DkgError_ZeroSecretViolation
+                      ({ Golden_dkg.Error.f_sender = sender_id })
+                      <:
+                      Golden_dkg.Error.t_DkgError)
                     <:
-                    Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+                    Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                      Golden_dkg.Error.t_DkgError)
                   <:
                   Core_models.Ops.Control_flow.t_ControlFlow
-                    (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                    (Prims.unit & Prims.unit))
+                    (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                        Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit))
                 <:
                 Core_models.Ops.Control_flow.t_ControlFlow
                   (Core_models.Ops.Control_flow.t_ControlFlow
-                      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                      (Prims.unit & Prims.unit)) Prims.unit
+                      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                          Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit
               else
                 Core_models.Ops.Control_flow.ControlFlow_Continue ()
                 <:
                 Core_models.Ops.Control_flow.t_ControlFlow
                   (Core_models.Ops.Control_flow.t_ControlFlow
-                      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                      (Prims.unit & Prims.unit)) Prims.unit)
+                      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                          Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit)
         <:
         Core_models.Ops.Control_flow.t_ControlFlow
-          (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError) Prims.unit
+          (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError)
+          Prims.unit
       with
       | Core_models.Ops.Control_flow.ControlFlow_Break ret -> ret
       | Core_models.Ops.Control_flow.ControlFlow_Continue _ ->
         match
           Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_HashMap
-                    u32 Golden_rs.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
+                    u32 Golden_dkg.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
                 #FStar.Tactics.Typeclasses.solve
                 received
               <:
-              Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Round0Msg)
+              Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Round0Msg)
             ()
             (fun temp_0_ temp_1_ ->
                 let _:Prims.unit = temp_0_ in
-                let (sender_id: u32), (msg: Golden_rs.Types.t_Round0Msg) = temp_1_ in
+                let (sender_id: u32), (msg: Golden_dkg.Types.t_Round0Msg) = temp_1_ in
                 match
                   Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter
                         #(Std.Collections.Hash.Map.t_HashMap u32
-                            Golden_rs.Types.t_Ciphertext
+                            Golden_dkg.Types.t_Ciphertext
                             Std.Hash.Random.t_RandomState)
                         #FStar.Tactics.Typeclasses.solve
-                        msg.Golden_rs.Types.f_ciphertexts
+                        msg.Golden_dkg.Types.f_ciphertexts
                       <:
-                      Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Ciphertext)
+                      Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Ciphertext)
                     ()
                     (fun temp_0_ temp_1_ ->
                         let _:Prims.unit = temp_0_ in
-                        let (recipient_id: u32), (ct: Golden_rs.Types.t_Ciphertext) = temp_1_ in
+                        let (recipient_id: u32), (ct: Golden_dkg.Types.t_Ciphertext) = temp_1_ in
                         let expected_share_comm:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                         Ark_bls12_381_.Curves.G1.t_Config =
-                          Golden_rs.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice msg
-                                  .Golden_rs.Types.f_vss_commitment
+                          Golden_dkg.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice msg
+                                  .Golden_dkg.Types.f_vss_commitment
                               <:
                               t_Slice
                               (Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -2603,7 +2563,7 @@ let round1_refresh
                                   <:
                                   Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                   Ark_bls12_381_.Curves.G1.t_Config)
-                                ct.Golden_rs.Types.f_encrypted_share
+                                ct.Golden_dkg.Types.f_encrypted_share
                               <:
                               Ark_ec.Models.Short_weierstrass.Group.t_Projective
                               Ark_bls12_381_.Curves.G1.t_Config)
@@ -2621,7 +2581,7 @@ let round1_refresh
                                 (Ark_ec.f_into_group #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                       Ark_bls12_381_.Curves.G1.t_Config)
                                     #FStar.Tactics.Typeclasses.solve
-                                    ct.Golden_rs.Types.f_r_commitment
+                                    ct.Golden_dkg.Types.f_r_commitment
                                   <:
                                   Ark_ec.Models.Short_weierstrass.Group.t_Projective
                                   Ark_bls12_381_.Curves.G1.t_Config)
@@ -2641,55 +2601,60 @@ let round1_refresh
                           Core_models.Ops.Control_flow.ControlFlow_Break
                           (Core_models.Ops.Control_flow.ControlFlow_Break
                             (Core_models.Result.Result_Err
-                              (ProtocolError_CiphertextVerificationFailed
-                                ({ f_sender = sender_id; f_recipient = recipient_id })
+                              (Golden_dkg.Error.DkgError_CiphertextVerificationFailed
+                                ({
+                                    Golden_dkg.Error.f_sender = sender_id;
+                                    Golden_dkg.Error.f_recipient = recipient_id
+                                  })
                                 <:
-                                t_ProtocolError)
+                                Golden_dkg.Error.t_DkgError)
                               <:
-                              Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                t_ProtocolError)
+                              Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                Golden_dkg.Error.t_DkgError)
                             <:
                             Core_models.Ops.Control_flow.t_ControlFlow
-                              (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                  t_ProtocolError) (Prims.unit & Prims.unit))
+                              (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                  Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit))
                           <:
                           Core_models.Ops.Control_flow.t_ControlFlow
                             (Core_models.Ops.Control_flow.t_ControlFlow
-                                (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                    t_ProtocolError) (Prims.unit & Prims.unit)) Prims.unit
+                                (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                    Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit))
+                            Prims.unit
                         else
                           Core_models.Ops.Control_flow.ControlFlow_Continue ()
                           <:
                           Core_models.Ops.Control_flow.t_ControlFlow
                             (Core_models.Ops.Control_flow.t_ControlFlow
-                                (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                    t_ProtocolError) (Prims.unit & Prims.unit)) Prims.unit)
+                                (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                    Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit))
+                            Prims.unit)
                   <:
                   Core_models.Ops.Control_flow.t_ControlFlow
-                    (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                    Prims.unit
+                    (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                        Golden_dkg.Error.t_DkgError) Prims.unit
                 with
                 | Core_models.Ops.Control_flow.ControlFlow_Break ret ->
                   Core_models.Ops.Control_flow.ControlFlow_Break
                   (Core_models.Ops.Control_flow.ControlFlow_Break ret
                     <:
                     Core_models.Ops.Control_flow.t_ControlFlow
-                      (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                      (Prims.unit & Prims.unit))
+                      (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                          Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit))
                   <:
                   Core_models.Ops.Control_flow.t_ControlFlow
                     (Core_models.Ops.Control_flow.t_ControlFlow
-                        (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                        (Prims.unit & Prims.unit)) Prims.unit
+                        (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                            Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit
                 | Core_models.Ops.Control_flow.ControlFlow_Continue _ ->
                   let sender_pk:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                   Ark_bls12_381_.Curves.G1.t_Config =
                     peers.[ sender_id ]
                   in
                   match
-                    msg.Golden_rs.Types.f_batch_evrf_proof
+                    msg.Golden_dkg.Types.f_batch_evrf_proof
                     <:
-                    Core_models.Option.t_Option Golden_rs.Zk_evrf.t_EVRFProof
+                    Core_models.Option.t_Option Golden_dkg.Zk_evrf.t_EVRFProof
                   with
                   | Core_models.Option.Option_Some batch_proof ->
                     let
@@ -2702,7 +2667,7 @@ let round1_refresh
                         Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                         Ark_bls12_381_.Curves.G1.t_Config) Alloc.Alloc.t_Global =
                       Core_models.Iter.Traits.Iterator.f_collect #(Core_models.Iter.Adapters.Map.t_Map
-                            (Std.Collections.Hash.Map.t_Keys u32 Golden_rs.Types.t_Ciphertext)
+                            (Std.Collections.Hash.Map.t_Keys u32 Golden_dkg.Types.t_Ciphertext)
                             (u32
                                 -> (u32 &
                                     Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -2713,7 +2678,7 @@ let round1_refresh
                               Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                               Ark_bls12_381_.Curves.G1.t_Config) Alloc.Alloc.t_Global)
                         (Core_models.Iter.Traits.Iterator.f_map #(Std.Collections.Hash.Map.t_Keys
-                                u32 Golden_rs.Types.t_Ciphertext)
+                                u32 Golden_dkg.Types.t_Ciphertext)
                             #FStar.Tactics.Typeclasses.solve
                             #(u32 &
                               Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -2723,11 +2688,11 @@ let round1_refresh
                                     Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                     Ark_bls12_381_.Curves.G1.t_Config))
                             (Std.Collections.Hash.Map.impl_1__keys #u32
-                                #Golden_rs.Types.t_Ciphertext
+                                #Golden_dkg.Types.t_Ciphertext
                                 #Std.Hash.Random.t_RandomState
-                                msg.Golden_rs.Types.f_ciphertexts
+                                msg.Golden_dkg.Types.f_ciphertexts
                               <:
-                              Std.Collections.Hash.Map.t_Keys u32 Golden_rs.Types.t_Ciphertext)
+                              Std.Collections.Hash.Map.t_Keys u32 Golden_dkg.Types.t_Ciphertext)
                             (fun pid ->
                                 let pid:u32 = pid in
                                 pid,
@@ -2741,7 +2706,7 @@ let round1_refresh
                                   Ark_bls12_381_.Curves.G1.t_Config))
                           <:
                           Core_models.Iter.Adapters.Map.t_Map
-                            (Std.Collections.Hash.Map.t_Keys u32 Golden_rs.Types.t_Ciphertext)
+                            (Std.Collections.Hash.Map.t_Keys u32 Golden_dkg.Types.t_Ciphertext)
                             (u32
                                 -> (u32 &
                                     Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -2757,8 +2722,8 @@ let round1_refresh
                         Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                         Ark_bls12_381_.Curves.G1.t_Config) Alloc.Alloc.t_Global =
                       Core_models.Iter.Traits.Iterator.f_collect #(Core_models.Iter.Adapters.Map.t_Map
-                            (Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Ciphertext)
-                            ((u32 & Golden_rs.Types.t_Ciphertext)
+                            (Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Ciphertext)
+                            ((u32 & Golden_dkg.Types.t_Ciphertext)
                                 -> (u32 &
                                     Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                     Ark_bls12_381_.Curves.G1.t_Config)))
@@ -2768,38 +2733,38 @@ let round1_refresh
                               Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                               Ark_bls12_381_.Curves.G1.t_Config) Alloc.Alloc.t_Global)
                         (Core_models.Iter.Traits.Iterator.f_map #(Std.Collections.Hash.Map.t_Iter
-                                u32 Golden_rs.Types.t_Ciphertext)
+                                u32 Golden_dkg.Types.t_Ciphertext)
                             #FStar.Tactics.Typeclasses.solve
                             #(u32 &
                               Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                               Ark_bls12_381_.Curves.G1.t_Config)
-                            #((u32 & Golden_rs.Types.t_Ciphertext)
+                            #((u32 & Golden_dkg.Types.t_Ciphertext)
                                 -> (u32 &
                                     Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                     Ark_bls12_381_.Curves.G1.t_Config))
                             (Std.Collections.Hash.Map.impl_1__iter #u32
-                                #Golden_rs.Types.t_Ciphertext
+                                #Golden_dkg.Types.t_Ciphertext
                                 #Std.Hash.Random.t_RandomState
-                                msg.Golden_rs.Types.f_ciphertexts
+                                msg.Golden_dkg.Types.f_ciphertexts
                               <:
-                              Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Ciphertext)
+                              Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Ciphertext)
                             (fun temp_0_ ->
-                                let (pid: u32), (ct: Golden_rs.Types.t_Ciphertext) = temp_0_ in
-                                pid, ct.Golden_rs.Types.f_r_commitment
+                                let (pid: u32), (ct: Golden_dkg.Types.t_Ciphertext) = temp_0_ in
+                                pid, ct.Golden_dkg.Types.f_r_commitment
                                 <:
                                 (u32 &
                                   Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                   Ark_bls12_381_.Curves.G1.t_Config))
                           <:
                           Core_models.Iter.Adapters.Map.t_Map
-                            (Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Ciphertext)
-                            ((u32 & Golden_rs.Types.t_Ciphertext)
+                            (Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Ciphertext)
+                            ((u32 & Golden_dkg.Types.t_Ciphertext)
                                 -> (u32 &
                                     Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                     Ark_bls12_381_.Curves.G1.t_Config)))
                     in
                     (match
-                        Golden_rs.Zk_evrf.verify_evrf_batch sender_pk
+                        Golden_dkg.Zk_evrf.verify_evrf_batch sender_pk
                           (Alloc.Vec.impl_1__as_slice peers_for_verify
                             <:
                             t_Slice
@@ -2822,8 +2787,8 @@ let round1_refresh
                         <:
                         Core_models.Ops.Control_flow.t_ControlFlow
                           (Core_models.Ops.Control_flow.t_ControlFlow
-                              (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                  t_ProtocolError) (Prims.unit & Prims.unit)) Prims.unit
+                              (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                  Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit
                       | _ ->
                         let interest:Tracing_core.Subscriber.t_Interest =
                           Tracing_core.Callsite.impl_DefaultCallsite__interest round1_refresh__e_ee_CALLSITE
@@ -2926,22 +2891,23 @@ let round1_refresh
                         <:
                         Core_models.Ops.Control_flow.t_ControlFlow
                           (Core_models.Ops.Control_flow.t_ControlFlow
-                              (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput
-                                  t_ProtocolError) (Prims.unit & Prims.unit)) Prims.unit)
+                              (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                                  Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit
+                    )
                   | _ ->
                     Core_models.Ops.Control_flow.ControlFlow_Continue
                     (Core_models.Iter.Traits.Iterator.f_fold (Core_models.Iter.Traits.Collect.f_into_iter
                             #(Std.Collections.Hash.Map.t_HashMap u32
-                                Golden_rs.Zk_evrf.t_EVRFProof
+                                Golden_dkg.Zk_evrf.t_EVRFProof
                                 Std.Hash.Random.t_RandomState)
                             #FStar.Tactics.Typeclasses.solve
-                            msg.Golden_rs.Types.f_evrf_proofs
+                            msg.Golden_dkg.Types.f_evrf_proofs
                           <:
-                          Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Zk_evrf.t_EVRFProof)
+                          Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Zk_evrf.t_EVRFProof)
                         ()
                         (fun temp_0_ temp_1_ ->
                             let _:Prims.unit = temp_0_ in
-                            let (recipient_id: u32), (proof: Golden_rs.Zk_evrf.t_EVRFProof) =
+                            let (recipient_id: u32), (proof: Golden_dkg.Zk_evrf.t_EVRFProof) =
                               temp_1_
                             in
                             let recipient_pk:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -2950,11 +2916,11 @@ let round1_refresh
                             in
                             let r_commitment:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                             Ark_bls12_381_.Curves.G1.t_Config =
-                              (msg.Golden_rs.Types.f_ciphertexts.[ recipient_id ])
-                                .Golden_rs.Types.f_r_commitment
+                              (msg.Golden_dkg.Types.f_ciphertexts.[ recipient_id ])
+                                .Golden_dkg.Types.f_r_commitment
                             in
                             match
-                              Golden_rs.Zk_evrf.verify_evrf sender_pk
+                              Golden_dkg.Zk_evrf.verify_evrf sender_pk
                                 recipient_pk
                                 r_commitment
                                 beta
@@ -3078,11 +3044,12 @@ let round1_refresh
                     <:
                     Core_models.Ops.Control_flow.t_ControlFlow
                       (Core_models.Ops.Control_flow.t_ControlFlow
-                          (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
-                          (Prims.unit & Prims.unit)) Prims.unit)
+                          (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                              Golden_dkg.Error.t_DkgError) (Prims.unit & Prims.unit)) Prims.unit)
           <:
           Core_models.Ops.Control_flow.t_ControlFlow
-            (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError) Prims.unit
+            (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError)
+            Prims.unit
         with
         | Core_models.Ops.Control_flow.ControlFlow_Break ret -> ret
         | Core_models.Ops.Control_flow.ControlFlow_Continue _ ->
@@ -3093,11 +3060,11 @@ let round1_refresh
           in
           match
             Rust_primitives.Hax.Folds.fold_return (Core_models.Iter.Traits.Collect.f_into_iter #(Std.Collections.Hash.Map.t_HashMap
-                      u32 Golden_rs.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
+                      u32 Golden_dkg.Types.t_Round0Msg Std.Hash.Random.t_RandomState)
                   #FStar.Tactics.Typeclasses.solve
                   received
                 <:
-                Std.Collections.Hash.Map.t_Iter u32 Golden_rs.Types.t_Round0Msg)
+                Std.Collections.Hash.Map.t_Iter u32 Golden_dkg.Types.t_Round0Msg)
               total_delta
               (fun total_delta temp_1_ ->
                   let total_delta:Ark_ff.Fields.Models.Fp.t_Fp
@@ -3105,23 +3072,28 @@ let round1_refresh
                         Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
                     total_delta
                   in
-                  let (sender_id: u32), (msg: Golden_rs.Types.t_Round0Msg) = temp_1_ in
+                  let (sender_id: u32), (msg: Golden_dkg.Types.t_Round0Msg) = temp_1_ in
                   match
-                    Core_models.Option.impl__ok_or #Golden_rs.Types.t_Ciphertext
-                      #t_ProtocolError
+                    Core_models.Option.impl__ok_or #Golden_dkg.Types.t_Ciphertext
+                      #Golden_dkg.Error.t_DkgError
                       (Std.Collections.Hash.Map.impl_2__get #u32
-                          #Golden_rs.Types.t_Ciphertext
+                          #Golden_dkg.Types.t_Ciphertext
                           #Std.Hash.Random.t_RandomState
                           #u32
-                          msg.Golden_rs.Types.f_ciphertexts
+                          msg.Golden_dkg.Types.f_ciphertexts
                           id
                         <:
-                        Core_models.Option.t_Option Golden_rs.Types.t_Ciphertext)
-                      (ProtocolError_MissingCiphertext ({ f_sender = sender_id; f_recipient = id })
+                        Core_models.Option.t_Option Golden_dkg.Types.t_Ciphertext)
+                      (Golden_dkg.Error.DkgError_MissingCiphertext
+                        ({
+                            Golden_dkg.Error.f_sender = sender_id;
+                            Golden_dkg.Error.f_recipient = id
+                          })
                         <:
-                        t_ProtocolError)
+                        Golden_dkg.Error.t_DkgError)
                     <:
-                    Core_models.Result.t_Result Golden_rs.Types.t_Ciphertext t_ProtocolError
+                    Core_models.Result.t_Result Golden_dkg.Types.t_Ciphertext
+                      Golden_dkg.Error.t_DkgError
                   with
                   | Core_models.Result.Result_Ok ct ->
                     let sender_pk:Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -3136,9 +3108,9 @@ let round1_refresh
                     (_:
                       Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                       Ark_bls12_381_.Curves.G1.t_Config) =
-                      Golden_rs.Evrf.derive_pad sk
+                      Golden_dkg.Evrf.derive_pad sk
                         sender_pk
-                        (msg.Golden_rs.Types.f_random_msg <: t_Slice u8)
+                        (msg.Golden_dkg.Types.f_random_msg <: t_Slice u8)
                         beta
                     in
                     let decrypted_share:Ark_ff.Fields.Models.Fp.t_Fp
@@ -3151,7 +3123,7 @@ let round1_refresh
                             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                 Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
                         #FStar.Tactics.Typeclasses.solve
-                        ct.Golden_rs.Types.f_encrypted_share
+                        ct.Golden_dkg.Types.f_encrypted_share
                         r_pad
                     in
                     let total_delta:Ark_ff.Fields.Models.Fp.t_Fp
@@ -3171,7 +3143,8 @@ let round1_refresh
                     <:
                     Core_models.Ops.Control_flow.t_ControlFlow
                       (Core_models.Ops.Control_flow.t_ControlFlow
-                          (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+                          (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                              Golden_dkg.Error.t_DkgError)
                           (Prims.unit &
                             Ark_ff.Fields.Models.Fp.t_Fp
                               (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -3184,10 +3157,12 @@ let round1_refresh
                     (Core_models.Ops.Control_flow.ControlFlow_Break
                       (Core_models.Result.Result_Err err
                         <:
-                        Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+                        Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                          Golden_dkg.Error.t_DkgError)
                       <:
                       Core_models.Ops.Control_flow.t_ControlFlow
-                        (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+                        (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                            Golden_dkg.Error.t_DkgError)
                         (Prims.unit &
                           Ark_ff.Fields.Models.Fp.t_Fp
                             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -3195,7 +3170,8 @@ let round1_refresh
                     <:
                     Core_models.Ops.Control_flow.t_ControlFlow
                       (Core_models.Ops.Control_flow.t_ControlFlow
-                          (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+                          (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput
+                              Golden_dkg.Error.t_DkgError)
                           (Prims.unit &
                             Ark_ff.Fields.Models.Fp.t_Fp
                               (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -3205,7 +3181,7 @@ let round1_refresh
                               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
             <:
             Core_models.Ops.Control_flow.t_ControlFlow
-              (Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError)
+              (Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError)
               (Ark_ff.Fields.Models.Fp.t_Fp
                   (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                       Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
@@ -3261,7 +3237,7 @@ let round1_refresh
                       Ark_ec.f_into_group #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                           Ark_bls12_381_.Curves.G1.t_Config)
                         #FStar.Tactics.Typeclasses.solve
-                        (Golden_rs.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice own_vss_commitment
+                        (Golden_dkg.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice own_vss_commitment
 
                               <:
                               t_Slice
@@ -3275,31 +3251,31 @@ let round1_refresh
                     let delta_pk_k:Ark_ec.Models.Short_weierstrass.Group.t_Projective
                     Ark_bls12_381_.Curves.G1.t_Config =
                       Core_models.Iter.Traits.Iterator.f_fold (Core_models.Iter.Traits.Collect.f_into_iter
-                            #(Std.Collections.Hash.Map.t_Values u32 Golden_rs.Types.t_Round0Msg)
+                            #(Std.Collections.Hash.Map.t_Values u32 Golden_dkg.Types.t_Round0Msg)
                             #FStar.Tactics.Typeclasses.solve
                             (Std.Collections.Hash.Map.impl_1__values #u32
-                                #Golden_rs.Types.t_Round0Msg
+                                #Golden_dkg.Types.t_Round0Msg
                                 #Std.Hash.Random.t_RandomState
                                 received
                               <:
-                              Std.Collections.Hash.Map.t_Values u32 Golden_rs.Types.t_Round0Msg)
+                              Std.Collections.Hash.Map.t_Values u32 Golden_dkg.Types.t_Round0Msg)
                           <:
-                          Std.Collections.Hash.Map.t_Values u32 Golden_rs.Types.t_Round0Msg)
+                          Std.Collections.Hash.Map.t_Values u32 Golden_dkg.Types.t_Round0Msg)
                         delta_pk_k
                         (fun delta_pk_k msg ->
                             let delta_pk_k:Ark_ec.Models.Short_weierstrass.Group.t_Projective
                             Ark_bls12_381_.Curves.G1.t_Config =
                               delta_pk_k
                             in
-                            let msg:Golden_rs.Types.t_Round0Msg = msg in
+                            let msg:Golden_dkg.Types.t_Round0Msg = msg in
                             Core_models.Ops.Arith.f_add_assign #(Ark_ec.Models.Short_weierstrass.Group.t_Projective
                                 Ark_bls12_381_.Curves.G1.t_Config)
                               #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                                 Ark_bls12_381_.Curves.G1.t_Config)
                               #FStar.Tactics.Typeclasses.solve
                               delta_pk_k
-                              (Golden_rs.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice msg
-                                        .Golden_rs.Types.f_vss_commitment
+                              (Golden_dkg.Vss.expected_share_commitment (Alloc.Vec.impl_1__as_slice msg
+                                        .Golden_dkg.Types.f_vss_commitment
                                     <:
                                     t_Slice
                                     (Ark_ec.Models.Short_weierstrass.Affine.t_Affine
@@ -3370,11 +3346,11 @@ let round1_refresh
             in
             Core_models.Result.Result_Ok
             ({
-                Golden_rs.Types.f_public_key = public_key;
-                Golden_rs.Types.f_public_key_shares = public_key_shares;
-                Golden_rs.Types.f_secret_share = new_secret_share
+                Golden_dkg.Types.f_public_key = public_key;
+                Golden_dkg.Types.f_public_key_shares = public_key_shares;
+                Golden_dkg.Types.f_secret_share = new_secret_share
               }
               <:
-              Golden_rs.Types.t_DkgOutput)
+              Golden_dkg.Types.t_DkgOutput)
             <:
-            Core_models.Result.t_Result Golden_rs.Types.t_DkgOutput t_ProtocolError
+            Core_models.Result.t_Result Golden_dkg.Types.t_DkgOutput Golden_dkg.Error.t_DkgError

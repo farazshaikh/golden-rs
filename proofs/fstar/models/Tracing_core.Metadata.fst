@@ -1,6 +1,6 @@
 module Tracing_core.Metadata
 
-/// Tracing metadata type used by the tracing crate for structured logging.
+/// Tracing metadata as opaque type.
 assume new type t_Metadata : Type0
 
 /// Re-export t_Level from Callsite (extraction references it as both

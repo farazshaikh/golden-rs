@@ -11,6 +11,17 @@ assume val f_rev : #v_I:Type0 -> {| i: t_IteratorMethods v_I |} -> v_I
 assume val f_collect : #v_I:Type0 -> {| i: t_IteratorMethods v_I |}
   -> #v_B:Type0 -> v_I -> v_B
 
+assume val f_copied : #v_I:Type0 -> {| i: t_IteratorMethods v_I |} -> #v_Item:Type0 -> v_I
+  -> Core_models.Iter.Adapters.Copied.t_Copied v_I
+
+assume val f_find : #v_I:Type0 -> {| i: t_IteratorMethods v_I |}
+  -> #v_P:Type0 -> #v_Item:Type0
+  -> v_I -> v_P
+  -> (v_I & Core_models.Option.t_Option v_Item)
+
+(* NOTE: IntoIterator for Vec is in Golden_dkg.Iter_instances.fst to avoid
+   circular dependency: Iterator -> Alloc.Vec -> Iterator *)
+
 (* --- t_Iterator instances moved from Slice.Iter.fst --- *)
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 let impl_slice_iter_is_iterator (#v_T: Type0)
@@ -139,15 +150,15 @@ let impl_iterator_methods_hashmap_iter (#v_K #v_V: Type0)
 
 (* HashMap::Keys yields K values *)
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_iterator_hashmap_keys (#v_K #v_V #v_S: Type0)
-  : t_Iterator (Std.Collections.Hash.Map.t_Keys v_K v_V v_S) =
+let impl_iterator_hashmap_keys (#v_K #v_V: Type0)
+  : t_Iterator (Std.Collections.Hash.Map.t_Keys v_K v_V) =
   { f_Item = v_K;
     f_next_pre = (fun _ -> true); f_next_post = (fun _ _ -> true);
     f_next = (fun _ -> admit ()) }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_iterator_methods_hashmap_keys (#v_K #v_V #v_S: Type0)
-  : t_IteratorMethods (Std.Collections.Hash.Map.t_Keys v_K v_V v_S) =
+let impl_iterator_methods_hashmap_keys (#v_K #v_V: Type0)
+  : t_IteratorMethods (Std.Collections.Hash.Map.t_Keys v_K v_V) =
   { _super_i0 = impl_iterator_hashmap_keys;
     f_fold_pre = (fun #_ #_ #_ #_ _ _ _ -> true);
     f_fold_post = (fun #_ #_ #_ #_ _ _ _ _ -> true);
@@ -164,15 +175,15 @@ let impl_iterator_methods_hashmap_keys (#v_K #v_V #v_S: Type0)
 
 (* HashMap::Values yields V values *)
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_iterator_hashmap_values (#v_K #v_V #v_S: Type0)
-  : t_Iterator (Std.Collections.Hash.Map.t_Values v_K v_V v_S) =
+let impl_iterator_hashmap_values (#v_K #v_V: Type0)
+  : t_Iterator (Std.Collections.Hash.Map.t_Values v_K v_V) =
   { f_Item = v_V;
     f_next_pre = (fun _ -> true); f_next_post = (fun _ _ -> true);
     f_next = (fun _ -> admit ()) }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_iterator_methods_hashmap_values (#v_K #v_V #v_S: Type0)
-  : t_IteratorMethods (Std.Collections.Hash.Map.t_Values v_K v_V v_S) =
+let impl_iterator_methods_hashmap_values (#v_K #v_V: Type0)
+  : t_IteratorMethods (Std.Collections.Hash.Map.t_Values v_K v_V) =
   { _super_i0 = impl_iterator_hashmap_values;
     f_fold_pre = (fun #_ #_ #_ #_ _ _ _ -> true);
     f_fold_post = (fun #_ #_ #_ #_ _ _ _ _ -> true);

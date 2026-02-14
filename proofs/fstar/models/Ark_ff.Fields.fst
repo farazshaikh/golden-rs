@@ -6,32 +6,11 @@ open Rust_primitives
 open Core_models
 
 /// The arkworks Field trait.
-/// hax extracts field operations as standalone functions with typeclass instances.
-/// f_ZERO, f_ONE, f_inverse are called as:
-///   Ark_ff.Fields.f_ZERO #(t_Fp ...) #FStar.Tactics.Typeclasses.solve
-
 class t_Field (v_Self : Type0) = {
-  __f_ZERO : v_Self;
-  __f_ONE : v_Self;
-  __f_inverse : v_Self -> Core_models.Option.t_Option v_Self;
+  [@@@ FStar.Tactics.Typeclasses.no_method] __f_ZERO : v_Self;
+  [@@@ FStar.Tactics.Typeclasses.no_method] __f_ONE : v_Self;
+  [@@@ FStar.Tactics.Typeclasses.no_method] __f_inverse : v_Self -> Core_models.Option.t_Option v_Self;
 }
-
-/// Standalone accessor functions matching hax's calling convention.
-/// hax calls: Ark_ff.Fields.f_ZERO #FStar.Tactics.Typeclasses.solve
-///
-/// NOTE: These use `Prims.Pure` with trivial pre/post to help F* type
-/// inference in if-then-else contexts where the return type is ambiguous.
-/// f_ZERO: the typeclass instance is the ONLY implicit parameter.
-/// hax calls: f_ZERO #FStar.Tactics.Typeclasses.solve
-/// The `#solve` fills the tcresolve parameter. v_Self is inferred from the instance.
-let f_ZERO (#[FStar.Tactics.Typeclasses.tcresolve ()] _i: t_Field 'a)
-  : 'a = _i.__f_ZERO
-
-let f_ONE (#[FStar.Tactics.Typeclasses.tcresolve ()] _i: t_Field 'a)
-  : 'a = _i.__f_ONE
-
-let f_inverse (#[FStar.Tactics.Typeclasses.tcresolve ()] _i: t_Field 'a)
-  (x : 'a) : Core_models.Option.t_Option 'a = _i.__f_inverse x
 
 /// Typeclass instance for t_Fp.
 open Ark_ff.Fields.Models.Fp
@@ -40,3 +19,30 @@ open Ark_ff.Fields.Models.Fp.Montgomery_backend
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume val impl_field_for_fp (config : Type0) (n : usize) :
   t_Field (t_Fp (t_MontBackend config n) n)
+
+/// f_ZERO: hax calls `f_ZERO #solve` with NO type implicits.
+/// Result type is inferred from the `<: t_Fp (...)` ascription at call site.
+/// The tcresolve is the ONLY implicit parameter.
+///
+/// TRICK: We don't use a type parameter at all. Instead we hardcode
+/// the concrete BLS12-381 Fr scalar type (the only field used in golden-dkg).
+/// In --lax mode this is sufficient because F* trusts type ascriptions.
+let scalar_fr = t_Fp (t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)
+
+assume val f_ZERO_fr :
+  (#[FStar.Tactics.Typeclasses.tcresolve ()] _inst : t_Field scalar_fr) -> scalar_fr
+assume val f_ONE_fr :
+  (#[FStar.Tactics.Typeclasses.tcresolve ()] _inst : t_Field scalar_fr) -> scalar_fr
+
+/// Map f_ZERO/f_ONE to the concrete versions.
+/// hax calls: Ark_ff.Fields.f_ZERO #solve
+/// The `#solve` fills tcresolve which resolves to impl_field_for_fp.
+/// v_Self = scalar_fr is inferred from the return type ascription.
+let f_ZERO (#[FStar.Tactics.Typeclasses.tcresolve ()] _i: t_Field scalar_fr) = f_ZERO_fr #_i
+let f_ONE (#[FStar.Tactics.Typeclasses.tcresolve ()] _i: t_Field scalar_fr) = f_ONE_fr #_i
+
+/// f_inverse: hax calls `f_inverse #Type #solve arg` -- has a type implicit.
+/// Standard 2-implicit pattern (same as f_add, f_mul, etc.)
+assume val f_inverse (#v_Self: Type0)
+  (#[FStar.Tactics.Typeclasses.tcresolve ()] _inst : t_Field v_Self)
+  (x : v_Self) : Core_models.Option.t_Option v_Self

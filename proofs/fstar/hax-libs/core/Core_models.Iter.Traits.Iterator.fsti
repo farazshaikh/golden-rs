@@ -70,8 +70,13 @@ val f_filter : #v_I:Type0 -> {| i: t_IteratorMethods v_I |}
   -> #v_P:Type0 -> v_I -> v_P
   -> Core_models.Iter.Adapters.Filter.t_Filter v_I v_P
 
-val f_copied : #v_I:Type0 -> {| i: t_IteratorMethods v_I |} -> v_I
+val f_copied : #v_I:Type0 -> {| i: t_IteratorMethods v_I |} -> #v_Item:Type0 -> v_I
   -> Core_models.Iter.Adapters.Copied.t_Copied v_I
+
+val f_find : #v_I:Type0 -> {| i: t_IteratorMethods v_I |}
+  -> #v_P:Type0 -> #v_Item:Type0
+  -> v_I -> v_P
+  -> (v_I & Core_models.Option.t_Option v_Item)
 
 (* --- t_Iterator instances moved from Slice.Iter and Range --- *)
 [@@ FStar.Tactics.Typeclasses.tcinstance]
@@ -126,13 +131,13 @@ val impl_iterator_hashmap_iter (v_K v_V: Type0) : t_Iterator (Std.Collections.Ha
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 val impl_iterator_methods_hashmap_iter (v_K v_V: Type0) : t_IteratorMethods (Std.Collections.Hash.Map.t_Iter v_K v_V)
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-val impl_iterator_hashmap_keys (v_K v_V v_S: Type0) : t_Iterator (Std.Collections.Hash.Map.t_Keys v_K v_V v_S)
+val impl_iterator_hashmap_keys (v_K v_V: Type0) : t_Iterator (Std.Collections.Hash.Map.t_Keys v_K v_V)
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-val impl_iterator_methods_hashmap_keys (v_K v_V v_S: Type0) : t_IteratorMethods (Std.Collections.Hash.Map.t_Keys v_K v_V v_S)
+val impl_iterator_methods_hashmap_keys (v_K v_V: Type0) : t_IteratorMethods (Std.Collections.Hash.Map.t_Keys v_K v_V)
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-val impl_iterator_hashmap_values (v_K v_V v_S: Type0) : t_Iterator (Std.Collections.Hash.Map.t_Values v_K v_V v_S)
+val impl_iterator_hashmap_values (v_K v_V: Type0) : t_Iterator (Std.Collections.Hash.Map.t_Values v_K v_V)
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-val impl_iterator_methods_hashmap_values (v_K v_V v_S: Type0) : t_IteratorMethods (Std.Collections.Hash.Map.t_Values v_K v_V v_S)
+val impl_iterator_methods_hashmap_values (v_K v_V: Type0) : t_IteratorMethods (Std.Collections.Hash.Map.t_Values v_K v_V)
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 val impl_into_iter_hashmap (v_K v_V v_S: Type0) : Core_models.Iter.Traits.Collect.t_IntoIterator (Std.Collections.Hash.Map.t_HashMap v_K v_V v_S)
 [@@ FStar.Tactics.Typeclasses.tcinstance]

@@ -29,14 +29,29 @@ assume val impl_proj_sub (config : Type0) :
 assume val impl_proj_neg (config : Type0) :
   Core_models.Ops.Arith.t_Neg (t_Projective config)
 
-/// Affine * Scalar -> Projective (scalar multiplication)
+/// Scalar multiplication instances
 open Ark_ff.Fields.Models.Fp
 open Ark_ff.Fields.Models.Fp.Montgomery_backend
 
+/// Affine * Scalar -> Projective
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume val impl_affine_scalar_mul (config : Type0) (fp_config : Type0) (n : usize) :
   Core_models.Ops.Arith.t_Mul
     (Ark_ec.Models.Short_weierstrass.Affine.t_Affine config)
+    (t_Fp (t_MontBackend fp_config n) n)
+
+/// Projective * Scalar
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume val impl_proj_scalar_mul (config : Type0) (fp_config : Type0) (n : usize) :
+  Core_models.Ops.Arith.t_Mul
+    (t_Projective config)
+    (t_Fp (t_MontBackend fp_config n) n)
+
+/// Projective *= Scalar
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume val impl_proj_scalar_mul_assign (config : Type0) (fp_config : Type0) (n : usize) :
+  Core_models.Ops.Arith.t_MulAssign
+    (t_Projective config)
     (t_Fp (t_MontBackend fp_config n) n)
 
 /// Default for Projective (identity / point at infinity)

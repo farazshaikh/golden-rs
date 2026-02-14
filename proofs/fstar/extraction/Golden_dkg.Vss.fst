@@ -1,4 +1,4 @@
-module Golden_rs.Vss
+module Golden_dkg.Vss
 #set-options "--fuel 0 --ifuel 1 --z3rlimit 15"
 open FStar.Mul
 open Core_models
@@ -24,7 +24,7 @@ let _ =
 /// NOTE: Uses index-based push loop instead of `iter().map().collect()` for hax
 /// extraction compatibility. See: formal_verification/Implementation.md
 /// "Extraction-Friendly Rust"
-let commit (poly: Golden_rs.Shamir.t_Polynomial)
+let commit (poly: Golden_dkg.Shamir.t_Polynomial)
     : Alloc.Vec.t_Vec
       (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
       Alloc.Alloc.t_Global =
@@ -33,7 +33,7 @@ let commit (poly: Golden_rs.Shamir.t_Polynomial)
           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
       #Alloc.Alloc.t_Global
-      poly.Golden_rs.Shamir.f_coefficients
+      poly.Golden_dkg.Shamir.f_coefficients
   in
   let commitments:Alloc.Vec.t_Vec
     (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
@@ -66,7 +66,7 @@ let commit (poly: Golden_rs.Shamir.t_Polynomial)
           let coeff:Ark_ff.Fields.Models.Fp.t_Fp
             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                 Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
-            poly.Golden_rs.Shamir.f_coefficients.[ idx ]
+            poly.Golden_dkg.Shamir.f_coefficients.[ idx ]
           in
           let commitments:Alloc.Vec.t_Vec
             (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
