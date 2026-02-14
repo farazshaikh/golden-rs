@@ -8,7 +8,6 @@
 //! original value. This is a core building block for the exponentiation gadget.
 
 use ark_bls12_381::Fr;
-use ark_ec::AdditiveGroup;
 use ark_ff::{BigInteger, One, PrimeField, Zero};
 
 use super::nonnative::{ConstraintSystem, VarIndex};

@@ -51,7 +51,7 @@ noncomputable def vss_expected_fn {F : Type*} [Field F] {G : Type*} [AddCommGrou
     Rust: `verify_share` in src/vss.rs
 -/
 theorem feldman_vss_completeness
-    {F : Type*} [Field F] [DecidableEq F]
+    {F : Type*} [Field F]
     {G : Type*} [AddCommGroup G] [Module F G]
     {t : ℕ} (g : G) (coeffs : Fin t → F) (j : F) :
     poly_eval coeffs j • g = vss_expected_fn (feldman_commit_fn g coeffs) j := by

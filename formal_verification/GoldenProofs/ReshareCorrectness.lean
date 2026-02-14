@@ -65,14 +65,14 @@ variable {F : Type*} [Field F]
 -/
 theorem reshare_lagrange_aggregation
     {n : ℕ}
-    (L : Fin n → F)            -- Lagrange coefficients for old members
-    (sk : Fin n → F)           -- old shares (sk_i = g_i(0))
-    (g_eval_j : Fin n → F)    -- g_i(j) for new member j
-    (h_linear : ∀ i, g_eval_j i = sk i + (g_eval_j i - sk i))
+    (L : Fin n → F) -- Lagrange coefficients for old members
+    (sk : Fin n → F) -- old shares (sk_i = g_i(0))
+    (g_eval_j : Fin n → F) -- g_i(j) for new member j
+    (_h_linear : ∀ i, g_eval_j i = sk i + (g_eval_j i - sk i))
     -- The key property: evaluation at 0 gives the old share
     -- Since g_i(0) = sk_i, we model: g_i(j) = sk_i + [higher-order terms]
     -- The higher-order terms vanish when reconstructing at 0
-    (h_sk_reconstructs : ∑ i : Fin n, L i * sk i = (∑ i : Fin n, L i * sk i)) :
+    (_h_sk_reconstructs : ∑ i : Fin n, L i * sk i = (∑ i : Fin n, L i * sk i)) :
     -- The aggregated new share evaluates to a value such that
     -- Lagrange interpolation of new shares at 0 recovers sk
     ∑ i : Fin n, L i * g_eval_j i =
@@ -99,9 +99,9 @@ theorem reshare_lagrange_aggregation
 -/
 theorem reshare_reconstruction_at_zero
     {n : ℕ}
-    (L : Fin n → F)            -- Lagrange coefficients
-    (sk : Fin n → F)           -- old shares
-    (secret : F)               -- the original secret
+    (L : Fin n → F) -- Lagrange coefficients
+    (sk : Fin n → F) -- old shares
+    (secret : F) -- the original secret
     (h_reconstruct : ∑ i : Fin n, L i * sk i = secret) :
     -- If each dealer uses g_i(0) = sk_i, and we weight by L_i(0),
     -- the sum of g_i(0) * L_i(0) = sum of sk_i * L_i(0) = secret

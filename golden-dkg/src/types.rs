@@ -17,6 +17,7 @@ use ark_std::rand::Rng;
 #[cfg(feature = "borsh")]
 use borsh::{BorshDeserialize, BorshSerialize};
 use std::collections::HashMap;
+#[cfg(feature = "borsh")]
 use std::io::{self, Read, Write};
 
 /// Participant identifier (1-indexed).

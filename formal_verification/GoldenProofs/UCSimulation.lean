@@ -193,8 +193,8 @@ variable {G : Type*} [AddCommGroup G] [Module F G]
     All of these follow as corollaries of UC security.
 -/
 theorem golden_uc_security
-    (n : ℕ)           -- number of participants
-    (adv_evrf : ℝ)    -- eVRF advantage per instance
+    (n : ℕ) -- number of participants
+    (adv_evrf : ℝ) -- eVRF advantage per instance
     (prob_real prob_ideal : ℝ) :  -- distinguishing probabilities
     -- The UC advantage is bounded
     |prob_real - prob_ideal| ≤ (n : ℝ) * adv_evrf := by

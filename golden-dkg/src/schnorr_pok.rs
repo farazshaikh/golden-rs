@@ -31,7 +31,9 @@
 use ark_bls12_381::{Fr, G1Affine};
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::PrimeField;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_serialize::CanonicalSerialize;
+#[cfg(feature = "borsh")]
+use ark_serialize::CanonicalDeserialize;
 use ark_std::rand::Rng;
 use ark_std::UniformRand;
 #[cfg(feature = "borsh")]

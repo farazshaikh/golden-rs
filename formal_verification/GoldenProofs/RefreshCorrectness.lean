@@ -110,9 +110,9 @@ variable {F : Type*} [Field F]
 -/
 theorem refresh_preserves_secret
     {n : ℕ}
-    (L : Fin n → F)          -- Lagrange coefficients
-    (sk : Fin n → F)         -- original shares
-    (delta : Fin n → F)      -- zero-sharing deltas
+    (L : Fin n → F) -- Lagrange coefficients
+    (sk : Fin n → F) -- original shares
+    (delta : Fin n → F) -- zero-sharing deltas
     (h_delta_zero : ∑ i : Fin n, L i * delta i = 0) :
     ∑ i : Fin n, L i * (sk i + delta i) =
     ∑ i : Fin n, L i * sk i := by
@@ -205,7 +205,7 @@ theorem refresh_shares_changed
   -- From h : sk_old + delta = sk_old, derive delta = 0
   -- Subtract sk_old from both sides: delta = 0
   have : sk_old + delta - sk_old = sk_old - sk_old := by rw [h]
-  simp [add_sub_cancel_left] at this
+  simp only [add_sub_cancel_left, sub_self] at this
   exact this
 
 end RefreshSharesChanged

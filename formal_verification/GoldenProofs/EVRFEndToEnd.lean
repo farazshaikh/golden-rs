@@ -90,7 +90,7 @@ theorem evrf_evaluation_satisfies_relation
 theorem evrf_pad_consistent_with_relation
     (extract_x : G → F) (H₁ H₂ : G)
     (g g_out : G) (sk1 : F) (pk2 : G) (beta : F)
-    (pk1 : G) (hpk1 : pk1 = sk1 • g) :
+    (pk1 : G) (_hpk1 : pk1 = sk1 • g) :
     let output := compute_pad extract_x H₁ H₂ g_out beta (sk1 • pk2)
     output.r_commitment = output.r • g_out := by
   -- By definition of compute_pad: R = r • g_commit (where g_commit = g_out)

@@ -8,7 +8,7 @@ use rand::rngs::OsRng;
 use tokio::sync::{broadcast, Barrier, RwLock};
 
 use golden_dkg::schnorr_pok::{self, SchnorrPoK};
-use golden_dkg::types::{MessageHeader, NodeId, Round0Msg, SessionId};
+use golden_dkg::types::{NodeId, Round0Msg, SessionId};
 
 /// Simulated broadcast channel with peer discovery.
 #[derive(Clone)]
@@ -78,6 +78,7 @@ mod tests {
     use ark_bls12_381::Fr;
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ff::UniformRand;
+    use golden_dkg::types::MessageHeader;
 
     fn gen_keypair_with_pok(rng: &mut impl ark_std::rand::Rng) -> (Fr, G1Affine, SchnorrPoK) {
         let sk = Fr::rand(rng);

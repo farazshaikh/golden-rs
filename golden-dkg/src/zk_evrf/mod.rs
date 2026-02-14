@@ -42,6 +42,7 @@ use ark_bls12_381::{Fr, G1Affine, G1Projective};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 #[cfg(feature = "borsh")]
 use borsh::{BorshDeserialize, BorshSerialize};
+#[cfg(feature = "borsh")]
 use std::io::{self, Read, Write};
 
 use self::adapter::capture_circuit;
