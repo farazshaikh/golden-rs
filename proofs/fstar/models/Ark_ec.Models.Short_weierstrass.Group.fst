@@ -12,8 +12,22 @@ assume new type t_Projective (config : Type0) : eqtype
 
 /// Projective + Projective (point addition)
 [@@ FStar.Tactics.Typeclasses.tcinstance]
+assume val impl_proj_add (config : Type0) :
+  Core_models.Ops.Arith.t_Add (t_Projective config) (t_Projective config)
+
+[@@ FStar.Tactics.Typeclasses.tcinstance]
 assume val impl_proj_add_assign (config : Type0) :
   Core_models.Ops.Arith.t_AddAssign (t_Projective config) (t_Projective config)
+
+/// Projective - Projective (point subtraction)
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume val impl_proj_sub (config : Type0) :
+  Core_models.Ops.Arith.t_Sub (t_Projective config) (t_Projective config)
+
+/// Negation: -Projective
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume val impl_proj_neg (config : Type0) :
+  Core_models.Ops.Arith.t_Neg (t_Projective config)
 
 /// Affine * Scalar -> Projective (scalar multiplication)
 open Ark_ff.Fields.Models.Fp

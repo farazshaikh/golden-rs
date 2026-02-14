@@ -1,0 +1,140 @@
+module Rust_primitives.Hax
+
+open Rust_primitives.Integers
+open Rust_primitives.Arrays
+
+type t_Never = False
+let never_to_any #t: t_Never -> t = (fun _ -> match () with)
+
+let repeat #a (x: a) (len: usize): t_Array a len = 
+  FStar.Seq.create (v len) x
+
+open Core_models.Ops.Index
+class update_at_tc self idx = {
+  [@@@FStar.Tactics.Typeclasses.tcinstance]
+  super_index: t_Index self idx;
+  update_at: s: self -> i: idx {f_index_pre s i} -> super_index.f_Output -> self;
+}
+
+open Core_models.Slice
+open Core_models.Array
+open Core_models.Ops.Range
+
+/// We have an instance for `usize`, but we often work with refined
+/// `usize`, and F* typeclass inference doesn't support subtyping
+/// well, hence the instance below.
+instance impl__index_refined t l r: t_Index (t_Array t l) (x: usize {r x})
+  = { f_Output = t;
+      f_index_pre = (fun (s: t_Array t l) (i: usize {r i}) -> v i >= 0 && v i < v l);
+      f_index_post = (fun _ _ _ -> true);
+      f_index = (fun s i -> Seq.index s (v i));
+    }
+
+/// Similarly to `impl__index_refined`, we need to define a instance
+/// for refined `usize`.
+instance update_at_tc_array_refined t l r: update_at_tc (t_Array t l) (x: usize {r x}) = {
+  super_index = impl__index_refined t l r;
+  update_at = (fun arr i x -> FStar.Seq.upd arr (v i) x);
+}
+
+instance impl__index t l: t_Index (t_Array t l) (usize)
+  = { f_Output = t;
+      f_index_pre = (fun (s: t_Array t l) (i: usize) -> v i >= 0 && v i < v l);
+      f_index_post = (fun _ _ _ -> true);
+      f_index = (fun s i -> Seq.index s (v i));
+    }
+
+instance update_at_tc_array t l: update_at_tc (t_Array t l) (usize) = {
+  super_index = FStar.Tactics.Typeclasses.solve <: t_Index (t_Array t l) (usize);
+  update_at = (fun arr i x -> FStar.Seq.upd arr (v i) x);
+}
+
+
+let update_at_tc_array_range_super t l: t_Index (t_Array t l) (t_Range (usize))
+  = FStar.Tactics.Typeclasses.solve
+let update_at_tc_array_range_to_super t l: t_Index (t_Array t l) (t_RangeTo (usize))
+  = FStar.Tactics.Typeclasses.solve
+let update_at_tc_array_range_from_super t l: t_Index (t_Array t l) (t_RangeFrom (usize))
+  = FStar.Tactics.Typeclasses.solve
+let update_at_tc_array_range_full_super t l: t_Index (t_Array t l) t_RangeFull
+  = FStar.Tactics.Typeclasses.solve
+
+assume val update_at_array_range t l
+  (s: t_Array t l) (i: t_Range (usize) {(update_at_tc_array_range_super t l).f_index_pre s i})
+  : (update_at_tc_array_range_super t l).f_Output -> t_Array t l
+assume val update_at_array_range_to t l
+  (s: t_Array t l) (i: t_RangeTo (usize) {(update_at_tc_array_range_to_super t l).f_index_pre s i})
+  : (update_at_tc_array_range_to_super t l).f_Output -> t_Array t l
+assume val update_at_array_range_from t l
+  (s: t_Array t l) (i: t_RangeFrom (usize) {(update_at_tc_array_range_from_super t l).f_index_pre s i})
+  : (update_at_tc_array_range_from_super t l).f_Output -> t_Array t l
+assume val update_at_array_range_full t l
+  (s: t_Array t l) (i: t_RangeFull)
+  : (update_at_tc_array_range_full_super t l).f_Output -> t_Array t l
+
+instance update_at_tc_array_range t l: update_at_tc (t_Array t l) (t_Range (usize)) = {
+  super_index = update_at_tc_array_range_super t l;
+  update_at = update_at_array_range t l
+}
+instance update_at_tc_array_range_to t l: update_at_tc (t_Array t l) (t_RangeTo (usize)) = {
+  super_index = update_at_tc_array_range_to_super t l;
+  update_at = update_at_array_range_to t l
+}
+instance update_at_tc_array_range_from t l: update_at_tc (t_Array t l) (t_RangeFrom (usize)) = {
+  super_index = update_at_tc_array_range_from_super t l;
+  update_at = update_at_array_range_from t l
+}
+instance update_at_tc_array_range_full t l: update_at_tc (t_Array t l) t_RangeFull = {
+  super_index = update_at_tc_array_range_full_super t l;
+  update_at = update_at_array_range_full t l
+}
+
+
+let (.[]<-) #self #idx {| update_at_tc self idx |} (s: self) (i: idx {f_index_pre s i})
+  = update_at s i
+
+unfold let array_of_list (#t:Type)
+  (n: nat {n < maxint U16})
+  (l: list t {FStar.List.Tot.length l == n})
+  : t_Array t (sz n)
+  = Seq.seq_of_list l
+
+(* class iterator_return (self: Type u#0): Type u#1 = {
+  [@@@FStar.Tactics.Typeclasses.tcresolve]
+  parent_iterator: Core_models.Iter.Traits.Iterator.t_Iterator self;
+  f_fold_return: #b:Type0 -> s:self -> b -> (b -> i:parent_iterator.f_Item{parent_iterator.f_contains s i} -> Core_models.Ops.Control_flow.t_ControlFlow b b) -> Core_models.Ops.Control_flow.t_ControlFlow b b;
+} *)
+let while_loop #acc_t 
+  (inv: acc_t -> Type0)
+  (condition: (c:acc_t {inv c}) -> bool) 
+  (fuel: (a:acc_t{inv a} -> nat))
+  (init: acc_t {inv init}) 
+  (f: (i:acc_t{inv i /\ condition i} -> o:acc_t{inv o /\ fuel o < fuel i})): 
+  (res: acc_t {inv res /\ not (condition res)})
+  = 
+  let rec while_loop_internal
+  (current: acc_t {inv current}): 
+  Tot (res: acc_t {inv res /\ not (condition res)}) (decreases (fuel current))
+  = if condition current
+    then 
+      let next = f current in 
+      assert (fuel next < fuel current);
+      while_loop_internal next
+    else current in 
+  while_loop_internal init
+
+assume val while_loop_return #acc_t #ret_t 
+  (inv: acc_t -> Type0)
+  (condition: (c:acc_t {inv c}) -> bool) 
+  (fuel: (a:acc_t -> nat))
+  (init: acc_t ) 
+  (f: (acc_t -> Core_models.Ops.Control_flow.t_ControlFlow 
+  (Core_models.Ops.Control_flow.t_ControlFlow ret_t (Prims.unit & acc_t)) acc_t))
+  : Core_models.Ops.Control_flow.t_ControlFlow ret_t acc_t
+
+/// Represents backend failures
+let failure #t (_error: string) (_ast: string): Pure t False (fun _ -> True) = ()
+
+/// Rust trait objects: `dyn Trait` becomes `dyn n (fun z -> Trait z)`.
+/// Modeled as an opaque type -- the actual vtable dispatch is not relevant for verification.
+assume val dyn (#v_A: Type) (_n: v_A) (#v_B: Type) (_f: v_B) : Type0

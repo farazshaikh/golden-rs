@@ -30,3 +30,10 @@ assume val impl_affine_repr_g1 :
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume val impl_curve_group_g1 :
   t_CurveGroup (Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config)
+
+/// f_into_group: converts Affine -> Projective (inverse of f_into_affine).
+/// Specialized to BLS12-381 G1 since that's the only curve in use.
+assume val f_into_group (#v_Self: Type0)
+  (#[FStar.Tactics.Typeclasses.tcresolve ()] _inst: t_AffineRepr v_Self)
+  (x: v_Self)
+  : Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config

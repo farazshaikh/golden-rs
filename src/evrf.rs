@@ -36,9 +36,13 @@ use crate::types::Scalar;
 ///
 /// Converts the Fq x-coordinate (381 bits) to bytes, then reduces mod r
 /// into the scalar field. Returns `Fr::zero()` for the identity point.
+/// NOTE: Uses Scalar::from(0u64) instead of Scalar::ZERO to avoid
+/// arkworks Field::ZERO constant which generates f_ZERO typeclass call
+/// in F* extraction. Scalar::from(0u64) uses the From<u64> instance
+/// which resolves correctly. See: formal_verification/Implementation.md
 fn extract_x_as_scalar(point: G1Affine) -> Scalar {
     if point.infinity {
-        return Scalar::ZERO;
+        return Scalar::from(0u64);
     }
     let bytes = point.x.into_bigint().to_bytes_le();
     Fr::from_le_bytes_mod_order(&bytes)
