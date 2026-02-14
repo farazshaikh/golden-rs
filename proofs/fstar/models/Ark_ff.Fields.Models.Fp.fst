@@ -218,3 +218,36 @@ assume val fp_mul_assoc : #config:Type0 -> #n:usize ->
 assume val fp_mul_dist : #config:Type0 -> #n:usize ->
   a:t_Fp config n -> b:t_Fp config n -> c:t_Fp config n ->
   Lemma (fp_mul a (fp_add b c) == fp_add (fp_mul a b) (fp_mul a c))
+
+// ============================================================================
+// Additional derived properties (Phase 2.5)
+// ============================================================================
+
+/// 1 * a == a (left identity for multiplication)
+assume val fp_mul_one_l : #config:Type0 -> #n:usize -> a:t_Fp config n ->
+  Lemma (fp_mul (fp_from_u64 #config #n (mk_u64 1)) a == a)
+
+/// 0 + a == a (left identity for addition)
+assume val fp_add_zero_l : #config:Type0 -> #n:usize -> a:t_Fp config n ->
+  Lemma (fp_add (fp_from_u64 #config #n (mk_u64 0)) a == a)
+
+/// a - a == 0
+assume val fp_sub_self : #config:Type0 -> #n:usize -> a:t_Fp config n ->
+  Lemma (fp_sub a a == fp_from_u64 #config #n (mk_u64 0))
+
+/// a - b + b == a (cancellation)
+assume val fp_sub_add_cancel : #config:Type0 -> #n:usize ->
+  a:t_Fp config n -> b:t_Fp config n ->
+  Lemma (fp_add (fp_sub a b) b == a)
+
+/// a * 0 == 0 (right zero for multiplication)
+assume val fp_mul_zero_r : #config:Type0 -> #n:usize -> a:t_Fp config n ->
+  Lemma (fp_mul a (fp_from_u64 #config #n (mk_u64 0)) == fp_from_u64 #config #n (mk_u64 0))
+
+/// Right distributivity: (a + b) * c == a*c + b*c
+assume val fp_mul_dist_r : #config:Type0 -> #n:usize ->
+  a:t_Fp config n -> b:t_Fp config n -> c:t_Fp config n ->
+  Lemma (fp_mul (fp_add a b) c == fp_add (fp_mul a c) (fp_mul b c))
+
+/// NOTE: Inverse axioms (fp_inverse_exists, fp_mul_inverse) live in
+/// Golden_dkg.Shamir.Spec.fst to avoid circular dependency with Ark_ff.Fields.
