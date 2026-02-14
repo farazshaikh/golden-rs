@@ -21,88 +21,86 @@ let _ =
 /// > "C_k = g^{a_k} for each coefficient a_k"
 /// Returns a vector of `g^{a_k}` for each coefficient `a_k` in the polynomial.
 /// The first element `C_0 = g^{a_0}` is a commitment to the secret itself.
+/// NOTE: Uses index-based push loop instead of `iter().map().collect()` for hax
+/// extraction compatibility. See: formal_verification/Implementation.md
+/// "Extraction-Friendly Rust"
 let commit (poly: Golden_rs.Shamir.t_Polynomial)
     : Alloc.Vec.t_Vec
       (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
       Alloc.Alloc.t_Global =
-  Core_models.Iter.Traits.Iterator.f_collect #(Core_models.Iter.Adapters.Map.t_Map
-        (Core_models.Slice.Iter.t_Iter
-          (Ark_ff.Fields.Models.Fp.t_Fp
-              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-        (
-              Ark_ff.Fields.Models.Fp.t_Fp
-                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)
-            -> Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config))
-    #FStar.Tactics.Typeclasses.solve
-    #(Alloc.Vec.t_Vec
-        (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
-        Alloc.Alloc.t_Global)
-    (Core_models.Iter.Traits.Iterator.f_map #(Core_models.Slice.Iter.t_Iter
-          (Ark_ff.Fields.Models.Fp.t_Fp
-              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-        #FStar.Tactics.Typeclasses.solve
-        #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
-        #(
-              Ark_ff.Fields.Models.Fp.t_Fp
-                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)
-            -> Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
-        (Core_models.Slice.impl__iter #(Ark_ff.Fields.Models.Fp.t_Fp
-                (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                    Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
-            (Alloc.Vec.impl_1__as_slice poly.Golden_rs.Shamir.f_coefficients
-              <:
-              t_Slice
-              (Ark_ff.Fields.Models.Fp.t_Fp
-                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-          <:
-          Core_models.Slice.Iter.t_Iter
-          (Ark_ff.Fields.Models.Fp.t_Fp
-              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-        (fun coeff ->
-            let coeff:Ark_ff.Fields.Models.Fp.t_Fp
-              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
-              coeff
-            in
-            Ark_ec.f_into_affine #(Ark_ec.Models.Short_weierstrass.Group.t_Projective
+  let n:usize =
+    Alloc.Vec.impl_1__len #(Ark_ff.Fields.Models.Fp.t_Fp
+          (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+              Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+      #Alloc.Alloc.t_Global
+      poly.Golden_rs.Shamir.f_coefficients
+  in
+  let commitments:Alloc.Vec.t_Vec
+    (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
+    Alloc.Alloc.t_Global =
+    Alloc.Vec.impl__with_capacity #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
+        Ark_bls12_381_.Curves.G1.t_Config)
+      n
+  in
+  let commitments:Alloc.Vec.t_Vec
+    (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
+    Alloc.Alloc.t_Global =
+    Rust_primitives.Hax.Folds.fold_range (mk_usize 0)
+      n
+      (fun commitments temp_1_ ->
+          let commitments:Alloc.Vec.t_Vec
+            (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
+            Alloc.Alloc.t_Global =
+            commitments
+          in
+          let _:usize = temp_1_ in
+          true)
+      commitments
+      (fun commitments idx ->
+          let commitments:Alloc.Vec.t_Vec
+            (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
+            Alloc.Alloc.t_Global =
+            commitments
+          in
+          let idx:usize = idx in
+          let coeff:Ark_ff.Fields.Models.Fp.t_Fp
+            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
+            poly.Golden_rs.Shamir.f_coefficients.[ idx ]
+          in
+          let commitments:Alloc.Vec.t_Vec
+            (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
+            Alloc.Alloc.t_Global =
+            Alloc.Vec.impl_1__push #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                 Ark_bls12_381_.Curves.G1.t_Config)
-              #FStar.Tactics.Typeclasses.solve
-              (Core_models.Ops.Arith.f_mul #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
+              #Alloc.Alloc.t_Global
+              commitments
+              (Ark_ec.f_into_affine #(Ark_ec.Models.Short_weierstrass.Group.t_Projective
                     Ark_bls12_381_.Curves.G1.t_Config)
-                  #(Ark_ff.Fields.Models.Fp.t_Fp
-                      (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                          Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
                   #FStar.Tactics.Typeclasses.solve
-                  (Ark_ec.f_generator #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
+                  (Core_models.Ops.Arith.f_mul #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
                         Ark_bls12_381_.Curves.G1.t_Config)
+                      #(Ark_ff.Fields.Models.Fp.t_Fp
+                          (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                              Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
                       #FStar.Tactics.Typeclasses.solve
-                      ()
+                      (Ark_ec.f_generator #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
+                            Ark_bls12_381_.Curves.G1.t_Config)
+                          #FStar.Tactics.Typeclasses.solve
+                          ()
+                        <:
+                        Ark_ec.Models.Short_weierstrass.Affine.t_Affine
+                        Ark_bls12_381_.Curves.G1.t_Config)
+                      coeff
                     <:
-                    Ark_ec.Models.Short_weierstrass.Affine.t_Affine
+                    Ark_ec.Models.Short_weierstrass.Group.t_Projective
                     Ark_bls12_381_.Curves.G1.t_Config)
-                  coeff
                 <:
-                Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config
-              )
-            <:
-            Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
-      <:
-      Core_models.Iter.Adapters.Map.t_Map
-        (Core_models.Slice.Iter.t_Iter
-          (Ark_ff.Fields.Models.Fp.t_Fp
-              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-        (
-              Ark_ff.Fields.Models.Fp.t_Fp
-                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)
-            -> Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config))
+                Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
+          in
+          commitments)
+  in
+  commitments
 
 /// Verify that a share is consistent with a VSS commitment.
 /// Per Section 3.2 of the Golden paper (IACR 2025/1924), checks the
@@ -110,6 +108,9 @@ let commit (poly: Golden_rs.Shamir.t_Polynomial)
 /// > "g^{f(j)} == product_{k=0}^{t-1} C_k^{j^k}"
 /// Returns `true` if `g^{share}` equals the product of `C_k^{index^k}` over
 /// all commitment elements, confirming the share lies on the committed polynomial.
+/// NOTE: Uses index-based loop instead of `for c_k in commitment` for hax
+/// extraction compatibility. See: formal_verification/Implementation.md
+/// "Extraction-Friendly Rust"
 let verify_share
       (commitment:
           t_Slice
@@ -147,26 +148,20 @@ let verify_share
       #FStar.Tactics.Typeclasses.solve
       (mk_u64 1)
   in
+  let n:usize =
+    Core_models.Slice.impl__len #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
+        Ark_bls12_381_.Curves.G1.t_Config)
+      commitment
+  in
   let
   (expected: Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config),
   (x_pow:
     Ark_ff.Fields.Models.Fp.t_Fp
       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig
           (mk_usize 4)) (mk_usize 4)) =
-    Core_models.Iter.Traits.Iterator.f_fold (Core_models.Iter.Traits.Collect.f_into_iter #(t_Slice
-            (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config))
-          #FStar.Tactics.Typeclasses.solve
-          commitment
-        <:
-        Core_models.Slice.Iter.t_Iter
-        (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config))
-      (expected, x_pow
-        <:
-        (Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config &
-          Ark_ff.Fields.Models.Fp.t_Fp
-            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-      (fun temp_0_ c_k ->
+    Rust_primitives.Hax.Folds.fold_range (mk_usize 0)
+      n
+      (fun temp_0_ temp_1_ ->
           let
           (expected:
             Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config),
@@ -176,10 +171,25 @@ let verify_share
                   Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) =
             temp_0_
           in
-          let c_k:Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config
-          =
-            c_k
+          let _:usize = temp_1_ in
+          true)
+      (expected, x_pow
+        <:
+        (Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config &
+          Ark_ff.Fields.Models.Fp.t_Fp
+            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
+      (fun temp_0_ idx ->
+          let
+          (expected:
+            Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config),
+          (x_pow:
+            Ark_ff.Fields.Models.Fp.t_Fp
+              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) =
+            temp_0_
           in
+          let idx:usize = idx in
           let expected:Ark_ec.Models.Short_weierstrass.Group.t_Projective
           Ark_bls12_381_.Curves.G1.t_Config =
             Core_models.Ops.Arith.f_add_assign #(Ark_ec.Models.Short_weierstrass.Group.t_Projective
@@ -194,7 +204,10 @@ let verify_share
                       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                           Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
                   #FStar.Tactics.Typeclasses.solve
-                  c_k
+                  (commitment.[ idx ]
+                    <:
+                    Ark_ec.Models.Short_weierstrass.Affine.t_Affine
+                    Ark_bls12_381_.Curves.G1.t_Config)
                   x_pow
                 <:
                 Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config
@@ -242,6 +255,7 @@ let verify_share
 /// > "X_{j,k} = product_{l=0}^{t-1} A_{j,l}^{k^l}"
 /// Returns `g^{f(index)} = product_{k=0}^{t-1} C_k^{index^k}`, which is the
 /// commitment to the share value at `index` without revealing the share itself.
+/// NOTE: Uses index-based loop for hax extraction compatibility.
 let expected_share_commitment
       (commitment:
           t_Slice
@@ -274,26 +288,20 @@ let expected_share_commitment
       #FStar.Tactics.Typeclasses.solve
       (mk_u64 1)
   in
+  let n:usize =
+    Core_models.Slice.impl__len #(Ark_ec.Models.Short_weierstrass.Affine.t_Affine
+        Ark_bls12_381_.Curves.G1.t_Config)
+      commitment
+  in
   let
   (result: Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config),
   (x_pow:
     Ark_ff.Fields.Models.Fp.t_Fp
       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig
           (mk_usize 4)) (mk_usize 4)) =
-    Core_models.Iter.Traits.Iterator.f_fold (Core_models.Iter.Traits.Collect.f_into_iter #(t_Slice
-            (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config))
-          #FStar.Tactics.Typeclasses.solve
-          commitment
-        <:
-        Core_models.Slice.Iter.t_Iter
-        (Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config))
-      (result, x_pow
-        <:
-        (Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config &
-          Ark_ff.Fields.Models.Fp.t_Fp
-            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-      (fun temp_0_ c_k ->
+    Rust_primitives.Hax.Folds.fold_range (mk_usize 0)
+      n
+      (fun temp_0_ temp_1_ ->
           let
           (result:
             Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config),
@@ -303,10 +311,25 @@ let expected_share_commitment
                   Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) =
             temp_0_
           in
-          let c_k:Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config
-          =
-            c_k
+          let _:usize = temp_1_ in
+          true)
+      (result, x_pow
+        <:
+        (Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config &
+          Ark_ff.Fields.Models.Fp.t_Fp
+            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
+      (fun temp_0_ idx ->
+          let
+          (result:
+            Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config),
+          (x_pow:
+            Ark_ff.Fields.Models.Fp.t_Fp
+              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) =
+            temp_0_
           in
+          let idx:usize = idx in
           let result:Ark_ec.Models.Short_weierstrass.Group.t_Projective
           Ark_bls12_381_.Curves.G1.t_Config =
             Core_models.Ops.Arith.f_add_assign #(Ark_ec.Models.Short_weierstrass.Group.t_Projective
@@ -321,7 +344,10 @@ let expected_share_commitment
                       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                           Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
                   #FStar.Tactics.Typeclasses.solve
-                  c_k
+                  (commitment.[ idx ]
+                    <:
+                    Ark_ec.Models.Short_weierstrass.Affine.t_Affine
+                    Ark_bls12_381_.Curves.G1.t_Config)
                   x_pow
                 <:
                 Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config

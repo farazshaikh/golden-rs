@@ -28,11 +28,18 @@ use crate::types::{NodeId, Scalar};
 ///
 /// Returns a vector of `g^{a_k}` for each coefficient `a_k` in the polynomial.
 /// The first element `C_0 = g^{a_0}` is a commitment to the secret itself.
+///
+/// NOTE: Uses index-based push loop instead of `iter().map().collect()` for hax
+/// extraction compatibility. See: formal_verification/Implementation.md
+/// "Extraction-Friendly Rust"
 pub fn commit(poly: &Polynomial) -> Vec<G1Affine> {
-    poly.coefficients
-        .iter()
-        .map(|coeff| (G1Affine::generator() * coeff).into_affine())
-        .collect()
+    let n = poly.coefficients.len();
+    let mut commitments = Vec::with_capacity(n);
+    for idx in 0..n {
+        let coeff = poly.coefficients[idx];
+        commitments.push((G1Affine::generator() * coeff).into_affine());
+    }
+    commitments
 }
 
 /// Verify that a share is consistent with a VSS commitment.
@@ -43,12 +50,17 @@ pub fn commit(poly: &Polynomial) -> Vec<G1Affine> {
 ///
 /// Returns `true` if `g^{share}` equals the product of `C_k^{index^k}` over
 /// all commitment elements, confirming the share lies on the committed polynomial.
+///
+/// NOTE: Uses index-based loop instead of `for c_k in commitment` for hax
+/// extraction compatibility. See: formal_verification/Implementation.md
+/// "Extraction-Friendly Rust"
 pub fn verify_share(commitment: &[G1Affine], index: NodeId, share: Scalar) -> bool {
     let x = Scalar::from(index as u64);
     let mut expected = G1Projective::default();
     let mut x_pow = Scalar::from(1u64);
-    for c_k in commitment {
-        expected += *c_k * x_pow;
+    let n = commitment.len();
+    for idx in 0..n {
+        expected += commitment[idx] * x_pow;
         x_pow *= x;
     }
     let actual = G1Affine::generator() * share;
@@ -62,12 +74,15 @@ pub fn verify_share(commitment: &[G1Affine], index: NodeId, share: Scalar) -> bo
 ///
 /// Returns `g^{f(index)} = product_{k=0}^{t-1} C_k^{index^k}`, which is the
 /// commitment to the share value at `index` without revealing the share itself.
+///
+/// NOTE: Uses index-based loop for hax extraction compatibility.
 pub fn expected_share_commitment(commitment: &[G1Affine], index: NodeId) -> G1Affine {
     let x = Scalar::from(index as u64);
     let mut result = G1Projective::default();
     let mut x_pow = Scalar::from(1u64);
-    for c_k in commitment {
-        result += *c_k * x_pow;
+    let n = commitment.len();
+    for idx in 0..n {
+        result += commitment[idx] * x_pow;
         x_pow *= x;
     }
     result.into_affine()
