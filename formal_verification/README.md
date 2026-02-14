@@ -92,6 +92,91 @@ If someone changes the Rust code:
 - Kani harnesses catch new panic paths
 - Rust tests catch functional regressions
 
+## Running Verification After Code Changes
+
+After modifying Rust code in `golden-dkg/`, run the full verification suite:
+
+### Quick Check (2 minutes)
+
+```bash
+# 1. Rust tests -- catches functional regressions
+cargo test --workspace
+
+# 2. Lean proofs -- catches math spec regressions
+cd formal_verification && lake build
+```
+
+### Full Verification (5-10 minutes)
+
+```bash
+# 1. Rust tests
+cargo test --workspace
+
+# 2. Lean 4 proofs (requires elan + Lean 4 toolchain)
+cd formal_verification && lake build
+
+# 3. Re-extract Rust to F* via hax (requires hax + nightly-2025-11-08)
+cd golden-dkg
+eval $(opam env --switch=hax-engine)
+RUSTC_WRAPPER= cargo +nightly-2025-11-08 hax into fstar
+
+# 4. Copy updated extraction files
+cp golden-dkg/proofs/fstar/extraction/Golden_dkg.*.fst proofs/fstar/extraction/
+
+# 5. F* lax-check all 18 extracted modules
+FSTAR=~/.local/fstar/fstar/bin/fstar.exe
+for f in proofs/fstar/extraction/Golden_dkg.*.fst; do
+  $FSTAR --lax --warn_error -331 \
+    --include proofs/fstar/models \
+    --include proofs/fstar/extraction \
+    --include proofs/fstar/specs \
+    --include proofs/fstar/hax-libs/core \
+    --include proofs/fstar/hax-libs/rust_primitives \
+    --include proofs/fstar/hax-libs/hax_lib \
+    "$f" || echo "FAIL: $f"
+done
+
+# 6. F* spec lemmas (type-check specs against extraction)
+for f in proofs/fstar/specs/Golden_dkg.*.fst proofs/fstar/specs/Fold.Axioms.fst; do
+  $FSTAR --lax --warn_error -331 \
+    --include proofs/fstar/models \
+    --include proofs/fstar/extraction \
+    --include proofs/fstar/specs \
+    --include proofs/fstar/hax-libs/core \
+    --include proofs/fstar/hax-libs/rust_primitives \
+    --include proofs/fstar/hax-libs/hax_lib \
+    "$f" || echo "FAIL: $f"
+done
+```
+
+### What Each Step Catches
+
+| Step | Time | What It Catches |
+|------|------|-----------------|
+| `cargo test` | 15s | Logic bugs, adversarial attack handling, serialization errors |
+| `lake build` | 30s | Math spec regressions (any change to Lean proof files) |
+| hax re-extraction | 7s | Generates new F* from changed Rust (automatic) |
+| F* lax-check (18 modules) | 3min | Type errors in extraction (changed function signatures, new dependencies) |
+| F* spec check (6 files) | 40s | Spec-extraction mismatch (function API changed, types don't align) |
+
+### Tool Installation
+
+| Tool | Version | Install |
+|------|---------|---------|
+| Lean 4 | v4.27.0 | `curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \| sh` |
+| F* | v2025.10.06 | Download from [FStar releases](https://github.com/FStarLang/FStar/releases/tag/v2025.10.06) |
+| hax | v0.3.6 | See [Implementation.md](Implementation.md) for build-from-source instructions |
+| Kani | latest | `cargo install --locked kani-verifier && cargo kani setup` |
+
+### Kani (Optional -- Slower)
+
+```bash
+# Run all 20 Kani harnesses (requires kani-verifier installed)
+# Note: Kani cannot handle arkworks internals, so harnesses use
+# simplified models. ~7 seconds total.
+cd golden-dkg && cargo kani
+```
+
 ## What This Is
 
 Golden (Bunz, Choi, Komlo -- IACR 2025/1924) is a one-round DKG protocol achieving public verifiability via a novel exponent Verifiable Random Function (eVRF). This directory contains the formal verification effort: proving that the mathematical claims in the paper are correct, the Rust implementation faithfully realizes the paper's algorithms, and the ZK proof circuit correctly encodes the eVRF relation.
