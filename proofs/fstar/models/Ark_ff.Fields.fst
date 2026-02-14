@@ -46,3 +46,33 @@ let f_ONE (#[FStar.Tactics.Typeclasses.tcresolve ()] _i: t_Field scalar_fr) = f_
 assume val f_inverse (#v_Self: Type0)
   (#[FStar.Tactics.Typeclasses.tcresolve ()] _inst : t_Field v_Self)
   (x : v_Self) : Core_models.Option.t_Option v_Self
+
+// ============================================================================
+// Phase 2: Field trait axioms connecting to the Fp model
+// ============================================================================
+
+/// f_ZERO_fr is the field zero, i.e., fp_from_u64(0)
+assume val f_ZERO_fr_spec :
+  (#[FStar.Tactics.Typeclasses.tcresolve ()] _inst : t_Field scalar_fr) ->
+  Lemma (f_ZERO_fr #_inst == Ark_ff.Fields.Models.Fp.fp_from_u64 (mk_u64 0))
+
+/// f_ONE_fr is the field one, i.e., fp_from_u64(1)
+assume val f_ONE_fr_spec :
+  (#[FStar.Tactics.Typeclasses.tcresolve ()] _inst : t_Field scalar_fr) ->
+  Lemma (f_ONE_fr #_inst == Ark_ff.Fields.Models.Fp.fp_from_u64 (mk_u64 1))
+
+/// f_inverse on a nonzero element returns Some(inv) where inv is the
+/// multiplicative inverse: x * inv == 1_F.
+/// On zero, it returns None.
+assume val f_inverse_spec :
+  x:scalar_fr ->
+  Lemma (
+    let zero = Ark_ff.Fields.Models.Fp.fp_from_u64 #_ #(mk_usize 4) (mk_u64 0) in
+    let one  = Ark_ff.Fields.Models.Fp.fp_from_u64 #_ #(mk_usize 4) (mk_u64 1) in
+    if x = zero then
+      f_inverse x == Core_models.Option.Option_None
+    else
+      (exists (inv : scalar_fr).
+        f_inverse x == Core_models.Option.Option_Some inv /\
+        Ark_ff.Fields.Models.Fp.fp_mul x inv == one)
+  )
