@@ -169,10 +169,15 @@ RUSTC_WRAPPER= cargo +nightly-2025-11-08 hax into fstar
 
 | # | Sub-Task | Module | What to Prove in F* | Status |
 |---|----------|--------|---------------------|--------|
-| 2a | Shamir functional correctness | `Golden_rs.Shamir.fst` | `lagrange_interpolate_at_zero` returns `f(0)` for valid shares | Not started |
-| 2b | VSS functional correctness | `Golden_rs.Vss.fst` | `verify_share` returns true iff share is consistent with commitment | Not started |
-| 2c | eVRF DH symmetry (F* version) | `Golden_rs.Evrf.fst` | `derive_pad(sk_i, pk_j, ...) = derive_pad(sk_j, pk_i, ...)` | Not started (proven in Lean, Task 5) |
-| 2d | Protocol round correctness | `Golden_rs.Protocol.fst` | `round1` output `sk_i = sum_j f_j(i)` for honest broadcasts | Not started |
+| 2a | Shamir functional correctness | `Golden_dkg.Shamir.fst` | `lagrange_interpolate_at_zero` returns `f(0)` for valid shares | **Phase 1 done** -- spec in `Golden_dkg.Shamir.Spec.fst` (4 lemmas, admits) |
+| 2b | VSS functional correctness | `Golden_dkg.Vss.fst` | `verify_share` returns true iff share is consistent with commitment | **Phase 1 done** -- spec in `Golden_dkg.Vss.Spec.fst` (3 lemmas, admits) |
+| 2c | eVRF DH symmetry (F* version) | `Golden_dkg.Evrf.fst` | `derive_pad(sk_i, pk_j, ...) = derive_pad(sk_j, pk_i, ...)` | **Phase 1 done** -- spec in `Golden_dkg.Evrf.Spec.fst` (5 lemmas, admits) |
+| 2d | Refresh correctness | `Golden_dkg.Protocol.fst` | Zero-sharing vanishes, secret preserved, PK unchanged | **Phase 1 done** -- spec in `Golden_dkg.Refresh.Spec.fst` (4 lemmas, admits) |
+| 2e | Reshare correctness | `Golden_dkg.Reshare_protocol.fst` | Lagrange aggregation, PK preserved, dealer binding, threshold valid | **Phase 1 done** -- spec in `Golden_dkg.Reshare.Spec.fst` (4 lemmas, admits) |
+
+**Phase 1 status:** 5 spec files, 20 lemmas total, all type-check in `--lax` mode. Lemma bodies use `admit()`. The `val` signatures reference the extracted functions directly, so any API change in the Rust code will cause the spec to fail on re-extraction.
+
+**Phase 2 (future):** Replace `admit()` with actual proofs. Requires strengthening `assume val` stubs in model files with real `ensures` clauses (field arithmetic axioms, group law, etc.).
 
 7. **F* version must match hax.** hax v0.3.6 expects F* **v2025.10.06** (specified in `flake.nix`). Using a newer F* (e.g., v2025.12.15) causes hard errors in the core models (`Core_models.Slice.Iter` record type mismatch). Download the exact binary from `https://github.com/FStarLang/FStar/releases/download/v2025.10.06/fstar-v2025.10.06-Linux-x86_64.tar.gz`.
 
