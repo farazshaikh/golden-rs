@@ -83,7 +83,7 @@ impl Polynomial {
 /// Generate `n` shares by evaluating the polynomial at x = 1, 2, ..., n.
 ///
 /// Per Section 3.3 of the Golden paper (IACR 2025/1924):
-/// > "Each share x_bar_i = f(i) for i in [n]"
+/// > "Each share x_bar_i = f(i) for i in \[n\]"
 ///
 /// Returns `(node_id, share_value)` pairs with `node_id` in `1..=n`.
 /// The evaluation points are the natural numbers 1 through n, which ensures

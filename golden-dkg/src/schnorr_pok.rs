@@ -1,12 +1,25 @@
-//! Schnorr Proof of Knowledge for PKI registration per Appendix F of the Golden paper.
+//! Schnorr Proof of Knowledge for PKI registration.
 //!
-//! Per Appendix F of the Golden paper (IACR 2025/1924):
+//! Implements the Schnorr Sigma protocol (made non-interactive via the Fiat-Shamir
+//! heuristic) for proving knowledge of a discrete logarithm. This is used during
+//! PKI registration as specified in Appendix F of the Golden paper
+//! (Bünz, Choi, Komlo, [IACR 2025/1924](https://eprint.iacr.org/2025/1924)):
+//!
 //! > "F_pki: KeyGen, Register (with proof of knowledge), Query.
 //! > Must prove knowledge of sk_i^I when registering."
 //!
 //! Each DKG participant must register their identity public key with the PKI
-//! and prove they know the corresponding secret key. This prevents rogue-key
-//! attacks where an adversary registers a public key they cannot use.
+//! and prove they know the corresponding secret key. This prevents **rogue-key
+//! attacks** where an adversary registers a crafted public key (e.g., `PK_adv = g^x / PK_honest`)
+//! to cancel out honest contributions.
+//!
+//! # Protocol
+//!
+//! The Sigma protocol for relation `{(PK; sk) : PK = g^sk}`:
+//! 1. Prover samples nonce `k <- Z_p`, sends commitment `R = g^k`
+//! 2. Challenge `c = H("golden-schnorr-pok" || g || PK || R)` (Fiat-Shamir)
+//! 3. Prover sends response `s = k + c * sk`
+//! 4. Verifier checks `g^s == R + c * PK`
 
 // SECURITY: Constant-time analysis
 // - prove: nonce sampling (OsRng), scalar mul (constant-time), field add/mul (constant-time).
@@ -21,6 +34,7 @@ use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::Rng;
 use ark_std::UniformRand;
+#[cfg(feature = "borsh")]
 use borsh::{BorshDeserialize, BorshSerialize};
 use sha2::{Digest, Sha256};
 
@@ -33,11 +47,15 @@ use crate::types::{Scalar, SecretScalar};
 /// when registering an identity public key with the PKI functionality `F_pki`.
 /// The proof consists of a commitment `R = g^nonce` and a response
 /// `s = nonce + challenge * sk` using the Fiat-Shamir heuristic.
+///
+/// Generate with [`prove`], verify with [`verify`]. The proof is bound to a
+/// specific public key via the Fiat-Shamir challenge -- it cannot be reused for
+/// a different key.
 #[derive(Clone, Debug)]
 pub struct SchnorrPoK {
-    /// Commitment: R = g^nonce
+    /// Commitment `R = g^k` where `k` is the prover's random nonce.
     pub commitment: G1Affine,
-    /// Response: s = nonce + challenge * sk
+    /// Response `s = k + c * sk` where `c = H(g || PK || R)` is the Fiat-Shamir challenge.
     pub response: Scalar,
 }
 
@@ -119,6 +137,7 @@ fn compute_challenge(pk: G1Affine, commitment: G1Affine) -> Scalar {
     Fr::from_le_bytes_mod_order(&hash)
 }
 
+#[cfg(feature = "borsh")]
 impl BorshSerialize for SchnorrPoK {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         let mut buf = Vec::new();
@@ -135,6 +154,7 @@ impl BorshSerialize for SchnorrPoK {
     }
 }
 
+#[cfg(feature = "borsh")]
 impl BorshDeserialize for SchnorrPoK {
     fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         let buf: Vec<u8> = BorshDeserialize::deserialize_reader(reader)?;
@@ -220,6 +240,7 @@ mod tests {
         assert!(!verify(pk, &proof), "Tampered response should NOT verify");
     }
 
+    #[cfg(feature = "borsh")]
     #[test]
     fn test_schnorr_pok_borsh_roundtrip() {
         let mut rng = ark_std::test_rng();

@@ -1,3 +1,8 @@
+mod network;
+mod node;
+mod reshare_network;
+mod reshare_node;
+
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -6,12 +11,12 @@ use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::UniformRand;
 use rand::rngs::OsRng;
 
-use golden_rs::network::Network;
-use golden_rs::node::Node;
-use golden_rs::reshare_network::ReshareNetwork;
-use golden_rs::reshare_node::{NewReshareNode, OldReshareNode};
-use golden_rs::shamir::lagrange_interpolate_at_zero;
-use golden_rs::types::{DkgOutput, NodeId, Scalar};
+use crate::network::Network;
+use crate::node::Node;
+use crate::reshare_network::ReshareNetwork;
+use crate::reshare_node::{NewReshareNode, OldReshareNode};
+use golden_dkg::shamir::lagrange_interpolate_at_zero;
+use golden_dkg::types::{DkgOutput, NodeId, Scalar};
 
 /// Generate all C(n, k) combinations of indices.
 fn generate_combinations(

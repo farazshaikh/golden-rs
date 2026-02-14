@@ -18,70 +18,10 @@ use ark_std::rand::Rng;
 
 use crate::evrf;
 use crate::shamir::Polynomial;
-use crate::types::{Ciphertext, DkgOutput, NodeId, ReshareMsg, Scalar};
+use crate::types::{Ciphertext, DkgOutput, NodeId, ReshareMsg, Scalar, SessionId};
 use crate::vss;
 
-/// Error type for resharing protocol failures.
-#[derive(Debug)]
-pub enum ReshareError {
-    /// A ciphertext failed the VSS consistency check, indicating the dealer
-    /// sent a malformed or inconsistent encrypted share.
-    CiphertextVerificationFailed {
-        /// The old-group dealer that sent the bad ciphertext.
-        sender: NodeId,
-        /// The new-group member the ciphertext was intended for.
-        recipient: NodeId,
-    },
-    /// An expected ciphertext for this node was missing from a dealer's message.
-    MissingCiphertext {
-        /// The dealer whose message lacked the ciphertext.
-        sender: NodeId,
-        /// The new-group member that was expecting a ciphertext.
-        recipient: NodeId,
-    },
-    /// Fewer than `t_old` dealers participated, which is insufficient to
-    /// reconstruct the secret via Lagrange interpolation.
-    InsufficientDealers {
-        /// Minimum number of dealers required (= `t_old`).
-        needed: u32,
-        /// Actual number of dealers received.
-        got: u32,
-    },
-    /// Failed to receive a broadcast message.
-    BroadcastReceiveFailed {
-        /// The node that failed to receive.
-        node: NodeId,
-        /// Description of the receive failure.
-        reason: String,
-    },
-    /// PKI registration failed.
-    RegistrationFailed {
-        /// The node whose registration failed.
-        node: NodeId,
-        /// Description of the registration failure.
-        reason: String,
-    },
-    /// Duplicate node indices found during Lagrange interpolation.
-    DuplicateNodeIndex {
-        /// The duplicate node index.
-        index: NodeId,
-    },
-    /// No messages received from old group.
-    NoMessages,
-    /// Session ID mismatch.
-    SessionMismatch {
-        /// The node that sent the mismatched session ID.
-        sender: NodeId,
-    },
-}
-
-impl std::fmt::Display for ReshareError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl std::error::Error for ReshareError {}
+use crate::error::ReshareError;
 
 /// Old node deals its existing share to the new group.
 ///
@@ -98,7 +38,7 @@ pub fn reshare_deal(
     t_new: u32,
     beta: Scalar,
     rng: &mut impl Rng,
-    session_id: [u8; 32],
+    session_id: SessionId,
 ) -> ReshareMsg {
     // Polynomial g_i of degree t_new-1 with g_i(0) = old_share
     let poly = Polynomial::new_random(old_share, (t_new - 1) as usize, rng);
@@ -152,7 +92,7 @@ pub fn reshare_receive(
     original_pk: G1Affine,
     old_pk_shares: &HashMap<NodeId, G1Affine>, // old NodeId -> g^{sk_i} (for verification)
     t_old: u32,
-    session_id: [u8; 32],
+    session_id: SessionId,
 ) -> Result<DkgOutput, ReshareError> {
     // === SESSION ID VERIFICATION ===
     for (&sender_id, msg) in received {
@@ -349,7 +289,7 @@ mod malicious_tests {
             setup_old_group(3, 2, &mut rng);
         let (new_sk_ids, new_pk_ids) = setup_new_group(2, 10, &mut rng);
         let beta = Scalar::rand(&mut rng);
-        let session_id = [0u8; 32];
+        let session_id = SessionId([0u8; 32]);
 
         // Node 1 deals honestly
         let msg1 = reshare_deal(
@@ -408,7 +348,7 @@ mod malicious_tests {
             setup_old_group(3, 2, &mut rng);
         let (new_sk_ids, new_pk_ids) = setup_new_group(2, 10, &mut rng);
         let beta = Scalar::rand(&mut rng);
-        let session_id = [0u8; 32];
+        let session_id = SessionId([0u8; 32]);
 
         // Node 1 deals honestly
         let msg1 = reshare_deal(
@@ -467,7 +407,7 @@ mod malicious_tests {
             setup_old_group(3, 2, &mut rng);
         let (new_sk_ids, new_pk_ids) = setup_new_group(2, 10, &mut rng);
         let beta = Scalar::rand(&mut rng);
-        let session_id = [0u8; 32];
+        let session_id = SessionId([0u8; 32]);
 
         // Only 1 dealer when t_old=2
         let msg1 = reshare_deal(
@@ -516,7 +456,7 @@ mod malicious_tests {
             setup_old_group(3, t_old, &mut rng);
         let (new_sk_ids, new_pk_ids) = setup_new_group(2, 10, &mut rng);
         let beta = Scalar::rand(&mut rng);
-        let session_id = [0u8; 32];
+        let session_id = SessionId([0u8; 32]);
 
         // t_old old nodes deal honestly
         let mut received = HashMap::new();

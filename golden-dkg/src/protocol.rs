@@ -15,7 +15,7 @@ use ark_std::rand::Rng;
 
 use crate::evrf;
 use crate::shamir::Polynomial;
-use crate::types::{Ciphertext, DkgOutput, NodeId, Round0Msg, Scalar, SecretScalar};
+use crate::types::{Ciphertext, DkgOutput, NodeId, Round0Msg, Scalar, SecretScalar, SessionId};
 use crate::vss;
 
 /// Execute Round 0 of the Golden DKG protocol for a single node.
@@ -38,7 +38,7 @@ pub fn round0(
     peers: &HashMap<NodeId, G1Affine>,
     beta: Scalar,
     rng: &mut impl Rng,
-    session_id: [u8; 32],
+    session_id: SessionId,
 ) -> (Round0Msg, Scalar) {
     // Sample random secret omega_i
     let omega = SecretScalar::new(Scalar::rand(rng));
@@ -110,63 +110,7 @@ pub fn round0(
     (msg, own_share)
 }
 
-/// Error type for protocol verification failures.
-#[derive(Debug)]
-pub enum ProtocolError {
-    /// A ciphertext `g^{z_{j,k}} != R_{j,k} * X_{j,k}` check failed (Round 1 line 9).
-    CiphertextVerificationFailed {
-        /// The node that sent the malformed ciphertext.
-        sender: NodeId,
-        /// The intended recipient of the ciphertext.
-        recipient: NodeId,
-    },
-    /// A ciphertext expected for this node was not found in the sender's message.
-    MissingCiphertext {
-        /// The node whose message lacked the ciphertext.
-        sender: NodeId,
-        /// The node that was expecting a ciphertext.
-        recipient: NodeId,
-    },
-    /// During key refresh, `A_{j,0}` was not the group identity (Section 5.2 violation).
-    ZeroSecretViolation {
-        /// The node that violated the zero-secret invariant.
-        sender: NodeId,
-    },
-    /// The number of registered peers did not match the expected count.
-    PeerCountMismatch {
-        /// Expected peer count.
-        expected: u32,
-        /// Actual peer count.
-        got: usize,
-    },
-    /// Failed to receive a broadcast message from the network.
-    BroadcastReceiveFailed {
-        /// The node that failed to receive.
-        node: NodeId,
-        /// Description of the receive failure.
-        reason: String,
-    },
-    /// PKI registration failed (invalid proof of knowledge).
-    RegistrationFailed {
-        /// The node whose registration failed.
-        node: NodeId,
-        /// Description of the registration failure.
-        reason: String,
-    },
-    /// Session ID in a received message does not match the expected session.
-    SessionMismatch {
-        /// The node that sent the mismatched session ID.
-        sender: NodeId,
-    },
-}
-
-impl std::fmt::Display for ProtocolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl std::error::Error for ProtocolError {}
+use crate::error::DkgError;
 
 /// Execute Round 1 of the Golden DKG protocol for a single node.
 ///
@@ -194,14 +138,14 @@ pub fn round1(
     own_vss_commitment: Vec<G1Affine>,
     received: &HashMap<NodeId, Round0Msg>,
     beta: Scalar,
-    session_id: [u8; 32],
-) -> Result<DkgOutput, ProtocolError> {
+    session_id: SessionId,
+) -> Result<DkgOutput, DkgError> {
     let n = peers.len() as u32;
 
     // === SESSION ID VERIFICATION ===
     for (&sender_id, msg) in received {
         if msg.session_id != session_id {
-            return Err(ProtocolError::SessionMismatch { sender: sender_id });
+            return Err(DkgError::SessionMismatch { sender: sender_id });
         }
     }
 
@@ -219,7 +163,7 @@ pub fn round1(
                 (ct.r_commitment.into_group() + expected_share_comm.into_group()).into_affine();
 
             if lhs != rhs {
-                return Err(ProtocolError::CiphertextVerificationFailed {
+                return Err(DkgError::CiphertextVerificationFailed {
                     sender: sender_id,
                     recipient: recipient_id,
                 });
@@ -288,7 +232,7 @@ pub fn round1(
         let ct = msg
             .ciphertexts
             .get(&id)
-            .ok_or(ProtocolError::MissingCiphertext {
+            .ok_or(DkgError::MissingCiphertext {
                 sender: sender_id,
                 recipient: id,
             })?;
@@ -345,7 +289,7 @@ pub fn round0_refresh(
     peers: &HashMap<NodeId, G1Affine>,
     beta: Scalar,
     rng: &mut impl Rng,
-    session_id: [u8; 32],
+    session_id: SessionId,
 ) -> (Round0Msg, Scalar) {
     // Zero secret: omega = 0 (paper Section 5.2)
     let omega = SecretScalar::new(Scalar::ZERO);
@@ -437,27 +381,27 @@ pub fn round1_refresh(
     existing_share: Scalar,
     original_pk: G1Affine,
     original_pk_shares: &HashMap<NodeId, G1Affine>,
-    session_id: [u8; 32],
-) -> Result<DkgOutput, ProtocolError> {
+    session_id: SessionId,
+) -> Result<DkgOutput, DkgError> {
     let n = peers.len() as u32;
 
     // === SESSION ID VERIFICATION ===
     for (&sender_id, msg) in received {
         if msg.session_id != session_id {
-            return Err(ProtocolError::SessionMismatch { sender: sender_id });
+            return Err(DkgError::SessionMismatch { sender: sender_id });
         }
     }
 
     // === ZERO-SECRET VERIFICATION (paper Section 5.2) ===
     // Check own commitment: A_{i,0} must be identity
     if !own_vss_commitment[0].infinity {
-        return Err(ProtocolError::ZeroSecretViolation { sender: id });
+        return Err(DkgError::ZeroSecretViolation { sender: id });
     }
 
     // Check all received: A_{j,0} must be identity for all j
     for (&sender_id, msg) in received {
         if !msg.vss_commitment[0].infinity {
-            return Err(ProtocolError::ZeroSecretViolation { sender: sender_id });
+            return Err(DkgError::ZeroSecretViolation { sender: sender_id });
         }
     }
 
@@ -470,7 +414,7 @@ pub fn round1_refresh(
             let rhs =
                 (ct.r_commitment.into_group() + expected_share_comm.into_group()).into_affine();
             if lhs != rhs {
-                return Err(ProtocolError::CiphertextVerificationFailed {
+                return Err(DkgError::CiphertextVerificationFailed {
                     sender: sender_id,
                     recipient: recipient_id,
                 });
@@ -538,7 +482,7 @@ pub fn round1_refresh(
         let ct = msg
             .ciphertexts
             .get(&id)
-            .ok_or(ProtocolError::MissingCiphertext {
+            .ok_or(DkgError::MissingCiphertext {
                 sender: sender_id,
                 recipient: id,
             })?;
@@ -606,7 +550,7 @@ mod malicious_tests {
         }
 
         // Run round0 for each node
-        let session_id = [0u8; 32];
+        let session_id = SessionId([0u8; 32]);
         let mut results = Vec::new();
         for i in 1..=n {
             let (msg, own_share) = round0(i, n, t, sks[&i], &peers, beta, &mut rng, session_id);
@@ -648,13 +592,20 @@ mod malicious_tests {
         let own_vss = round0_results[1].1.vss_commitment.clone();
 
         let result = round1(
-            node2_id, node2_sk, &peers, own_share, own_vss, &received, beta, [0u8; 32],
+            node2_id,
+            node2_sk,
+            &peers,
+            own_share,
+            own_vss,
+            &received,
+            beta,
+            SessionId([0u8; 32]),
         );
 
         // Should fail with CiphertextVerificationFailed
         assert!(result.is_err(), "Tampered ciphertext should be detected");
         match result.unwrap_err() {
-            ProtocolError::CiphertextVerificationFailed { sender, .. } => {
+            DkgError::CiphertextVerificationFailed { sender, .. } => {
                 assert_eq!(sender, 1, "Should identify node 1 as the malicious sender");
             }
             other => panic!("Expected CiphertextVerificationFailed, got {:?}", other),
@@ -688,13 +639,13 @@ mod malicious_tests {
             round0_results[1].1.vss_commitment.clone(),
             &received,
             beta,
-            [0u8; 32],
+            SessionId([0u8; 32]),
         );
 
         assert!(result.is_err(), "Tampered R commitment should be detected");
         assert!(matches!(
             result.unwrap_err(),
-            ProtocolError::CiphertextVerificationFailed { sender: 1, .. }
+            DkgError::CiphertextVerificationFailed { sender: 1, .. }
         ));
     }
 
@@ -723,14 +674,14 @@ mod malicious_tests {
             round0_results[1].1.vss_commitment.clone(),
             &received,
             beta,
-            [0u8; 32],
+            SessionId([0u8; 32]),
         );
 
         // VSS commitment mismatch causes g^z != R * X check to fail
         assert!(result.is_err(), "Wrong VSS commitment should be detected");
         assert!(matches!(
             result.unwrap_err(),
-            ProtocolError::CiphertextVerificationFailed { sender: 1, .. }
+            DkgError::CiphertextVerificationFailed { sender: 1, .. }
         ));
     }
 
@@ -807,7 +758,7 @@ mod malicious_tests {
             round0_results[1].1.vss_commitment.clone(),
             &received,
             beta,
-            [0u8; 32],
+            SessionId([0u8; 32]),
         );
 
         // The tampered ciphertext for recipient 3 should be caught by node 2's verification
@@ -817,7 +768,7 @@ mod malicious_tests {
         );
         assert!(matches!(
             result.unwrap_err(),
-            ProtocolError::CiphertextVerificationFailed {
+            DkgError::CiphertextVerificationFailed {
                 sender: 1,
                 recipient: 3
             }
@@ -852,7 +803,7 @@ mod malicious_refresh_tests {
             peers.insert(i, pk);
         }
 
-        let session_id = [0u8; 32];
+        let session_id = SessionId([0u8; 32]);
 
         // Node 1 is malicious: uses regular round0 (non-zero omega) instead of round0_refresh
         let (malicious_msg, _) = round0(1, n, t, sks[&1], &peers, beta, &mut rng, session_id);
@@ -897,7 +848,7 @@ mod malicious_refresh_tests {
             "Non-zero omega in refresh should be detected"
         );
         match result.unwrap_err() {
-            ProtocolError::ZeroSecretViolation { sender } => {
+            DkgError::ZeroSecretViolation { sender } => {
                 assert_eq!(sender, 1, "Should identify node 1 as violator");
             }
             other => panic!("Expected ZeroSecretViolation, got {:?}", other),

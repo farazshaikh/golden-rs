@@ -21,7 +21,7 @@
 use ark_bls12_381::{g1::Config as G1Config, Fr, G1Affine, G1Projective};
 use ark_ec::{
     hashing::{curve_maps::wb::WBMap, map_to_curve_hasher::MapToCurveBasedHasher, HashToCurve},
-    AdditiveGroup, AffineRepr, CurveGroup,
+    AffineRepr, CurveGroup,
 };
 use ark_ff::{field_hashers::DefaultFieldHasher, BigInteger, PrimeField};
 use sha2::Sha256;

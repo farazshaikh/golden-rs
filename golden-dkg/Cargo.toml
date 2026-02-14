@@ -1,0 +1,34 @@
+[package]
+name = "golden-dkg"
+version = "0.1.0"
+edition = "2021"
+description = "Golden non-interactive distributed key generation (Bünz, Choi, Komlo 2025)"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+ark-bls12-381 = { workspace = true }
+ark-ec = { workspace = true }
+ark-ff = { workspace = true }
+ark-std = { workspace = true }
+ark-serialize = { workspace = true }
+ark-r1cs-std = { workspace = true }
+ark-relations = { workspace = true }
+ark-spartan = { workspace = true }
+merlin = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+borsh = { workspace = true, optional = true }
+
+zeroize = { workspace = true }
+tracing = { workspace = true }
+
+[features]
+default = []
+borsh = ["dep:borsh"]
+
+[dev-dependencies]
+criterion = { version = "0.5" }
+
+[[bench]]
+name = "dkg"
+harness = false

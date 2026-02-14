@@ -1,48 +1,29 @@
 //! Simulated broadcast network for the Golden DKG protocol.
-//!
-//! Per Section 5.1 of the Golden paper (IACR 2025/1924), the protocol requires
-//! a PKI and a broadcast channel. This module simulates both:
-//! - A peer registry where nodes register their identity public keys with
-//!   proof of knowledge (preventing rogue-key attacks per Appendix F)
-//! - A broadcast channel for disseminating Round 0 messages to all participants
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use ark_bls12_381::G1Affine;
-use rand::RngCore;
+use rand::rngs::OsRng;
 use tokio::sync::{broadcast, Barrier, RwLock};
 
-use crate::schnorr_pok::{self, SchnorrPoK};
-use crate::types::{NodeId, Round0Msg};
+use golden_dkg::schnorr_pok::{self, SchnorrPoK};
+use golden_dkg::types::{NodeId, Round0Msg, SessionId};
 
 /// Simulated broadcast channel with peer discovery.
-///
-/// Per Section 5.1 of the Golden paper (IACR 2025/1924):
-/// > "Each party i maintains (sk_i^I, PK_i^I) where PK_i^I = g^{sk_i^I} in G_in."
-///
-/// All nodes register their identity public key, then use a shared broadcast
-/// channel to send Round 0 messages to every other participant.
 #[derive(Clone)]
 pub struct Network {
-    /// Broadcast channel sender -- all nodes send Round0 messages here.
     sender: broadcast::Sender<Round0Msg>,
-    /// Peer identity public keys: `NodeId -> PK_i`.
     peers: Arc<RwLock<HashMap<NodeId, G1Affine>>>,
-    /// Barrier to synchronize: all nodes must register before Round 0 starts.
     barrier: Arc<Barrier>,
-    /// Session ID for replay protection (random per DKG/refresh session).
-    session_id: Arc<[u8; 32]>,
+    session_id: Arc<SessionId>,
 }
 
 impl Network {
     /// Create a new network for `n` participants.
-    ///
-    /// The broadcast channel capacity is `n * 2` to avoid dropped messages.
     pub fn new(n: u32) -> Self {
         let (sender, _) = broadcast::channel((n * 2) as usize);
-        let mut session_id = [0u8; 32];
-        rand::rngs::OsRng.fill_bytes(&mut session_id);
+        let session_id = SessionId::random(&mut OsRng);
         Self {
             sender,
             peers: Arc::new(RwLock::new(HashMap::new())),
@@ -52,23 +33,17 @@ impl Network {
     }
 
     /// Get the session ID for this network session.
-    pub fn session_id(&self) -> [u8; 32] {
+    pub fn session_id(&self) -> SessionId {
         *self.session_id
     }
 
     /// Register a node's identity public key with proof of knowledge.
-    ///
-    /// Per Appendix F of the Golden paper (IACR 2025/1924), registration
-    /// requires proving knowledge of the secret key to prevent rogue-key attacks.
-    /// Returns a broadcast receiver on success, or an error if the Schnorr PoK
-    /// is invalid.
     pub async fn register(
         &self,
         id: NodeId,
         pk: G1Affine,
         pok: &SchnorrPoK,
     ) -> Result<broadcast::Receiver<Round0Msg>, String> {
-        // Verify proof of knowledge before accepting
         if !schnorr_pok::verify(pk, pok) {
             return Err(format!(
                 "Node {} failed proof of knowledge for PK registration",
@@ -82,26 +57,16 @@ impl Network {
     }
 
     /// Wait for all nodes to finish registration.
-    ///
-    /// Blocks until all `n` participants have registered, ensuring the peer
-    /// directory is complete before Round 0 begins.
     pub async fn wait_ready(&self) {
         self.barrier.wait().await;
     }
 
     /// Broadcast a Round 0 message to all participants.
-    ///
-    /// Sends the message on the shared broadcast channel. All registered
-    /// receivers will obtain a copy.
     pub fn broadcast(&self, msg: Round0Msg) {
-        // Ignore the error (only fails if no receivers, shouldn't happen)
         let _ = self.sender.send(msg);
     }
 
     /// Get a snapshot of all registered peer public keys.
-    ///
-    /// Returns a clone of the current peer directory mapping `NodeId` to
-    /// identity public key.
     pub async fn get_peers(&self) -> HashMap<NodeId, G1Affine> {
         self.peers.read().await.clone()
     }
@@ -114,7 +79,6 @@ mod tests {
     use ark_ec::{AffineRepr, CurveGroup};
     use ark_ff::UniformRand;
 
-    /// Helper: generate a keypair and PoK proof for test registration.
     fn gen_keypair_with_pok(rng: &mut impl ark_std::rand::Rng) -> (Fr, G1Affine, SchnorrPoK) {
         let sk = Fr::rand(rng);
         let pk = (G1Affine::generator() * sk).into_affine();
@@ -150,7 +114,6 @@ mod tests {
         let sk = Fr::rand(&mut rng);
         let pk = (G1Affine::generator() * sk).into_affine();
 
-        // Prove with a wrong secret key
         let wrong_sk = Fr::rand(&mut rng);
         let bad_pok = schnorr_pok::prove(wrong_sk, pk, &mut rng);
 
@@ -170,7 +133,7 @@ mod tests {
         let mut rx2 = network.register(2, pk2, &pok2).await.unwrap();
 
         let msg = Round0Msg {
-            session_id: [0u8; 32],
+            session_id: SessionId([0u8; 32]),
             from: 1,
             random_msg: [42u8; 32],
             vss_commitment: vec![],

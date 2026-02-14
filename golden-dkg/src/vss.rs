@@ -54,6 +54,7 @@ pub fn commit(poly: &Polynomial) -> Vec<G1Affine> {
 /// NOTE: Uses index-based loop instead of `for c_k in commitment` for hax
 /// extraction compatibility. See: formal_verification/Implementation.md
 /// "Extraction-Friendly Rust"
+#[allow(clippy::needless_range_loop, dead_code)]
 pub fn verify_share(commitment: &[G1Affine], index: NodeId, share: Scalar) -> bool {
     let x = Scalar::from(index as u64);
     let mut expected = G1Projective::default();
@@ -76,6 +77,7 @@ pub fn verify_share(commitment: &[G1Affine], index: NodeId, share: Scalar) -> bo
 /// commitment to the share value at `index` without revealing the share itself.
 ///
 /// NOTE: Uses index-based loop for hax extraction compatibility.
+#[allow(clippy::needless_range_loop)]
 pub fn expected_share_commitment(commitment: &[G1Affine], index: NodeId) -> G1Affine {
     let x = Scalar::from(index as u64);
     let mut result = G1Projective::default();
