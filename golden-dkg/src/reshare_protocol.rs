@@ -18,7 +18,7 @@ use ark_std::rand::Rng;
 
 use crate::evrf;
 use crate::shamir::Polynomial;
-use crate::types::{Ciphertext, DkgOutput, NodeId, ReshareMsg, Scalar, SessionId};
+use crate::types::{Ciphertext, DkgOutput, MessageHeader, NodeId, ReshareMsg, Scalar, SessionId};
 use crate::vss;
 
 use crate::error::ReshareError;
@@ -66,11 +66,13 @@ pub fn reshare_deal(
     }
 
     ReshareMsg {
-        session_id,
-        from: old_id,
-        random_msg,
-        vss_commitment,
-        ciphertexts,
+        reshare_header: MessageHeader {
+            session_id,
+            from: old_id,
+            random_msg,
+            vss_commitment,
+            ciphertexts,
+        },
     }
 }
 
@@ -96,7 +98,7 @@ pub fn reshare_receive(
 ) -> Result<DkgOutput, ReshareError> {
     // === SESSION ID VERIFICATION ===
     for (&sender_id, msg) in received {
-        if msg.session_id != session_id {
+        if msg.reshare_header.session_id != session_id {
             return Err(ReshareError::SessionMismatch { sender: sender_id });
         }
     }
@@ -114,7 +116,7 @@ pub fn reshare_receive(
         // Verify vss_commitment[0] == g^{sk_i} (old PK share)
         // This ensures the dealer is sharing their actual share, not garbage
         if let Some(&expected_pk_share) = old_pk_shares.get(&sender_id) {
-            if msg.vss_commitment[0] != expected_pk_share {
+            if msg.reshare_header.vss_commitment[0] != expected_pk_share {
                 return Err(ReshareError::CiphertextVerificationFailed {
                     sender: sender_id,
                     recipient: new_id,
@@ -123,9 +125,9 @@ pub fn reshare_receive(
         }
 
         // Verify ciphertexts against VSS commitment
-        for (&recipient_id, ct) in &msg.ciphertexts {
+        for (&recipient_id, ct) in &msg.reshare_header.ciphertexts {
             let expected_share_comm =
-                vss::expected_share_commitment(&msg.vss_commitment, recipient_id);
+                vss::expected_share_commitment(&msg.reshare_header.vss_commitment, recipient_id);
             let lhs = (G1Affine::generator() * ct.encrypted_share).into_affine();
             let rhs =
                 (ct.r_commitment.into_group() + expected_share_comm.into_group()).into_affine();
@@ -144,6 +146,7 @@ pub fn reshare_receive(
 
     for (&sender_id, msg) in received {
         let ct = msg
+            .reshare_header
             .ciphertexts
             .get(&new_id)
             .ok_or(ReshareError::MissingCiphertext {
@@ -152,7 +155,7 @@ pub fn reshare_receive(
             })?;
 
         let sender_pk = old_members[&sender_id];
-        let (r_pad, _) = evrf::derive_pad(new_sk_identity, sender_pk, &msg.random_msg, beta);
+        let (r_pad, _) = evrf::derive_pad(new_sk_identity, sender_pk, &msg.reshare_header.random_msg, beta);
         let decrypted = ct.encrypted_share - r_pad;
         sub_shares.push((sender_id, decrypted));
     }
@@ -184,7 +187,7 @@ pub fn reshare_receive(
     // For each new member k, compute PK_k = sum_{i in S} vss::expected_share_commitment(C_i, k) * L_i(0)
     // Collect all new member IDs from the ciphertexts of the first message
     let first_msg = received.values().next().ok_or(ReshareError::NoMessages)?;
-    let new_member_ids: Vec<NodeId> = first_msg.ciphertexts.keys().copied().collect();
+    let new_member_ids: Vec<NodeId> = first_msg.reshare_header.ciphertexts.keys().copied().collect();
 
     let mut public_key_shares = HashMap::new();
     for &k in &new_member_ids {
@@ -203,7 +206,7 @@ pub fn reshare_receive(
                         .ok_or(ReshareError::DuplicateNodeIndex { index: sender_id })?;
             }
             let msg = &received[&sender_id];
-            let share_comm = vss::expected_share_commitment(&msg.vss_commitment, k);
+            let share_comm = vss::expected_share_commitment(&msg.reshare_header.vss_commitment, k);
             pk_k += share_comm.into_group() * li;
         }
         public_key_shares.insert(k, pk_k.into_affine());
@@ -373,7 +376,7 @@ mod malicious_tests {
             &mut rng,
             session_id,
         );
-        msg2.ciphertexts.get_mut(&10).unwrap().encrypted_share += Scalar::from(1u64);
+        msg2.reshare_header.ciphertexts.get_mut(&10).unwrap().encrypted_share += Scalar::from(1u64);
 
         let mut received = HashMap::new();
         received.insert(1, msg1);

@@ -120,7 +120,7 @@ impl NewReshareNode {
         while received.len() < self.n_old as usize {
             match self.receiver.recv().await {
                 Ok(msg) => {
-                    received.insert(msg.from, msg);
+                    received.insert(msg.reshare_header.from, msg);
                 }
                 Err(e) => {
                     return Err(ReshareError::BroadcastReceiveFailed {

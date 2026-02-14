@@ -8,7 +8,7 @@ use rand::rngs::OsRng;
 use tokio::sync::{broadcast, Barrier, RwLock};
 
 use golden_dkg::schnorr_pok::{self, SchnorrPoK};
-use golden_dkg::types::{NodeId, Round0Msg, SessionId};
+use golden_dkg::types::{MessageHeader, NodeId, Round0Msg, SessionId};
 
 /// Simulated broadcast channel with peer discovery.
 #[derive(Clone)]
@@ -133,11 +133,13 @@ mod tests {
         let mut rx2 = network.register(2, pk2, &pok2).await.unwrap();
 
         let msg = Round0Msg {
-            session_id: SessionId([0u8; 32]),
-            from: 1,
-            random_msg: [42u8; 32],
-            vss_commitment: vec![],
-            ciphertexts: HashMap::new(),
+            dkg_header: MessageHeader {
+                session_id: SessionId([0u8; 32]),
+                from: 1,
+                random_msg: [42u8; 32],
+                vss_commitment: vec![],
+                ciphertexts: HashMap::new(),
+            },
             evrf_proofs: HashMap::new(),
             batch_evrf_proof: None,
         };
@@ -147,9 +149,9 @@ mod tests {
         let received1 = rx1.recv().await.unwrap();
         let received2 = rx2.recv().await.unwrap();
 
-        assert_eq!(received1.from, 1);
-        assert_eq!(received2.from, 1);
-        assert_eq!(received1.random_msg, [42u8; 32]);
+        assert_eq!(received1.dkg_header.from, 1);
+        assert_eq!(received2.dkg_header.from, 1);
+        assert_eq!(received1.dkg_header.random_msg, [42u8; 32]);
     }
 
     #[tokio::test]

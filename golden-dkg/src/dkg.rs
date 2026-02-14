@@ -71,7 +71,7 @@ pub fn create_dealing(
         config.session_id,
     );
     Ok(DkgDealing {
-        own_vss_commitment: msg.vss_commitment.clone(),
+        own_vss_commitment: msg.dkg_header.vss_commitment.clone(),
         message: msg,
         private_share: own_share,
     })
@@ -109,20 +109,21 @@ pub fn verify_dealing(
     peers: &HashMap<NodeId, G1Affine>,
     config: &DkgConfig,
 ) -> Result<(), DkgError> {
-    if dealing.session_id != config.session_id {
+    if dealing.dkg_header.session_id != config.session_id {
         return Err(DkgError::SessionMismatch {
-            sender: dealing.from,
+            sender: dealing.dkg_header.from,
         });
     }
 
     // Verify each ciphertext against VSS commitment
-    for (&recipient_id, ct) in &dealing.ciphertexts {
-        let expected = crate::vss::expected_share_commitment(&dealing.vss_commitment, recipient_id);
+    for (&recipient_id, ct) in &dealing.dkg_header.ciphertexts {
+        let expected =
+            crate::vss::expected_share_commitment(&dealing.dkg_header.vss_commitment, recipient_id);
         let lhs = (G1Affine::generator() * ct.encrypted_share).into_affine();
         let rhs = (ct.r_commitment.into_group() + expected.into_group()).into_affine();
         if lhs != rhs {
             return Err(DkgError::CiphertextVerificationFailed {
-                sender: dealing.from,
+                sender: dealing.dkg_header.from,
                 recipient: recipient_id,
             });
         }
@@ -130,17 +131,19 @@ pub fn verify_dealing(
 
     // Verify eVRF proofs
     let sender_pk = peers
-        .get(&dealing.from)
+        .get(&dealing.dkg_header.from)
         .copied()
-        .ok_or_else(|| DkgError::ProofError(format!("unknown sender {}", dealing.from)))?;
+        .ok_or_else(|| DkgError::ProofError(format!("unknown sender {}", dealing.dkg_header.from)))?;
 
     if let Some(ref batch_proof) = dealing.batch_evrf_proof {
         let peers_for_verify: Vec<(NodeId, G1Affine)> = dealing
+            .dkg_header
             .ciphertexts
             .keys()
             .map(|&pid| (pid, peers[&pid]))
             .collect();
         let pad_commitments: Vec<(NodeId, G1Affine)> = dealing
+            .dkg_header
             .ciphertexts
             .iter()
             .map(|(&pid, ct)| (pid, ct.r_commitment))
@@ -156,7 +159,7 @@ pub fn verify_dealing(
             Ok(false) => {
                 return Err(DkgError::ProofError(format!(
                     "batch eVRF verification failed for sender {}",
-                    dealing.from
+                    dealing.dkg_header.from
                 )));
             }
             Err(e) => return Err(DkgError::ProofError(e)),

@@ -15,7 +15,9 @@ use ark_std::rand::Rng;
 
 use crate::evrf;
 use crate::shamir::Polynomial;
-use crate::types::{Ciphertext, DkgOutput, NodeId, Round0Msg, Scalar, SecretScalar, SessionId};
+use crate::types::{
+    Ciphertext, DkgOutput, MessageHeader, NodeId, Round0Msg, Scalar, SecretScalar, SessionId,
+};
 use crate::vss;
 
 /// Execute Round 0 of the Golden DKG protocol for a single node.
@@ -98,11 +100,13 @@ pub fn round0(
         crate::zk_evrf::prove_evrf_batch(sk, my_pk, &peers_for_proof, &pads_for_proof, beta).ok();
 
     let msg = Round0Msg {
-        session_id,
-        from: id,
-        random_msg,
-        vss_commitment,
-        ciphertexts,
+        dkg_header: MessageHeader {
+            session_id,
+            from: id,
+            random_msg,
+            vss_commitment,
+            ciphertexts,
+        },
         evrf_proofs,
         batch_evrf_proof,
     };
@@ -144,7 +148,7 @@ pub fn round1(
 
     // === SESSION ID VERIFICATION ===
     for (&sender_id, msg) in received {
-        if msg.session_id != session_id {
+        if msg.dkg_header.session_id != session_id {
             return Err(DkgError::SessionMismatch { sender: sender_id });
         }
     }
@@ -152,10 +156,10 @@ pub fn round1(
     // === VERIFICATION ===
     // For each received message from sender j, verify ciphertexts against VSS commitment
     for (&sender_id, msg) in received {
-        for (&recipient_id, ct) in &msg.ciphertexts {
+        for (&recipient_id, ct) in &msg.dkg_header.ciphertexts {
             // X_{j,k} = g^{f_j(k)} computed from VSS commitment
             let expected_share_comm =
-                vss::expected_share_commitment(&msg.vss_commitment, recipient_id);
+                vss::expected_share_commitment(&msg.dkg_header.vss_commitment, recipient_id);
 
             // Check: g^{z_{j,k}} == R_{j,k} + X_{j,k}  (in additive group notation)
             let lhs = (G1Affine::generator() * ct.encrypted_share).into_affine();
@@ -175,11 +179,13 @@ pub fn round1(
         if let Some(ref batch_proof) = msg.batch_evrf_proof {
             // Build peer list and R commitment list from the message for batch verification
             let peers_for_verify: Vec<(crate::types::NodeId, G1Affine)> = msg
+                .dkg_header
                 .ciphertexts
                 .keys()
                 .map(|&pid| (pid, peers[&pid]))
                 .collect();
             let pad_commitments: Vec<(crate::types::NodeId, G1Affine)> = msg
+                .dkg_header
                 .ciphertexts
                 .iter()
                 .map(|(&pid, ct)| (pid, ct.r_commitment))
@@ -200,7 +206,7 @@ pub fn round1(
             // Legacy per-peer verification
             for (&recipient_id, proof) in &msg.evrf_proofs {
                 let recipient_pk = peers[&recipient_id];
-                let r_commitment = msg.ciphertexts[&recipient_id].r_commitment;
+                let r_commitment = msg.dkg_header.ciphertexts[&recipient_id].r_commitment;
                 match crate::zk_evrf::verify_evrf(
                     sender_pk,
                     recipient_pk,
@@ -223,6 +229,7 @@ pub fn round1(
 
     for (&sender_id, msg) in received {
         let ct = msg
+            .dkg_header
             .ciphertexts
             .get(&id)
             .ok_or(DkgError::MissingCiphertext {
@@ -232,7 +239,7 @@ pub fn round1(
 
         // Re-derive eVRF pad using sender's PK and their random_msg
         let sender_pk = peers[&sender_id];
-        let (r_pad, _) = evrf::derive_pad(sk, sender_pk, &msg.random_msg, beta);
+        let (r_pad, _) = evrf::derive_pad(sk, sender_pk, &msg.dkg_header.random_msg, beta);
 
         // Decrypt: x_{j,i} = z_{j,i} - r_{j,i}
         let decrypted_share = ct.encrypted_share - r_pad;
@@ -243,7 +250,7 @@ pub fn round1(
     // PK = sum of A_{j,0} for all j (including ourselves)
     let mut pk_projective = own_vss_commitment[0].into_group();
     for msg in received.values() {
-        pk_projective += msg.vss_commitment[0];
+        pk_projective += msg.dkg_header.vss_commitment[0];
     }
     let public_key = pk_projective.into_affine();
 
@@ -253,7 +260,7 @@ pub fn round1(
     for k in 1..=n {
         let mut pk_k = vss::expected_share_commitment(&own_vss_commitment, k).into_group();
         for msg in received.values() {
-            pk_k += vss::expected_share_commitment(&msg.vss_commitment, k);
+            pk_k += vss::expected_share_commitment(&msg.dkg_header.vss_commitment, k);
         }
         public_key_shares.insert(k, pk_k.into_affine());
     }
@@ -342,11 +349,13 @@ pub fn round0_refresh(
         crate::zk_evrf::prove_evrf_batch(sk, my_pk, &peers_for_proof, &pads_for_proof, beta).ok();
 
     let msg = Round0Msg {
-        session_id,
-        from: id,
-        random_msg,
-        vss_commitment,
-        ciphertexts,
+        dkg_header: MessageHeader {
+            session_id,
+            from: id,
+            random_msg,
+            vss_commitment,
+            ciphertexts,
+        },
         evrf_proofs,
         batch_evrf_proof,
     };
@@ -380,7 +389,7 @@ pub fn round1_refresh(
 
     // === SESSION ID VERIFICATION ===
     for (&sender_id, msg) in received {
-        if msg.session_id != session_id {
+        if msg.dkg_header.session_id != session_id {
             return Err(DkgError::SessionMismatch { sender: sender_id });
         }
     }
@@ -393,16 +402,16 @@ pub fn round1_refresh(
 
     // Check all received: A_{j,0} must be identity for all j
     for (&sender_id, msg) in received {
-        if !msg.vss_commitment[0].infinity {
+        if !msg.dkg_header.vss_commitment[0].infinity {
             return Err(DkgError::ZeroSecretViolation { sender: sender_id });
         }
     }
 
     // === CIPHERTEXT VERIFICATION (same as round1) ===
     for (&sender_id, msg) in received {
-        for (&recipient_id, ct) in &msg.ciphertexts {
+        for (&recipient_id, ct) in &msg.dkg_header.ciphertexts {
             let expected_share_comm =
-                vss::expected_share_commitment(&msg.vss_commitment, recipient_id);
+                vss::expected_share_commitment(&msg.dkg_header.vss_commitment, recipient_id);
             let lhs = (G1Affine::generator() * ct.encrypted_share).into_affine();
             let rhs =
                 (ct.r_commitment.into_group() + expected_share_comm.into_group()).into_affine();
@@ -419,11 +428,13 @@ pub fn round1_refresh(
         if let Some(ref batch_proof) = msg.batch_evrf_proof {
             // Build peer list and R commitment list from the message for batch verification
             let peers_for_verify: Vec<(crate::types::NodeId, G1Affine)> = msg
+                .dkg_header
                 .ciphertexts
                 .keys()
                 .map(|&pid| (pid, peers[&pid]))
                 .collect();
             let pad_commitments: Vec<(crate::types::NodeId, G1Affine)> = msg
+                .dkg_header
                 .ciphertexts
                 .iter()
                 .map(|(&pid, ct)| (pid, ct.r_commitment))
@@ -443,7 +454,7 @@ pub fn round1_refresh(
         } else {
             for (&recipient_id, proof) in &msg.evrf_proofs {
                 let recipient_pk = peers[&recipient_id];
-                let r_commitment = msg.ciphertexts[&recipient_id].r_commitment;
+                let r_commitment = msg.dkg_header.ciphertexts[&recipient_id].r_commitment;
                 match crate::zk_evrf::verify_evrf(
                     sender_pk,
                     recipient_pk,
@@ -466,6 +477,7 @@ pub fn round1_refresh(
 
     for (&sender_id, msg) in received {
         let ct = msg
+            .dkg_header
             .ciphertexts
             .get(&id)
             .ok_or(DkgError::MissingCiphertext {
@@ -473,7 +485,7 @@ pub fn round1_refresh(
                 recipient: id,
             })?;
         let sender_pk = peers[&sender_id];
-        let (r_pad, _) = evrf::derive_pad(sk, sender_pk, &msg.random_msg, beta);
+        let (r_pad, _) = evrf::derive_pad(sk, sender_pk, &msg.dkg_header.random_msg, beta);
         let decrypted_share = ct.encrypted_share - r_pad;
         total_delta += decrypted_share;
     }
@@ -493,7 +505,7 @@ pub fn round1_refresh(
     for k in 1..=n {
         let mut delta_pk_k = vss::expected_share_commitment(&own_vss_commitment, k).into_group();
         for msg in received.values() {
-            delta_pk_k += vss::expected_share_commitment(&msg.vss_commitment, k);
+            delta_pk_k += vss::expected_share_commitment(&msg.dkg_header.vss_commitment, k);
         }
         // new PK_k = original PK_k + delta from zero-sharing
         let original_pk_k = original_pk_shares[&k].into_group();
@@ -553,7 +565,7 @@ mod malicious_tests {
 
         // Tamper: modify the encrypted share in node 1's message for recipient 2
         let msg1 = &mut round0_results[0].1;
-        if let Some(ct) = msg1.ciphertexts.get_mut(&2) {
+        if let Some(ct) = msg1.dkg_header.ciphertexts.get_mut(&2) {
             ct.encrypted_share += Scalar::from(1u64); // Corrupt the ciphertext
         }
 
@@ -575,7 +587,7 @@ mod malicious_tests {
         }
 
         let own_share = round0_results[1].2;
-        let own_vss = round0_results[1].1.vss_commitment.clone();
+        let own_vss = round0_results[1].1.dkg_header.vss_commitment.clone();
 
         let result = round1(
             node2_id,
@@ -606,7 +618,7 @@ mod malicious_tests {
         // Tamper: replace R commitment with a random point
         let mut rng = ark_std::test_rng();
         let fake_r = (G1Affine::generator() * Scalar::rand(&mut rng)).into_affine();
-        if let Some(ct) = round0_results[0].1.ciphertexts.get_mut(&2) {
+        if let Some(ct) = round0_results[0].1.dkg_header.ciphertexts.get_mut(&2) {
             ct.r_commitment = fake_r;
         }
 
@@ -622,7 +634,7 @@ mod malicious_tests {
             Scalar::rand(&mut rng),
             &peers,
             round0_results[1].2,
-            round0_results[1].1.vss_commitment.clone(),
+            round0_results[1].1.dkg_header.vss_commitment.clone(),
             &received,
             beta,
             SessionId([0u8; 32]),
@@ -642,7 +654,7 @@ mod malicious_tests {
 
         // Tamper: replace VSS commitment[0] with a random point
         let mut rng = ark_std::test_rng();
-        round0_results[0].1.vss_commitment[0] =
+        round0_results[0].1.dkg_header.vss_commitment[0] =
             (G1Affine::generator() * Scalar::rand(&mut rng)).into_affine();
 
         let mut received: HashMap<NodeId, Round0Msg> = HashMap::new();
@@ -657,7 +669,7 @@ mod malicious_tests {
             Scalar::rand(&mut rng),
             &peers,
             round0_results[1].2,
-            round0_results[1].1.vss_commitment.clone(),
+            round0_results[1].1.dkg_header.vss_commitment.clone(),
             &received,
             beta,
             SessionId([0u8; 32]),
@@ -682,7 +694,7 @@ mod malicious_tests {
         for node_idx in 0..n as usize {
             let node_id = round0_results[node_idx].0;
             let own_share = round0_results[node_idx].2;
-            let own_vss = round0_results[node_idx].1.vss_commitment.clone();
+            let own_vss = round0_results[node_idx].1.dkg_header.vss_commitment.clone();
 
             // Need the actual sk for this node to decrypt
             // Since we can't easily recover the sk, we'll test threshold property differently:
@@ -723,7 +735,7 @@ mod malicious_tests {
 
         // Tamper: modify the ciphertext for recipient 3 but NOT recipient 2
         // This means z_{1,3} no longer matches the VSS commitment
-        if let Some(ct) = round0_results[0].1.ciphertexts.get_mut(&3) {
+        if let Some(ct) = round0_results[0].1.dkg_header.ciphertexts.get_mut(&3) {
             ct.encrypted_share += Scalar::from(999u64);
         }
 
@@ -741,7 +753,7 @@ mod malicious_tests {
             Scalar::rand(&mut rng),
             &peers,
             round0_results[1].2,
-            round0_results[1].1.vss_commitment.clone(),
+            round0_results[1].1.dkg_header.vss_commitment.clone(),
             &received,
             beta,
             SessionId([0u8; 32]),
@@ -793,7 +805,7 @@ mod malicious_refresh_tests {
 
         // Node 1 is malicious: uses regular round0 (non-zero omega) instead of round0_refresh
         let (malicious_msg, _) = round0(1, n, t, sks[&1], &peers, beta, &mut rng, session_id);
-        // malicious_msg.vss_commitment[0] != identity (it's g^omega for random omega)
+        // malicious_msg.dkg_header.vss_commitment[0] != identity (it's g^omega for random omega)
 
         // Nodes 2 and 3 do honest refresh
         let (msg2, delta2) = round0_refresh(2, n, t, sks[&2], &peers, beta, &mut rng, session_id);
@@ -820,7 +832,7 @@ mod malicious_refresh_tests {
             sks[&2],
             &peers,
             delta2,
-            msg2.vss_commitment.clone(),
+            msg2.dkg_header.vss_commitment.clone(),
             &received,
             beta,
             existing_share,

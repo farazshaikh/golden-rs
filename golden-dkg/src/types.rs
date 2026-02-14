@@ -161,15 +161,14 @@ impl BorshDeserialize for Ciphertext {
     }
 }
 
-/// Round 0 broadcast message from a single node.
+/// Common fields shared between [`Round0Msg`] and [`ReshareMsg`].
 ///
-/// Per Round 0 lines 9-10 of Figure 4 in the Golden paper (IACR 2025/1924):
-/// > "bmsg_i = {(msg_i, C_bar_i, sigma_{i,j}, pi_{i,j})} for j != i"
-///
-/// Contains the VSS commitment, encrypted shares for all peers, and eVRF proofs
-/// demonstrating correct pad derivation.
+/// Factored into a sub-struct so that hax generates unambiguous F* field paths
+/// (`msg.dkg_header.ciphertexts` instead of `msg.ciphertexts`). Without this, F*'s
+/// record type resolution confuses `t_Round0Msg` and `t_ReshareMsg` when both
+/// are in scope, because they share identically-named fields.
 #[derive(Clone, Debug)]
-pub struct Round0Msg {
+pub struct MessageHeader {
     /// Session ID for replay protection (must match across all messages in a session).
     pub session_id: SessionId,
     /// Sender node ID.
@@ -180,6 +179,22 @@ pub struct Round0Msg {
     pub vss_commitment: Vec<G1Affine>,
     /// Encrypted shares: one [`Ciphertext`] per peer (keyed by recipient [`NodeId`]).
     pub ciphertexts: HashMap<NodeId, Ciphertext>,
+}
+
+/// Round 0 broadcast message from a single node.
+///
+/// Per Round 0 lines 9-10 of Figure 4 in the Golden paper (IACR 2025/1924):
+/// > "bmsg_i = {(msg_i, C_bar_i, sigma_{i,j}, pi_{i,j})} for j != i"
+///
+/// Contains the VSS commitment, encrypted shares for all peers, and eVRF proofs
+/// demonstrating correct pad derivation.
+#[derive(Clone, Debug)]
+pub struct Round0Msg {
+    /// Common message fields (session ID, sender, VSS commitment, ciphertexts).
+    /// Named `dkg_header` (not just `header`) to avoid F* record field ambiguity
+    /// with `ReshareMsg.reshare_header` -- F* resolves field names globally and
+    /// would confuse the two types if both had a field called `header`.
+    pub dkg_header: MessageHeader,
     /// eVRF proofs: one per peer, proving the pad was correctly derived (legacy per-peer).
     pub evrf_proofs: HashMap<NodeId, crate::zk_evrf::EVRFProof>,
     /// Batched eVRF proof covering all peers (Section 5.3 optimization).
@@ -189,15 +204,16 @@ pub struct Round0Msg {
 #[cfg(feature = "borsh")]
 impl BorshSerialize for Round0Msg {
     fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        BorshSerialize::serialize(&self.session_id, writer)?;
-        BorshSerialize::serialize(&self.from, writer)?;
-        BorshSerialize::serialize(&self.random_msg, writer)?;
+        BorshSerialize::serialize(&self.dkg_header.session_id, writer)?;
+        BorshSerialize::serialize(&self.dkg_header.from, writer)?;
+        BorshSerialize::serialize(&self.dkg_header.random_msg, writer)?;
         // vss_commitment: Vec<G1Affine> -- serialize each element as bytes
-        let commitment_bytes: Vec<Vec<u8>> = self.vss_commitment.iter().map(ark_to_bytes).collect();
+        let commitment_bytes: Vec<Vec<u8>> =
+            self.dkg_header.vss_commitment.iter().map(ark_to_bytes).collect();
         BorshSerialize::serialize(&commitment_bytes, writer)?;
         // ciphertexts: HashMap<NodeId, Ciphertext> -- serialize as length + entries
         let ct_entries: Vec<(NodeId, &Ciphertext)> =
-            self.ciphertexts.iter().map(|(&k, v)| (k, v)).collect();
+            self.dkg_header.ciphertexts.iter().map(|(&k, v)| (k, v)).collect();
         let len = ct_entries.len() as u32;
         BorshSerialize::serialize(&len, writer)?;
         for (node_id, ct) in ct_entries {
@@ -254,11 +270,13 @@ impl BorshDeserialize for Round0Msg {
             None
         };
         Ok(Round0Msg {
-            session_id,
-            from,
-            random_msg,
-            vss_commitment,
-            ciphertexts,
+            dkg_header: MessageHeader {
+                session_id,
+                from,
+                random_msg,
+                vss_commitment,
+                ciphertexts,
+            },
             evrf_proofs,
             batch_evrf_proof,
         })
@@ -277,17 +295,10 @@ impl BorshDeserialize for Round0Msg {
 /// allows verifiers to check `commitment[0] == PK_i` (the known public key share).
 #[derive(Clone, Debug)]
 pub struct ReshareMsg {
-    /// Session ID for replay protection (must match across all reshare messages).
-    pub session_id: SessionId,
-    /// Sender node ID (old-group member who is re-sharing their share).
-    pub from: NodeId,
-    /// Random message `msg_i` used for eVRF pad derivation.
-    pub random_msg: [u8; 32],
-    /// Feldman VSS commitment to the dealing polynomial `g_i`:
-    /// `[g^{g_i(0)}, g^{a_1}, ..., g^{a_{t'-1}}]` where `g_i(0) = sk_i`.
-    pub vss_commitment: Vec<G1Affine>,
-    /// Encrypted sub-shares for each new-group member, keyed by new-member [`NodeId`].
-    pub ciphertexts: HashMap<NodeId, Ciphertext>,
+    /// Common message fields (session ID, sender, VSS commitment, ciphertexts).
+    /// Named `reshare_header` (not just `header`) to avoid F* record field ambiguity
+    /// with `Round0Msg.dkg_header` -- see comment on Round0Msg for details.
+    pub reshare_header: MessageHeader,
 }
 
 /// Output of the DKG protocol for a single node.
@@ -456,14 +467,16 @@ mod tests {
         );
 
         let msg = Round0Msg {
-            session_id: SessionId([0u8; 32]),
-            from: 1,
-            random_msg: [42u8; 32],
-            vss_commitment: vec![
-                (G1Affine::generator() * sk1).into_affine(),
-                (G1Affine::generator() * sk2).into_affine(),
-            ],
-            ciphertexts,
+            dkg_header: MessageHeader {
+                session_id: SessionId([0u8; 32]),
+                from: 1,
+                random_msg: [42u8; 32],
+                vss_commitment: vec![
+                    (G1Affine::generator() * sk1).into_affine(),
+                    (G1Affine::generator() * sk2).into_affine(),
+                ],
+                ciphertexts,
+            },
             evrf_proofs: HashMap::new(),
             batch_evrf_proof: None,
         };
@@ -471,15 +484,23 @@ mod tests {
         let bytes = borsh::to_vec(&msg).unwrap();
         let msg2: Round0Msg = borsh::from_slice(&bytes).unwrap();
 
-        assert_eq!(msg.from, msg2.from);
-        assert_eq!(msg.random_msg, msg2.random_msg);
-        assert_eq!(msg.vss_commitment.len(), msg2.vss_commitment.len());
-        for (a, b) in msg.vss_commitment.iter().zip(msg2.vss_commitment.iter()) {
+        assert_eq!(msg.dkg_header.from, msg2.dkg_header.from);
+        assert_eq!(msg.dkg_header.random_msg, msg2.dkg_header.random_msg);
+        assert_eq!(
+            msg.dkg_header.vss_commitment.len(),
+            msg2.dkg_header.vss_commitment.len()
+        );
+        for (a, b) in msg
+            .dkg_header
+            .vss_commitment
+            .iter()
+            .zip(msg2.dkg_header.vss_commitment.iter())
+        {
             assert_eq!(a, b);
         }
-        assert_eq!(msg.ciphertexts.len(), msg2.ciphertexts.len());
-        for (k, v) in &msg.ciphertexts {
-            let v2 = &msg2.ciphertexts[k];
+        assert_eq!(msg.dkg_header.ciphertexts.len(), msg2.dkg_header.ciphertexts.len());
+        for (k, v) in &msg.dkg_header.ciphertexts {
+            let v2 = &msg2.dkg_header.ciphertexts[k];
             assert_eq!(v.r_commitment, v2.r_commitment);
             assert_eq!(v.encrypted_share, v2.encrypted_share);
         }

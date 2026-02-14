@@ -83,8 +83,8 @@ impl Node {
         while received.len() < (self.n - 1) as usize {
             match self.receiver.recv().await {
                 Ok(msg) => {
-                    if msg.from != self.participant.id {
-                        received.insert(msg.from, msg);
+                    if msg.dkg_header.from != self.participant.id {
+                        received.insert(msg.dkg_header.from, msg);
                     }
                 }
                 Err(e) => {
@@ -100,7 +100,10 @@ impl Node {
     }
 
     /// Run the key refresh protocol.
-    pub async fn run_refresh(mut self, existing_output: DkgOutput) -> Result<DkgOutput, DkgError> {
+    pub async fn run_refresh(
+        mut self,
+        existing_output: DkgOutput,
+    ) -> Result<DkgOutput, DkgError> {
         self.network.wait_ready().await;
 
         let peers = self.network.get_peers().await;
@@ -128,8 +131,8 @@ impl Node {
         while received.len() < (self.n - 1) as usize {
             match self.receiver.recv().await {
                 Ok(msg) => {
-                    if msg.from != self.participant.id {
-                        received.insert(msg.from, msg);
+                    if msg.dkg_header.from != self.participant.id {
+                        received.insert(msg.dkg_header.from, msg);
                     }
                 }
                 Err(e) => {

@@ -19,6 +19,11 @@ assume val impl_proj_add (config : Type0) :
 assume val impl_proj_add_assign (config : Type0) :
   Core_models.Ops.Arith.t_AddAssign (t_Projective config) (t_Projective config)
 
+/// Projective += Affine (mixed addition)
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume val impl_proj_add_assign_affine (config : Type0) :
+  Core_models.Ops.Arith.t_AddAssign (t_Projective config) (Ark_ec.Models.Short_weierstrass.Affine.t_Affine config)
+
 /// Projective - Projective (point subtraction)
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume val impl_proj_sub (config : Type0) :

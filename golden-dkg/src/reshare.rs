@@ -100,17 +100,17 @@ pub fn verify_dealing(
     old_pk_shares: &HashMap<NodeId, G1Affine>,
     session_id: SessionId,
 ) -> Result<(), ReshareError> {
-    if dealing.session_id != session_id {
+    if dealing.reshare_header.session_id != session_id {
         return Err(ReshareError::SessionMismatch {
-            sender: dealing.from,
+            sender: dealing.reshare_header.from,
         });
     }
 
     // Check commitment[0] matches old PK share
-    if let Some(&expected_pk_share) = old_pk_shares.get(&dealing.from) {
-        if dealing.vss_commitment[0] != expected_pk_share {
+    if let Some(&expected_pk_share) = old_pk_shares.get(&dealing.reshare_header.from) {
+        if dealing.reshare_header.vss_commitment[0] != expected_pk_share {
             return Err(ReshareError::CiphertextVerificationFailed {
-                sender: dealing.from,
+                sender: dealing.reshare_header.from,
                 recipient: 0,
             });
         }

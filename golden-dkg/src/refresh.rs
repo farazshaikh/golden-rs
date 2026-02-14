@@ -79,7 +79,7 @@ pub fn create_dealing(
         config.session_id,
     );
     Ok(DkgDealing {
-        own_vss_commitment: msg.vss_commitment.clone(),
+        own_vss_commitment: msg.dkg_header.vss_commitment.clone(),
         message: msg,
         private_share: own_delta,
     })
@@ -110,27 +110,28 @@ pub fn verify_dealing(
     _peers: &HashMap<NodeId, G1Affine>,
     config: &DkgConfig,
 ) -> Result<(), DkgError> {
-    if dealing.session_id != config.session_id {
+    if dealing.dkg_header.session_id != config.session_id {
         return Err(DkgError::SessionMismatch {
-            sender: dealing.from,
+            sender: dealing.dkg_header.from,
         });
     }
 
     // Zero-secret check: A_{j,0} must be identity
-    if !dealing.vss_commitment[0].infinity {
+    if !dealing.dkg_header.vss_commitment[0].infinity {
         return Err(DkgError::ZeroSecretViolation {
-            sender: dealing.from,
+            sender: dealing.dkg_header.from,
         });
     }
 
     // Ciphertext consistency (same as DKG)
-    for (&recipient_id, ct) in &dealing.ciphertexts {
-        let expected = crate::vss::expected_share_commitment(&dealing.vss_commitment, recipient_id);
+    for (&recipient_id, ct) in &dealing.dkg_header.ciphertexts {
+        let expected =
+            crate::vss::expected_share_commitment(&dealing.dkg_header.vss_commitment, recipient_id);
         let lhs = (G1Affine::generator() * ct.encrypted_share).into_affine();
         let rhs = (ct.r_commitment.into_group() + expected.into_group()).into_affine();
         if lhs != rhs {
             return Err(DkgError::CiphertextVerificationFailed {
-                sender: dealing.from,
+                sender: dealing.dkg_header.from,
                 recipient: recipient_id,
             });
         }
