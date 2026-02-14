@@ -12,7 +12,7 @@ The verification uses Lean 4 + Mathlib + VCV-io for mathematical proofs, hax for
 
 | # | Task | Layer | Tool | What Is Proven | Effort | Status |
 |---|------|-------|------|----------------|--------|--------|
-| 1 | Safety (no panics) across all modules | Implementation | Kani | Absence of panics, overflows, and assertion violations for all inputs within bound. Covers `shamir`, `vss`, `protocol`, `evrf`, `adapter`. | 1-2 weeks | **Done** -- 17 harnesses, all verified |
+| 1 | Safety (no panics) across all modules | Implementation | Kani | Absence of panics, overflows, and assertion violations for all inputs within bound. Covers `shamir`, `vss`, `protocol`, `evrf`, `adapter`, `refresh`, `reshare`. | 1-2 weeks | **Done** -- 20 harnesses, all verified |
 | 2 | Shamir + VSS functional correctness | Implementation | hax -> F* | `lagrange_interpolate_at_zero` is correct polynomial interpolation. `verify_share` accepts only valid shares. `round1` output `sk_i = sum_j f_j(i)` when all broadcasts are honest. | 3-4 weeks | **Unblocked** -- hax extraction succeeds, 17 F* files generated. F* proofs not yet written. |
 | 3 | Adapter column remapping correctness | Circuit | Kani | The arkworks-to-Spartan column index remapping in `to_spartan()` is a correct bijection: every arkworks column maps to a unique Spartan column and back. No out-of-bounds indices. | 3-5 days | **Done** -- subsumed by Task 1 (4 adapter harnesses) |
 | 4 | Shamir/VSS algebraic properties | Paper Math | Lean 4 + Mathlib | `forall (f : Polynomial F_r) (S : Finset), |S| >= t -> lagrange_interpolate S f = f(0)`. Feldman VSS binding: if `commit(f) = C` and `verify_share(C, i, s) = true`, then `s = f(i)` under DL hardness. | 3-4 weeks | **Done** -- 9 theorems proved (5 Shamir + 4 VSS) in Lean 4 |
@@ -29,29 +29,32 @@ The verification uses Lean 4 + Mathlib + VCV-io for mathematical proofs, hax for
 
 ## Task 1 Findings: Kani Bounded Model Checking
 
-**Status:** Complete. 17 proof harnesses, all verified. Runtime: ~7 seconds total.
+**Status:** Complete. 20 proof harnesses, all verified. Runtime: ~7 seconds total.
 
 ### Harness Results
 
-| Module   | Harness                               | Property Verified                                                                  |
-| -------- | ------------------------------------- | ---------------------------------------------------------------------------------- |
-| shamir   | `polynomial_degree_invariant`         | `new_random` produces exactly `degree + 1` coefficients; `degree()` is correct     |
-| shamir   | `generate_shares_ids_distinct`        | Node IDs 1..=n are always distinct and nonzero                                     |
-| shamir   | `lagrange_no_duplicate_panic`         | `expect("duplicate x values")` never fires for valid shares from `generate_shares` |
-| vss      | `commit_output_length`                | `commit()` output length == polynomial coefficient count                           |
-| vss      | `share_commitment_safe_iteration`     | Uses safe iterators only, no indexing                                              |
-| adapter  | `column_remap_total_function`         | Every arkworks column maps to a valid Spartan column (in bounds)                   |
-| adapter  | `column_remap_injective`              | No two distinct arkworks columns collide in Spartan space                          |
-| adapter  | `column_remap_surjective`             | Every Spartan column is reachable via explicit inverse mapping                     |
-| adapter  | `assignment_split_sizes`              | Input/witness partition sizes match `num_inputs` and `num_witness`                 |
-| protocol | `round0_shares_cover_all_ids`         | All peer IDs in [1,n] are covered by the share map                                 |
-| protocol | `vss_commitment_index_zero_safe`      | `commitment[0]` safe because `t >= 1` implies `len >= 1`                           |
-| reshare  | `lagrange_returns_error_on_duplicate` | Duplicate IDs return `Err(DuplicateNodeIndex)`, never panic                        |
-| schnorr  | `serialize_to_vec_infallible`         | `Vec<u8>` serialization path cannot fail                                           |
-| evrf     | `extract_x_handles_identity`          | Identity point branch returns zero without panic                                   |
-| evrf     | `hash_to_curve_domain_nonempty`       | Domain separators `"golden-evrf-h1/h2"` are non-empty and distinct                 |
-| zk_evrf  | `generator_slice_bounds`              | `&gens[..n]` safe when generators created with `size >= n`                         |
-| zk_evrf  | `power_of_two_nonzero`                | `next_power_of_two` is >= 1 and bit shift `1 << k` is safe for k < 64              |
+| Module   | Harness                                  | Property Verified                                                                  |
+| -------- | ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| shamir   | `polynomial_degree_invariant`            | `new_random` produces exactly `degree + 1` coefficients; `degree()` is correct     |
+| shamir   | `generate_shares_ids_distinct`           | Node IDs 1..=n are always distinct and nonzero                                     |
+| shamir   | `lagrange_no_duplicate_panic`            | `expect("duplicate x values")` never fires for valid shares from `generate_shares` |
+| vss      | `commit_output_length`                   | `commit()` output length == polynomial coefficient count                           |
+| vss      | `share_commitment_safe_iteration`        | Uses safe iterators only, no indexing                                              |
+| adapter  | `column_remap_total_function`            | Every arkworks column maps to a valid Spartan column (in bounds)                   |
+| adapter  | `column_remap_injective`                 | No two distinct arkworks columns collide in Spartan space                          |
+| adapter  | `column_remap_surjective`                | Every Spartan column is reachable via explicit inverse mapping                     |
+| adapter  | `assignment_split_sizes`                 | Input/witness partition sizes match `num_inputs` and `num_witness`                 |
+| protocol | `round0_shares_cover_all_ids`            | All peer IDs in [1,n] are covered by the share map                                 |
+| protocol | `vss_commitment_index_zero_safe`         | `commitment[0]` safe because `t >= 1` implies `len >= 1`                           |
+| refresh  | `zero_secret_commitment_is_identity`     | `round0_refresh` always produces `vss_commitment[0] = identity` (omega = 0)        |
+| reshare  | `lagrange_returns_error_on_duplicate`    | Duplicate IDs return `Err(DuplicateNodeIndex)`, never panic                        |
+| reshare  | `lagrange_no_division_by_zero`           | Inline Lagrange in `reshare_receive` never divides by zero for distinct old IDs    |
+| reshare  | `deal_ciphertext_covers_all_new_members` | All new member IDs appear in the ciphertext map                                    |
+| schnorr  | `serialize_to_vec_infallible`            | `Vec<u8>` serialization path cannot fail                                           |
+| evrf     | `extract_x_handles_identity`             | Identity point branch returns zero without panic                                   |
+| evrf     | `hash_to_curve_domain_nonempty`          | Domain separators `"golden-evrf-h1/h2"` are non-empty and distinct                 |
+| zk_evrf  | `generator_slice_bounds`                 | `&gens[..n]` safe when generators created with `size >= n`                         |
+| zk_evrf  | `power_of_two_nonzero`                   | `next_power_of_two` is >= 1 and bit shift `1 << k` is safe for k < 64              |
 
 ### Key Result: Adapter Column Remapping Is a Proven Bijection
 
@@ -63,7 +66,7 @@ Kani uses CBMC (C Bounded Model Checker) under the hood, which cannot efficientl
 
 ### Files
 
-- `src/kani_proofs.rs` -- 17 proof harnesses under `#[cfg(kani)]`
+- `src/kani_proofs.rs` -- 20 proof harnesses under `#[cfg(kani)]`
 - `src/lib.rs` -- added `#[cfg(kani)] mod kani_proofs`
 - `Cargo.toml` -- added `cfg(kani)` to `[lints.rust.unexpected_cfgs]`
 
@@ -177,6 +180,53 @@ RUSTC_WRAPPER= cargo +nightly-2025-11-08 hax into fstar
 
 **Current state:** F* v2025.10.06 installed. Extraction succeeds. Lax-checking fails on missing arkworks type models. Next step: create minimal `Ark_bls12_381_.Fields.Fr.fst` and `Ark_ff.Fields.Models.Fp.fst` stub modules.
 
+### Technical Decision: F* Backend vs. Lean Backend (2025-02)
+
+**Decision: Use the F* backend. The Lean backend is not viable for this codebase.**
+
+hax v0.3.6 supports both `cargo hax into fstar` and `cargo hax into lean`. We evaluated both on the golden-rs crate. Results:
+
+|                       | F* Backend                                                           | Lean Backend                                                                        |
+| --------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **Files extracted**   | 17 modules                                                           | 1 file                                                                              |
+| **Lines of code**     | 16,580                                                               | 101                                                                                 |
+| **Crypto modules**    | All (Shamir, VSS, eVRF, Protocol, Reshare, Schnorr, ZK-EVRF)         | None                                                                                |
+| **What it extracted** | Full function bodies, types, typeclasses, doc comments               | `main` (stub: coroutines unsupported, hax #924) + `generate_combinations` (utility) |
+| **Errors**            | 2x `&mut` warnings in zk_evrf serialization (non-critical, hax #420) | None (silently skipped all crypto modules)                                          |
+| **Engine**            | OCaml engine (2,212 lines, production-quality)                       | Rust engine (132 lines, experimental)                                               |
+| **Proof libraries**   | 112 files (Core_models, Alloc, Rust_primitives, Rand)                | ~30 files (basic primitives only)                                                   |
+| **Status**            | Production (used by Cryspen for TLS/HPKE verification)               | "warning: experimental" (hax's own CLI help text)                                   |
+
+**Root cause of the Lean backend's failure:** hax routes F*/Coq/SSProve/EasyCrypt through the mature OCaml engine, but routes Lean through a newer Rust engine (`hax-rust-engine`). The Rust engine cannot handle the trait-heavy, generic-heavy arkworks code in golden-rs. The OCaml engine has years of refinement for exactly these patterns.
+
+**Why "just use Lean extraction" is wrong for this project:**
+
+1. The Lean backend extracted <1% of the codebase (101 lines vs 16,580). It missed every single cryptographic function.
+2. No build infrastructure (lakefile) was generated. The hax Lean prelude library would need manual setup.
+3. The Lean backend does not reference or integrate with Mathlib. The claimed advantage ("use Mathlib directly on extracted code") does not exist in practice.
+4. The theoretical advantage of a unified proof assistant (Lean for both math and code) does not outweigh the practical reality that the tool cannot extract the code.
+
+**Our architecture:**
+
+```
+Lean 4 + Mathlib          -- Mathematical security proofs (37 theorems)
+    |
+    | (manual correspondence: F* ensures clauses mirror Lean theorem statements)
+    |
+F* + hax extraction       -- Implementation correctness proofs (Rust code -> F*)
+    |
+    | (hax extracts automatically)
+    |
+Rust + arkworks           -- Production implementation
+```
+
+This "sandwich" approach is the standard in formal verification of cryptographic protocols (e.g., HACL*, EverCrypt, Cryspen's own libcrux). The F*/Lean bridge is the `ensures` clauses in the F* specs that state the same algebraic properties proven in Lean.
+
+**Re-evaluation criteria:** Revisit this decision if/when:
+- hax Lean backend can extract all 17 modules (check: `cargo hax into lean --stats` shows 17 modules)
+- The Lean proof-libs include models for `Vec`, `HashMap`, `Iterator`, and can handle arkworks trait dispatch
+- A production deployment uses the hax Lean backend for similarly complex code
+
 ---
 
 ## Task 5 Findings: eVRF DH Symmetry (Lean 4)
@@ -197,6 +247,81 @@ Pivoted from hax -> F* to Lean 4 since hax is blocked. The DH symmetry is a pure
 **Key Result:** The entire `derive_pad` output chain is proven symmetric. Since `compute_pad` is a deterministic function of the DH shared secret S, and S is symmetric by `mul_comm`, the proof is a single `rw [hS]`. This formally verifies what `test_symmetric_pad_derivation` in `src/evrf.rs` checks empirically.
 
 **File:** `GoldenProofs/EVRFSymmetry.lean`
+
+---
+
+## eVRF End-to-End Correctness and Uniqueness (Lean 4)
+
+**Status:** Complete. 7 machine-checked theorems, 0 sorry.
+
+Bridges EVRFSymmetry.lean (compute_pad) and EVRFCircuit.lean (R_eVRF), proving the full eVRF pipeline is correct.
+
+| Theorem                                   | Statement                                                                                                     |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `evrf_evaluation_satisfies_relation`      | Honest `compute_pad` output satisfies `R_eVRF` -- proof generation always succeeds                            |
+| `evrf_pad_consistent_with_relation`       | The pad R = r * g_out is consistent with the circuit relation                                                 |
+| `evrf_symmetric_provability`              | Both parties produce the same R AND party i's R satisfies R_eVRF with witness sk_i                            |
+| `evrf_uniqueness`                         | `compute_pad` is deterministic: same inputs give same outputs (by `rfl`)                                      |
+| `evrf_output_determined_by_shared_secret` | Equal shared secrets produce equal outputs                                                                    |
+| `evrf_r_determines_commitment`            | Equal pad scalars r imply equal commitments R                                                                 |
+| `evrf_full_pipeline_correct`              | Full pipeline: (a) pads equal by DH symmetry, (b) decryption recovers share, (c) R_eVRF holds for the witness |
+
+**Key Result:** The capstone theorem `evrf_full_pipeline_correct` proves the entire evaluate-prove-encrypt-decrypt pipeline in one statement: party i encrypts `z = r + share`, party j decrypts `z - r' = share` (because `r = r'` by DH symmetry), and the ZK proof verifies (because `R_eVRF` holds). This formally closes the gap between the two previously independent eVRF proof files.
+
+**File:** `GoldenProofs/EVRFEndToEnd.lean`
+
+---
+
+## Refresh Correctness (Lean 4)
+
+**Status:** Complete. 4 machine-checked theorems, 0 sorry.
+
+Proves that the key refresh protocol (Section 5.2) preserves the secret while rotating shares.
+
+| Theorem                    | Statement                                                                                 |
+| -------------------------- | ----------------------------------------------------------------------------------------- |
+| `zero_polynomial_vanishes` | If f(0) = 0, Lagrange interpolation of f's evaluations at 0 is 0 (refresh invariant)      |
+| `refresh_preserves_secret` | sum L_i * (sk_i + delta_i) = sum L_i * sk_i when sum L_i * delta_i = 0 (secret unchanged) |
+| `refresh_pk_unchanged`     | If all omega_j = 0, then sum omega_j * g = 0 (PK contribution from refresh is zero)       |
+| `refresh_shares_changed`   | If delta != 0, then sk_old + delta != sk_old (shares actually rotate)                     |
+
+**Key Result:** The refresh protocol is proven to preserve the secret under zero-sharing. The zero polynomial vanishing theorem is a direct instantiation of `shamir_reconstruction` from ShamirCorrectness.lean, connecting the refresh invariant (omega = 0) to the Shamir reconstruction guarantee.
+
+**File:** `GoldenProofs/RefreshCorrectness.lean`
+
+---
+
+## Reshare Correctness (Lean 4)
+
+**Status:** Complete. 4+ machine-checked theorems, 0 sorry.
+
+Proves that the reshare protocol preserves the secret across group changes.
+
+| Theorem                          | Statement                                                                                       |
+| -------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `reshare_lagrange_aggregation`   | sum L_i * g_i(j) decomposes into original secret component + higher-order terms                 |
+| `reshare_reconstruction_at_zero` | If sum L_i * sk_i = secret, then Lagrange aggregation at 0 yields secret (direct)               |
+| `reshare_pk_preservation`        | If sk_old = sk_new, then sk_old * g = sk_new * g (PK unchanged)                                 |
+| `reshare_dealer_binding`         | If claimed_share * g = actual_share * g and (. * g) is injective (DL), then claimed = actual    |
+| `reshare_new_threshold_valid`    | New shares satisfy Shamir reconstruction: any t_new of them recover G(0) (via Mathlib Lagrange) |
+
+**Key Result:** The reshare Lagrange aggregation is proven correct: new member j's share `sum_i g_i(j) * L_i(0)` is a valid share of the original secret, because each `g_i(0) = sk_i` and the Lagrange coefficients reconstruct sk from the old shares. The dealer binding theorem connects the VSS commitment check (`vss_commitment[0] == g^{sk_i}`) to the algebraic guarantee that dealers use their real shares.
+
+**File:** `GoldenProofs/ReshareCorrectness.lean`
+
+---
+
+## CI Pipeline: Regression Detection
+
+A GitHub Actions workflow (`.github/workflows/formal_verification_ci.yml`) runs on every push/PR to `main`:
+
+| Stage          | What Runs                             | Catches                                                                            |
+| -------------- | ------------------------------------- | ---------------------------------------------------------------------------------- |
+| Lean 4 Proofs  | `lake build` + sorry regression check | Math spec changes that break proofs; sorry introduced in previously-complete files |
+| Kani Harnesses | `cargo kani` (all 20 harnesses)       | Rust code changes that introduce panics, overflows, or precondition violations     |
+| Rust Tests     | `cargo test` + `cargo clippy`         | Functional regressions in DKG/refresh/reshare; lint violations                     |
+
+The sorry regression check enforces that completed proof files (ShamirCorrectness, VSSCorrectness, EVRFSymmetry, EVRFCircuit, RefreshCorrectness, ReshareCorrectness) remain sorry-free. Scaffolded files (EVRFSecurity, UCSimulation) are allowed to have sorry with an INFO-level warning.
 
 ---
 
@@ -248,8 +373,11 @@ The simulator's PK programming trick (the key algebraic insight of Theorem 3) is
 ### Files
 
 - `GoldenProofs/EVRFCircuit.lean` -- Task 8 (complete)
+- `GoldenProofs/EVRFEndToEnd.lean` -- eVRF pipeline correctness + uniqueness (complete)
 - `GoldenProofs/EVRFSecurity.lean` -- Task 7 (scaffolded)
 - `GoldenProofs/UCSimulation.lean` -- Task 9 (scaffolded)
+- `GoldenProofs/RefreshCorrectness.lean` -- Refresh correctness (complete)
+- `GoldenProofs/ReshareCorrectness.lean` -- Reshare correctness (complete)
 
 ---
 
@@ -284,9 +412,9 @@ Layer 3: ZK Circuit Correctness
   Tasks: 3, 8
 
 Layer 2: Implementation Correctness
-  Shamir SSS | Feldman VSS | Protocol rounds | eVRF | Schnorr PoK
-  Tools: hax -> F*, Kani
-  Tasks: 1, 2, 5
+  Shamir SSS | Feldman VSS | Protocol rounds | Refresh | Reshare | eVRF | Schnorr PoK
+  Tools: hax -> F*, Kani, Lean 4
+  Tasks: 1, 2, 5 + Refresh/Reshare proofs
 
 Layer 1: Mathematical Security Proofs
   Shamir/VSS algebra | Schnorr soundness | eVRF game hops | UC simulation

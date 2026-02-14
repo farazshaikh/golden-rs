@@ -1,0 +1,153 @@
+name: Formal Verification CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ============================================================
+  # Stage 1: Lean 4 proofs
+  # ============================================================
+  lean:
+    name: Lean 4 Proofs
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: formal_verification
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install elan (Lean toolchain manager)
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> $GITHUB_PATH
+
+      - name: Cache Lean build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            formal_verification/.lake
+            formal_verification/lake-packages
+            ~/.elan
+          key: lean-${{ hashFiles('formal_verification/lakefile.toml', 'formal_verification/lean-toolchain') }}
+          restore-keys: lean-
+
+      - name: Build all Lean proofs
+        run: lake build
+
+      - name: Check for sorry regressions in completed proofs
+        run: |
+          echo "=== Checking for sorry regressions in completed proof files ==="
+          SORRY_REGRESSION=0
+
+          # These files are known to be sorry-free (completed proofs).
+          # Any sorry appearing here is a regression.
+          COMPLETED_FILES=(
+            "GoldenProofs/ShamirCorrectness.lean"
+            "GoldenProofs/VSSCorrectness.lean"
+            "GoldenProofs/EVRFSymmetry.lean"
+            "GoldenProofs/EVRFCircuit.lean"
+            "GoldenProofs/EVRFEndToEnd.lean"
+            "GoldenProofs/RefreshCorrectness.lean"
+            "GoldenProofs/ReshareCorrectness.lean"
+          )
+
+          for f in "${COMPLETED_FILES[@]}"; do
+            if grep -n '\bsorry\b' "$f" 2>/dev/null; then
+              echo "ERROR: sorry found in completed proof file: $f"
+              SORRY_REGRESSION=1
+            else
+              echo "OK: $f (no sorry)"
+            fi
+          done
+
+          # These files are known to have sorry (scaffolded proofs).
+          # We warn but don't fail.
+          SCAFFOLDED_FILES=(
+            "GoldenProofs/EVRFSecurity.lean"
+            "GoldenProofs/UCSimulation.lean"
+          )
+
+          for f in "${SCAFFOLDED_FILES[@]}"; do
+            SORRY_COUNT=$(grep -c '\bsorry\b' "$f" 2>/dev/null || echo "0")
+            if [ "$SORRY_COUNT" -gt "0" ]; then
+              echo "INFO: $f has $SORRY_COUNT sorry (scaffolded -- expected)"
+            fi
+          done
+
+          if [ "$SORRY_REGRESSION" -ne "0" ]; then
+            echo ""
+            echo "FAILURE: sorry regression detected in completed proof files."
+            echo "These files were previously verified sorry-free."
+            exit 1
+          fi
+
+          echo ""
+          echo "=== All completed proofs remain sorry-free ==="
+
+  # ============================================================
+  # Stage 2: Kani bounded model checking
+  # ============================================================
+  kani:
+    name: Kani Proof Harnesses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo and kani
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: kani-${{ hashFiles('Cargo.lock') }}
+          restore-keys: kani-
+
+      - name: Install Kani verifier
+        run: |
+          if ! command -v cargo-kani &> /dev/null; then
+            cargo install --locked kani-verifier
+            cargo kani setup
+          fi
+
+      - name: Run all Kani harnesses
+        run: cargo kani
+
+  # ============================================================
+  # Stage 3: Rust tests (integration + unit)
+  # ============================================================
+  rust-tests:
+    name: Rust Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: test-${{ hashFiles('Cargo.lock') }}
+          restore-keys: test-
+
+      - name: Run all tests
+        run: cargo test
+
+      - name: Run clippy
+        run: cargo clippy -- -D warnings

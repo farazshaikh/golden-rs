@@ -3,5 +3,8 @@ import GoldenProofs.ShamirCorrectness
 import GoldenProofs.VSSCorrectness
 import GoldenProofs.EVRFSymmetry
 import GoldenProofs.EVRFCircuit
+import GoldenProofs.EVRFEndToEnd
 import GoldenProofs.EVRFSecurity
 import GoldenProofs.UCSimulation
+import GoldenProofs.RefreshCorrectness
+import GoldenProofs.ReshareCorrectness

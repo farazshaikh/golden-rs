@@ -1,0 +1,4 @@
+# Vendored hax proof-libs -- gitignored (too large for version control).
+# To regenerate, see proofs/fstar/PATCHES.md for complete instructions.
+*
+!.gitignore

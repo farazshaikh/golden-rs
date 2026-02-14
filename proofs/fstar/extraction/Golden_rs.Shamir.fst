@@ -143,6 +143,11 @@ let impl_Polynomial__new_random
 /// Computes `f(x) = a_0 + x*(a_1 + x*(a_2 + ... + x*a_n))` by walking
 /// coefficients from highest degree down to the constant term. This is
 /// numerically stable and requires only `degree` multiplications.
+/// NOTE: Uses index-based access instead of `iter().rev()` for hax
+/// extraction compatibility. Iterator adapters (Rev, Map) generate
+/// dependent closure types in F* that fail typeclass resolution.
+/// Index-based loops extract as simple `fold_range` with no closures.
+/// See: formal_verification/Implementation.md "Extraction-Friendly Rust"
 let impl_Polynomial__evaluate
       (self: t_Polynomial)
       (x:
@@ -162,58 +167,34 @@ let impl_Polynomial__evaluate
       #FStar.Tactics.Typeclasses.solve
       (mk_u64 0)
   in
+  let n:usize =
+    Alloc.Vec.impl_1__len #(Ark_ff.Fields.Models.Fp.t_Fp
+          (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+              Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+      #Alloc.Alloc.t_Global
+      self.f_coefficients
+  in
   let result:Ark_ff.Fields.Models.Fp.t_Fp
     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig
         (mk_usize 4)) (mk_usize 4) =
-    Core_models.Iter.Traits.Iterator.f_fold (Core_models.Iter.Traits.Collect.f_into_iter #(Core_models.Iter.Adapters.Rev.t_Rev
-            (Core_models.Slice.Iter.t_Iter
-              (Ark_ff.Fields.Models.Fp.t_Fp
-                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))))
-          #FStar.Tactics.Typeclasses.solve
-          (Core_models.Iter.Traits.Iterator.f_rev #(Core_models.Slice.Iter.t_Iter
-                (Ark_ff.Fields.Models.Fp.t_Fp
-                    (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                        Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-              #FStar.Tactics.Typeclasses.solve
-              (Core_models.Slice.impl__iter #(Ark_ff.Fields.Models.Fp.t_Fp
-                      (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                          Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
-                  (Alloc.Vec.impl_1__as_slice self.f_coefficients
-                    <:
-                    t_Slice
-                    (Ark_ff.Fields.Models.Fp.t_Fp
-                        (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                            Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-                <:
-                Core_models.Slice.Iter.t_Iter
-                (Ark_ff.Fields.Models.Fp.t_Fp
-                    (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                        Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-            <:
-            Core_models.Iter.Adapters.Rev.t_Rev
-            (Core_models.Slice.Iter.t_Iter
-              (Ark_ff.Fields.Models.Fp.t_Fp
-                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))))
-        <:
-        Core_models.Iter.Adapters.Rev.t_Rev
-        (Core_models.Slice.Iter.t_Iter
-          (Ark_ff.Fields.Models.Fp.t_Fp
-              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))))
-      result
-      (fun result coeff ->
+    Rust_primitives.Hax.Folds.fold_range (mk_usize 0)
+      n
+      (fun result temp_1_ ->
           let result:Ark_ff.Fields.Models.Fp.t_Fp
             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                 Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
             result
           in
-          let coeff:Ark_ff.Fields.Models.Fp.t_Fp
+          let _:usize = temp_1_ in
+          true)
+      result
+      (fun result idx ->
+          let result:Ark_ff.Fields.Models.Fp.t_Fp
             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                 Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
-            coeff
+            result
           in
+          let idx:usize = idx in
           Core_models.Ops.Arith.f_add #(Ark_ff.Fields.Models.Fp.t_Fp
                 (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                     Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
@@ -234,7 +215,11 @@ let impl_Polynomial__evaluate
               Ark_ff.Fields.Models.Fp.t_Fp
                 (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                     Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
-            coeff
+            (self.f_coefficients.[ (n -! mk_usize 1 <: usize) -! idx <: usize ]
+              <:
+              Ark_ff.Fields.Models.Fp.t_Fp
+                (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                    Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
           <:
           Ark_ff.Fields.Models.Fp.t_Fp
             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -259,65 +244,93 @@ let impl_Polynomial__degree (self: t_Polynomial) : usize =
 /// Returns `(node_id, share_value)` pairs with `node_id` in `1..=n`.
 /// The evaluation points are the natural numbers 1 through n, which ensures
 /// they are distinct and nonzero (as required for Lagrange interpolation).
+/// NOTE: Uses explicit push loop instead of `map().collect()` for hax
+/// extraction compatibility. See: formal_verification/Implementation.md
+/// "Extraction-Friendly Rust"
 let generate_shares (poly: t_Polynomial) (n: u32)
     : Alloc.Vec.t_Vec
       (u32 &
         Ark_ff.Fields.Models.Fp.t_Fp
           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) Alloc.Alloc.t_Global =
-  Core_models.Iter.Traits.Iterator.f_collect #(Core_models.Iter.Adapters.Map.t_Map
-        (Core_models.Ops.Range.t_RangeInclusive u32)
-        (u32
-            -> (u32 &
-                Ark_ff.Fields.Models.Fp.t_Fp
-                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))))
-    #FStar.Tactics.Typeclasses.solve
-    #(Alloc.Vec.t_Vec
-        (u32 &
-          Ark_ff.Fields.Models.Fp.t_Fp
-            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) Alloc.Alloc.t_Global
-    )
-    (Core_models.Iter.Traits.Iterator.f_map #(Core_models.Ops.Range.t_RangeInclusive u32)
-        #FStar.Tactics.Typeclasses.solve
-        #(u32 &
-          Ark_ff.Fields.Models.Fp.t_Fp
-            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
-        #(u32
-            -> (u32 &
-                Ark_ff.Fields.Models.Fp.t_Fp
-                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-        (Core_models.Ops.Range.impl_7__new #u32 (mk_u32 1) n
-          <:
-          Core_models.Ops.Range.t_RangeInclusive u32)
-        (fun i ->
-            let i:u32 = i in
-            let x:Ark_ff.Fields.Models.Fp.t_Fp
-              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
-              Core_models.Convert.f_from #(Ark_ff.Fields.Models.Fp.t_Fp
-                    (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                        Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
-                #u64
-                #FStar.Tactics.Typeclasses.solve
-                (cast (i <: u32) <: u64)
-            in
-            i, impl_Polynomial__evaluate poly x
-            <:
+  let shares:Alloc.Vec.t_Vec
+    (u32 &
+      Ark_ff.Fields.Models.Fp.t_Fp
+        (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+            Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) Alloc.Alloc.t_Global =
+    Alloc.Vec.impl__with_capacity #(u32 &
+        Ark_ff.Fields.Models.Fp.t_Fp
+          (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+              Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+      (cast (n <: u32) <: usize)
+  in
+  let shares:Alloc.Vec.t_Vec
+    (u32 &
+      Ark_ff.Fields.Models.Fp.t_Fp
+        (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+            Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) Alloc.Alloc.t_Global =
+    Rust_primitives.Hax.Folds.fold_range (mk_u32 0)
+      n
+      (fun shares temp_1_ ->
+          let shares:Alloc.Vec.t_Vec
             (u32 &
               Ark_ff.Fields.Models.Fp.t_Fp
                 (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                    Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-      <:
-      Core_models.Iter.Adapters.Map.t_Map (Core_models.Ops.Range.t_RangeInclusive u32)
-        (u32
-            -> (u32 &
+                    Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+            Alloc.Alloc.t_Global =
+            shares
+          in
+          let _:u32 = temp_1_ in
+          true)
+      shares
+      (fun shares idx ->
+          let shares:Alloc.Vec.t_Vec
+            (u32 &
+              Ark_ff.Fields.Models.Fp.t_Fp
+                (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                    Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+            Alloc.Alloc.t_Global =
+            shares
+          in
+          let idx:u32 = idx in
+          let i:u32 = idx +! mk_u32 1 in
+          let x:Ark_ff.Fields.Models.Fp.t_Fp
+            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
+            Core_models.Convert.f_from #(Ark_ff.Fields.Models.Fp.t_Fp
+                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+              #u64
+              #FStar.Tactics.Typeclasses.solve
+              (cast (i <: u32) <: u64)
+          in
+          let shares:Alloc.Vec.t_Vec
+            (u32 &
+              Ark_ff.Fields.Models.Fp.t_Fp
+                (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                    Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+            Alloc.Alloc.t_Global =
+            Alloc.Vec.impl_1__push #(u32 &
                 Ark_ff.Fields.Models.Fp.t_Fp
                   (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))))
+                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+              #Alloc.Alloc.t_Global
+              shares
+              (i,
+                (impl_Polynomial__evaluate poly x
+                  <:
+                  Ark_ff.Fields.Models.Fp.t_Fp
+                    (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                        Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+                <:
+                (u32 &
+                  Ark_ff.Fields.Models.Fp.t_Fp
+                    (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                        Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
+          in
+          shares)
+  in
+  shares
 
 /// Reconstruct `f(0)` (the secret) from a set of shares using Lagrange interpolation.
 /// Per Section 3.3 of the Golden paper (IACR 2025/1924), Recover(t, {(i, x_bar_i)}):

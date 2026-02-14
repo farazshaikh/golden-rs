@@ -57,12 +57,19 @@ impl Polynomial {
     /// Computes `f(x) = a_0 + x*(a_1 + x*(a_2 + ... + x*a_n))` by walking
     /// coefficients from highest degree down to the constant term. This is
     /// numerically stable and requires only `degree` multiplications.
+    ///
+    /// NOTE: Uses index-based access instead of `iter().rev()` for hax
+    /// extraction compatibility. Iterator adapters (Rev, Map) generate
+    /// dependent closure types in F* that fail typeclass resolution.
+    /// Index-based loops extract as simple `fold_range` with no closures.
+    /// See: formal_verification/Implementation.md "Extraction-Friendly Rust"
     pub fn evaluate(&self, x: Scalar) -> Scalar {
         // Horner's: a_0 + x*(a_1 + x*(a_2 + ... + x*a_n))
-        // Walk coefficients from highest degree down.
+        // Walk coefficients from highest degree down via index.
         let mut result = Scalar::from(0u64);
-        for coeff in self.coefficients.iter().rev() {
-            result = result * x + coeff;
+        let n = self.coefficients.len();
+        for idx in 0..n {
+            result = result * x + self.coefficients[n - 1 - idx];
         }
         result
     }
@@ -81,13 +88,20 @@ impl Polynomial {
 /// Returns `(node_id, share_value)` pairs with `node_id` in `1..=n`.
 /// The evaluation points are the natural numbers 1 through n, which ensures
 /// they are distinct and nonzero (as required for Lagrange interpolation).
+///
+/// NOTE: Uses explicit push loop instead of `map().collect()` for hax
+/// extraction compatibility. See: formal_verification/Implementation.md
+/// "Extraction-Friendly Rust"
 pub fn generate_shares(poly: &Polynomial, n: u32) -> Vec<(NodeId, Scalar)> {
-    (1..=n)
-        .map(|i| {
-            let x = Scalar::from(i as u64);
-            (i, poly.evaluate(x))
-        })
-        .collect()
+    let mut shares = Vec::with_capacity(n as usize);
+    // Use exclusive range 0..n (extracts as fold_range) instead of
+    // inclusive range 1..=n (extracts as f_fold over RangeInclusive with FnOnce).
+    for idx in 0..n {
+        let i = idx + 1;
+        let x = Scalar::from(i as u64);
+        shares.push((i, poly.evaluate(x)));
+    }
+    shares
 }
 
 /// Reconstruct `f(0)` (the secret) from a set of shares using Lagrange interpolation.
@@ -98,9 +112,14 @@ pub fn generate_shares(poly: &Polynomial, n: u32) -> Vec<(NodeId, Scalar)> {
 ///
 /// Each share is `(node_id, y_i)` where `x_i = Scalar::from(node_id)`.
 /// Requires at least `t` shares for a degree-`(t-1)` polynomial.
+///
 pub fn lagrange_interpolate_at_zero(shares: &[(NodeId, Scalar)]) -> Scalar {
     let mut result = Scalar::from(0u64);
 
+    // NOTE: Uses iter().enumerate() pattern which hax extracts as
+    // fold_enumerated_slice (no FnOnce needed). Direct index shares[i]
+    // generates .[ ] notation requiring Index typeclass instances.
+    // See: formal_verification/Implementation.md "Extraction-Friendly Rust"
     for (i, &(xi_id, yi)) in shares.iter().enumerate() {
         let xi = Scalar::from(xi_id as u64);
 
