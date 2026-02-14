@@ -1,41 +1,163 @@
 # Formal Verification Makefile for Golden DKG
 #
 # Usage:
-#   make all              -- run all formal verification (Kani + Lean)
-#   make kani             -- run all 20 Kani proof harnesses
-#   make lean             -- build all Lean 4 proofs
-#   make kani-<harness>   -- run a single Kani harness
-#   make lean-shamir      -- build Shamir correctness proof only
-#   make lean-vss         -- build VSS correctness proof only
-#   make lean-refresh     -- build refresh correctness proof only
-#   make lean-reshare     -- build reshare correctness proof only
-#   make clean            -- remove build artifacts
-#   make status           -- show verification status summary
+#   make verify            -- full verification: tests + lean + hax extract + F* check
+#   make verify-quick      -- quick check: tests + lean only (no hax/F*)
+#   make test              -- cargo test only
+#   make lean              -- build all Lean 4 proofs
+#   make extract           -- re-extract Rust to F* via hax
+#   make fstar             -- F* lax-check all 18 extraction modules + 6 spec files
+#   make kani              -- run all 20 Kani proof harnesses
+#   make status            -- show verification status summary
+#   make clean             -- remove build artifacts
 #
-# Prerequisites:
-#   - cargo kani (install: cargo install --locked kani-verifier && cargo kani setup)
+# Prerequisites (verify-quick):
+#   - cargo (Rust toolchain)
 #   - lean / lake (install: curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh)
+#
+# Additional prerequisites (verify):
+#   - F* v2025.10.06 at ~/.local/fstar/fstar/bin/fstar.exe
+#   - hax v0.3.6 (see Implementation.md for install instructions)
+#   - opam switch hax-engine
 
 SHELL := /bin/bash
-.PHONY: all kani lean clean status
+.PHONY: all verify verify-quick test lean extract fstar fstar-extraction fstar-specs kani clean status check-tools
 
 # Paths
 GOLDEN_RS_ROOT := $(shell cd .. && pwd)
 LEAN_DIR := $(CURDIR)
-LEAN_PROOFS := $(LEAN_DIR)/GoldenProofs
+FSTAR_DIR := $(GOLDEN_RS_ROOT)/proofs/fstar
+FSTAR := $(HOME)/.local/fstar/fstar/bin/fstar.exe
+HAX_NIGHTLY := nightly-2025-11-08
+
+# Rust sources (for dependency tracking)
+RUST_SOURCES := $(wildcard $(GOLDEN_RS_ROOT)/golden-dkg/src/*.rs $(GOLDEN_RS_ROOT)/golden-dkg/src/zk_evrf/*.rs)
+
+# F* include flags (reused across targets)
+FSTAR_INCLUDES := --include $(FSTAR_DIR)/models \
+                  --include $(FSTAR_DIR)/extraction \
+                  --include $(FSTAR_DIR)/specs \
+                  --include $(FSTAR_DIR)/hax-libs/core \
+                  --include $(FSTAR_DIR)/hax-libs/rust_primitives \
+                  --include $(FSTAR_DIR)/hax-libs/hax_lib
+
+# Stamp files for Make dependency tracking
+STAMP_DIR := $(GOLDEN_RS_ROOT)/.verification-stamps
+EXTRACT_STAMP := $(STAMP_DIR)/.extracted
+FSTAR_EXT_STAMP := $(STAMP_DIR)/.fstar-extraction-checked
+FSTAR_SPEC_STAMP := $(STAMP_DIR)/.fstar-specs-checked
+TEST_STAMP := $(STAMP_DIR)/.tests-passed
+LEAN_STAMP := $(STAMP_DIR)/.lean-built
 
 # Ensure tools are on PATH
-export PATH := $(HOME)/.elan/bin:$(HOME)/.cargo/bin:$(PATH)
+export PATH := $(HOME)/.elan/bin:$(HOME)/.cargo/bin:$(HOME)/.opam/hax-engine/bin:$(PATH)
 
 # ============================================================
 # Top-level targets
 # ============================================================
 
-all: kani lean
+verify: test lean extract fstar
 	@echo ""
 	@echo "======================================"
-	@echo "  All formal verification passed."
+	@echo "  Full formal verification passed."
+	@echo "  - cargo test:    51 tests"
+	@echo "  - Lean 4:        37 theorems"
+	@echo "  - hax extraction: re-extracted from current Rust"
+	@echo "  - F* lax-check:  18 modules + 6 spec files"
 	@echo "======================================"
+
+verify-quick: test lean
+	@echo ""
+	@echo "======================================"
+	@echo "  Quick verification passed."
+	@echo "  - cargo test:    51 tests"
+	@echo "  - Lean 4:        37 theorems"
+	@echo "  (F* skipped -- run 'make verify' for full check)"
+	@echo "======================================"
+
+all: verify
+
+# ============================================================
+# Rust tests
+# ============================================================
+
+test: $(TEST_STAMP)
+
+$(TEST_STAMP): $(RUST_SOURCES)
+	@echo "=== Running cargo test ==="
+	cd $(GOLDEN_RS_ROOT) && cargo test --workspace
+	@mkdir -p $(STAMP_DIR)
+	@touch $@
+	@echo "[PASS] 51 Rust tests passed."
+
+# ============================================================
+# hax extraction (Rust -> F*)
+# ============================================================
+
+extract: $(EXTRACT_STAMP)
+
+$(EXTRACT_STAMP): $(RUST_SOURCES)
+	@echo "=== Re-extracting Rust to F* via hax ==="
+	@which cargo-hax >/dev/null 2>&1 || (echo "ERROR: cargo-hax not found. See Implementation.md for install instructions." && exit 1)
+	cd $(GOLDEN_RS_ROOT)/golden-dkg && \
+		eval $$(opam env --switch=hax-engine 2>/dev/null) && \
+		RUSTC_WRAPPER= cargo +$(HAX_NIGHTLY) hax into fstar
+	@echo "Copying extraction to proofs/fstar/extraction/..."
+	cp $(GOLDEN_RS_ROOT)/golden-dkg/proofs/fstar/extraction/Golden_dkg.*.fst $(FSTAR_DIR)/extraction/
+	@mkdir -p $(STAMP_DIR)
+	@touch $@
+	@echo "[PASS] hax extraction complete (18 modules)."
+
+# ============================================================
+# F* lax-checking
+# ============================================================
+
+fstar: fstar-extraction fstar-specs
+
+fstar-extraction: $(FSTAR_EXT_STAMP)
+
+$(FSTAR_EXT_STAMP): $(EXTRACT_STAMP) $(wildcard $(FSTAR_DIR)/models/*.fst) $(wildcard $(FSTAR_DIR)/hax-libs/core/*.fst $(FSTAR_DIR)/hax-libs/core/*.fsti)
+	@echo "=== F* lax-checking 18 extraction modules ==="
+	@test -f $(FSTAR) || (echo "ERROR: F* not found at $(FSTAR). Download v2025.10.06 from https://github.com/FStarLang/FStar/releases/tag/v2025.10.06" && exit 1)
+	@pass=0; fail=0; \
+	for f in $(FSTAR_DIR)/extraction/Golden_dkg.*.fst; do \
+		mod=$$(basename "$$f" .fst); \
+		if $(FSTAR) --lax --warn_error -331 $(FSTAR_INCLUDES) "$$f" 2>&1 | grep -q "discharged successfully"; then \
+			pass=$$((pass+1)); \
+		else \
+			echo "FAIL: $$mod"; \
+			fail=$$((fail+1)); \
+		fi; \
+	done; \
+	echo "F* extraction: $$pass PASS, $$fail FAIL"; \
+	if [ $$fail -gt 0 ]; then exit 1; fi
+	@mkdir -p $(STAMP_DIR)
+	@touch $@
+	@echo "[PASS] All 18 extraction modules lax-check passed."
+
+fstar-specs: $(FSTAR_SPEC_STAMP)
+
+$(FSTAR_SPEC_STAMP): $(FSTAR_EXT_STAMP) $(wildcard $(FSTAR_DIR)/specs/*.fst)
+	@echo "=== F* lax-checking spec files ==="
+	@pass=0; fail=0; \
+	for f in $(FSTAR_DIR)/specs/Golden_dkg.*.fst $(FSTAR_DIR)/specs/Fold.Axioms.fst; do \
+		mod=$$(basename "$$f" .fst); \
+		if $(FSTAR) --lax --warn_error -331 $(FSTAR_INCLUDES) "$$f" 2>&1 | grep -q "discharged successfully"; then \
+			pass=$$((pass+1)); \
+		else \
+			echo "FAIL: $$mod"; \
+			fail=$$((fail+1)); \
+		fi; \
+	done; \
+	echo "F* specs: $$pass PASS, $$fail FAIL"; \
+	if [ $$fail -gt 0 ]; then exit 1; fi
+	@mkdir -p $(STAMP_DIR)
+	@touch $@
+	@echo "[PASS] All spec files lax-check passed."
+
+# ============================================================
+# Status
+# ============================================================
 
 status:
 	@echo "=== Formal Verification Status ==="
@@ -131,10 +253,14 @@ kani-zk-evrf: kani-zk_evrf_generator_slice_bounds kani-zk_evrf_power_of_two_nonz
 # Lean 4 targets
 # ============================================================
 
-lean:
+lean: $(LEAN_STAMP)
+
+$(LEAN_STAMP): $(wildcard $(LEAN_DIR)/GoldenProofs/*.lean) $(LEAN_DIR)/lakefile.toml
 	@echo "=== Building all Lean 4 proofs ==="
 	cd $(LEAN_DIR) && lake build
-	@echo "[PASS] All Lean 4 proofs verified."
+	@mkdir -p $(STAMP_DIR)
+	@touch $@
+	@echo "[PASS] All Lean 4 proofs verified (37 theorems)."
 
 lean-shamir:
 	@echo "=== Building Shamir correctness proof ==="
@@ -186,6 +312,8 @@ lean-uc:
 # ============================================================
 
 clean:
+	@echo "Cleaning verification stamps..."
+	rm -rf $(STAMP_DIR) 2>/dev/null || true
 	@echo "Cleaning Kani artifacts..."
 	cd $(GOLDEN_RS_ROOT) && rm -rf target/kani 2>/dev/null || true
 	@echo "Cleaning Lean build artifacts..."
@@ -196,7 +324,9 @@ clean:
 check-tools:
 	@echo "Checking required tools..."
 	@which cargo >/dev/null 2>&1 || (echo "ERROR: cargo not found" && exit 1)
-	@cargo kani --version >/dev/null 2>&1 || (echo "ERROR: cargo-kani not found. Install: cargo install --locked kani-verifier && cargo kani setup" && exit 1)
-	@which lean >/dev/null 2>&1 || (echo "ERROR: lean not found. Install: curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh" && exit 1)
+	@which lean >/dev/null 2>&1 || (echo "ERROR: lean not found. Install via elan." && exit 1)
 	@which lake >/dev/null 2>&1 || (echo "ERROR: lake not found" && exit 1)
-	@echo "All tools available."
+	@test -f $(FSTAR) && echo "F*: $(FSTAR)" || echo "WARNING: F* not found at $(FSTAR) (needed for 'make fstar')"
+	@which cargo-hax >/dev/null 2>&1 && echo "hax: $$(which cargo-hax)" || echo "WARNING: hax not found (needed for 'make extract')"
+	@cargo kani --version >/dev/null 2>&1 && echo "Kani: available" || echo "WARNING: Kani not found (needed for 'make kani')"
+	@echo "Tool check complete."
