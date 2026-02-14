@@ -32,3 +32,6 @@ criterion = { version = "0.5" }
 [[bench]]
 name = "dkg"
 harness = false
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }

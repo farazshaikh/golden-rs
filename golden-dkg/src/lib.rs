@@ -109,3 +109,6 @@ pub(crate) mod evrf;
 pub(crate) mod protocol;
 pub(crate) mod reshare_protocol;
 pub(crate) mod vss;
+
+#[cfg(kani)]
+mod kani_proofs;
