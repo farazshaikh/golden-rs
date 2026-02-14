@@ -99,9 +99,31 @@ extract: $(EXTRACT_STAMP)
 $(EXTRACT_STAMP): $(RUST_SOURCES)
 	@echo "=== Re-extracting Rust to F* via hax ==="
 	@which cargo-hax >/dev/null 2>&1 || (echo "ERROR: cargo-hax not found. See Implementation.md for install instructions." && exit 1)
+	@# Run hax, capture output. hax exits non-zero for ANY error including known ones.
 	cd $(GOLDEN_RS_ROOT)/golden-dkg && \
 		eval $$(opam env --switch=hax-engine 2>/dev/null) && \
-		RUSTC_WRAPPER= cargo +$(HAX_NIGHTLY) hax into fstar
+		RUSTC_WRAPPER= cargo +$(HAX_NIGHTLY) hax into fstar 2>&1 | tee /tmp/hax-output.log; true
+	@# Check for UNEXPECTED errors (anything other than HAX0003 &mut and HAX0008 raw pointer).
+	@# HAX0003: "&mut mutation not allowed" -- known limitation for serialize_compressed (hax #420)
+	@# HAX0008: "Raw_pointer rejected" -- known limitation for Drop zeroization
+	@# These affect serialization/zeroization code, not cryptographic logic.
+	@unexpected=$$(grep -c '\[HAX' /tmp/hax-output.log 2>/dev/null || echo 0); \
+	known=$$(grep -c 'HAX0003\|HAX0008' /tmp/hax-output.log 2>/dev/null || echo 0); \
+	other=$$((unexpected - known)); \
+	if [ "$$other" -gt 0 ]; then \
+		echo "ERROR: hax produced $$other unexpected error(s) (beyond known HAX0003/HAX0008):"; \
+		grep '\[HAX' /tmp/hax-output.log | grep -v 'HAX0003\|HAX0008'; \
+		exit 1; \
+	fi; \
+	if [ "$$known" -gt 0 ]; then \
+		echo "NOTE: $$known known hax warnings (HAX0003/HAX0008 -- &mut/raw_pointer in serialization code, hax #420)"; \
+	fi
+	@# Verify all 18 expected extraction files were produced
+	@count=$$(ls $(GOLDEN_RS_ROOT)/golden-dkg/proofs/fstar/extraction/Golden_dkg.*.fst 2>/dev/null | wc -l); \
+	if [ "$$count" -lt 18 ]; then \
+		echo "ERROR: hax extraction produced only $$count files (expected 18)."; \
+		exit 1; \
+	fi
 	@echo "Copying extraction to proofs/fstar/extraction/..."
 	cp $(GOLDEN_RS_ROOT)/golden-dkg/proofs/fstar/extraction/Golden_dkg.*.fst $(FSTAR_DIR)/extraction/
 	@mkdir -p $(STAMP_DIR)

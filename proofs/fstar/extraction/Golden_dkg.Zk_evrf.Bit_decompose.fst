@@ -237,26 +237,49 @@ let bit_decompose
               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
       ()
   in
-  let recomp_terms:Alloc.Vec.t_Vec
-    (usize &
-      Ark_ff.Fields.Models.Fp.t_Fp
-        (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-            Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) Alloc.Alloc.t_Global =
+  let
+  (power_of_two:
+    Ark_ff.Fields.Models.Fp.t_Fp
+      (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig
+          (mk_usize 4)) (mk_usize 4)),
+  (recomp_terms:
+    Alloc.Vec.t_Vec
+      (usize &
+        Ark_ff.Fields.Models.Fp.t_Fp
+          (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+              Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) Alloc.Alloc.t_Global)
+  =
     Core_models.Iter.Traits.Iterator.f_fold (Core_models.Iter.Traits.Collect.f_into_iter #(Alloc.Vec.t_Vec
               usize Alloc.Alloc.t_Global)
           #FStar.Tactics.Typeclasses.solve
           bits
         <:
         Core_models.Slice.Iter.t_Iter usize)
-      recomp_terms
-      (fun recomp_terms bit_var ->
-          let recomp_terms:Alloc.Vec.t_Vec
+      (power_of_two, recomp_terms
+        <:
+        (Ark_ff.Fields.Models.Fp.t_Fp
+            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) &
+          Alloc.Vec.t_Vec
             (usize &
               Ark_ff.Fields.Models.Fp.t_Fp
                 (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                     Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
-            Alloc.Alloc.t_Global =
-            recomp_terms
+            Alloc.Alloc.t_Global))
+      (fun temp_0_ bit_var ->
+          let
+          (power_of_two:
+            Ark_ff.Fields.Models.Fp.t_Fp
+              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)),
+          (recomp_terms:
+            Alloc.Vec.t_Vec
+              (usize &
+                Ark_ff.Fields.Models.Fp.t_Fp
+                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+              Alloc.Alloc.t_Global) =
+            temp_0_
           in
           let bit_var:usize = bit_var in
           let recomp_terms:Alloc.Vec.t_Vec
@@ -278,7 +301,30 @@ let bit_decompose
                     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                         Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
           in
-          recomp_terms)
+          let power_of_two:Ark_ff.Fields.Models.Fp.t_Fp
+            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
+            Core_models.Ops.Arith.f_add #(Ark_ff.Fields.Models.Fp.t_Fp
+                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+              #(Ark_ff.Fields.Models.Fp.t_Fp
+                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+              #FStar.Tactics.Typeclasses.solve
+              power_of_two
+              power_of_two
+          in
+          power_of_two, recomp_terms
+          <:
+          (Ark_ff.Fields.Models.Fp.t_Fp
+              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) &
+            Alloc.Vec.t_Vec
+              (usize &
+                Ark_ff.Fields.Models.Fp.t_Fp
+                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+              Alloc.Alloc.t_Global))
   in
   let cs:Golden_dkg.Zk_evrf.Nonnative.t_ConstraintSystem =
     Golden_dkg.Zk_evrf.Nonnative.impl_ConstraintSystem__constrain cs

@@ -73,9 +73,6 @@ theorem evrf_evaluation_satisfies_relation
   unfold R_eVRF compute_pad
   refine ⟨hpk1, ?_⟩
   simp only
-  -- The let-chain in R_eVRF and the struct construction in compute_pad
-  -- use identical formulas. The goal is: (beta * ... + ...) • g_out = (beta * ... + ...) • g_out
-  rfl
 
 /-- **eVRF pad is consistent with the proven relation.**
     Paper: Section 4.2 step 5 + Section 4.3 Figure 3 step 9
@@ -99,7 +96,6 @@ theorem evrf_pad_consistent_with_relation
   -- By definition of compute_pad: R = r • g_commit (where g_commit = g_out)
   unfold compute_pad
   simp only
-  rfl
 
 end EvaluationSatisfiesRelation
 

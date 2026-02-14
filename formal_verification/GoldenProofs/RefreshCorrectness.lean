@@ -202,6 +202,10 @@ theorem refresh_shares_changed
     sk_old + delta ≠ sk_old := by
   intro h
   apply h_nonzero
-  linarith
+  -- From h : sk_old + delta = sk_old, derive delta = 0
+  -- Subtract sk_old from both sides: delta = 0
+  have : sk_old + delta - sk_old = sk_old - sk_old := by rw [h]
+  simp [add_sub_cancel_left] at this
+  exact this
 
 end RefreshSharesChanged

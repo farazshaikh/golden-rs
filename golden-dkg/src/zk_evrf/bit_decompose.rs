@@ -63,11 +63,13 @@ pub fn bit_decompose(cs: &mut ConstraintSystem, value: Fr, lambda: usize) -> Bit
 
     // Constraint: k = sum_{i=0}^{lambda} 2^i * k_i
     // R1CS form: (sum 2^i * k_i) * 1 = k
+    // NOTE: Uses `p + p` instead of `p.double_in_place()` to avoid &mut
+    // pattern that hax cannot extract (hax issue #420).
     let mut power_of_two = Fr::one();
     let mut recomp_terms = Vec::new();
     for &bit_var in &bits {
         recomp_terms.push((bit_var, power_of_two));
-        power_of_two.double_in_place();
+        power_of_two = power_of_two + power_of_two;
     }
 
     cs.constrain(
