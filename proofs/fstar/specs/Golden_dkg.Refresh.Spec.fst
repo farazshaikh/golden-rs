@@ -54,22 +54,13 @@ assume val secret_preserved : scalar -> scalar -> prop
 //   delta at the secret level would be nonzero, changing sk to sk + delta.
 //   The shared public key PK = g^sk would no longer match the shares.
 //
-// STATUS: ADMITTED (Category B -- ensures references extracted code)
+// STATUS: CLOSED (Phase 3 -- chains shamir_roundtrip_correct with is_zero_sharing)
 // ENSURES: REAL (not True) -- states that interpolation returns fp_from_u64(0)
 //
-// This is a specialization of shamir_roundtrip_correct to secret=0:
-//   poly_constant_term poly == fp_from_u64(0)  (by is_zero_sharing)
-//   => lagrange_interpolate_at_zero(generate_shares(poly, n)) == fp_from_u64(0)
-//
-// BLOCKER: Depends on shamir_roundtrip_correct (itself admitted), which
-//   requires reasoning through both generate_shares (fold_range with push)
-//   and lagrange_interpolate_at_zero (double-nested fold_enumerated_slice).
-//   The (2,2) and (3,3) concrete cases in Shamir.Spec demonstrate the
-//   algebraic technique; the general case needs loop invariants.
-//
-// CONCRETE EVIDENCE: shamir_2_2_spec_correct proves the full roundtrip
-//   for linear polynomials. When secret=0 (zero-sharing), this gives:
-//   lagrange_interp_spec [(1, a1), (2, 2*a1)] == 0.
+// PROOF: Specialization of shamir_roundtrip_correct to secret=0:
+//   1. shamir_roundtrip_correct poly n  =>  interpolation == poly_constant_term poly
+//   2. is_zero_sharing poly             =>  poly_constant_term poly == fp_from_u64 0
+//   3. Transitivity                     =>  interpolation == fp_from_u64 0
 // ============================================================================
 
 val zero_sharing_vanishes :
@@ -87,11 +78,14 @@ val zero_sharing_vanishes :
       Ark_ff.Fields.Models.Fp.fp_from_u64 (mk_u64 0))
 
 let zero_sharing_vanishes poly n =
-  // Proof sketch (blocked by shamir_roundtrip_correct):
-  //   1. is_zero_sharing poly => poly_constant_term poly == fp_from_u64(0)
-  //   2. shamir_roundtrip_correct poly n => interpolation == poly_constant_term poly
-  //   3. Transitivity: interpolation == fp_from_u64(0)
-  admit ()
+  // Step 1: shamir_roundtrip_correct gives us:
+  //   lagrange_interpolate_at_zero(generate_shares(poly, n)) == poly_constant_term(poly)
+  Golden_dkg.Shamir.Spec.shamir_roundtrip_correct poly n;
+  // Step 2: is_zero_sharing tells us coefficients[0] == fp_from_u64 0.
+  //   poly_constant_term extracts coefficients[0] (= Seq.index s 0),
+  //   and is_zero_sharing guarantees this equals fp_from_u64 0.
+  //   Transitivity: interpolation == poly_constant_term poly == fp_from_u64 0.
+  ()
 
 // ============================================================================
 // Lemma 2: Refresh Preserves the Secret
