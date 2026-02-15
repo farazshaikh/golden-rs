@@ -3,14 +3,6 @@ module Golden_dkg.Zk_evrf
 open FStar.Mul
 open Core_models
 
-/// Serialize an ark-spartan NIZK proof to compressed bytes.
-/// Excluded from hax extraction (uses serialize_compressed with &mut).
-assume val serialize_nizk_proof
-      (proof: Libspartan.t_NIZK
-        (Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config))
-    : Core_models.Result.t_Result (Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global)
-        Alloc.String.t_String
-
 let _ =
   (* This module has implicit dependencies, here we make them explicit. *)
   (* The implicit dependencies arise from typeclasses instances. *)

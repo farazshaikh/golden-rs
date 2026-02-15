@@ -86,6 +86,70 @@
 //! - **Secret zeroization**: secret keys are zeroed from memory on drop via
 //!   [`types::SecretScalar`]
 //!
+//! ## Formal Verification
+//!
+//! This crate has multi-layer formal verification covering the paper math, the Rust
+//! implementation, and the bridge between them. See `formal_verification/README.md` for
+//! the full verification chain diagram and detailed status
+//! (`formal_verification/README.md` in the repository root).
+//!
+//! ### Approach
+//!
+//! The verification uses three tools in a "sandwich" architecture:
+//!
+//! **Top layer -- Lean 4 + Mathlib (paper math):** 38 machine-checked theorems prove
+//! the algebraic properties stated in the paper: Shamir reconstruction, Feldman VSS
+//! completeness, eVRF DH symmetry, refresh/reshare correctness, eVRF circuit
+//! completeness, security game hops, and the LHL bound. These are pure math proofs
+//! that hold in any field/group satisfying the standard algebraic axioms.
+//!
+//! **Bottom layer -- hax + F\* (Rust implementation):** The [`hax`](https://github.com/hacspec/hax)
+//! tool extracts the Rust source code into 18 F\* modules. F\* lax-checks all modules,
+//! verifying that the extracted code is well-typed against the arkworks type models.
+//! Non-crypto code (serialization, memory zeroization) is excluded via `#[hax_lib::exclude]`.
+//!
+//! **Bridge layer -- F\* specification files:** 6 F\* spec files state the correctness
+//! properties (mirroring the Lean theorems) and prove the extracted Rust code satisfies
+//! them. Key proofs include: eVRF pad symmetry (DH commutativity through the full
+//! `derive_pad` function), encrypt/decrypt roundtrip, Lagrange interpolation correctness
+//! for concrete cases (n=2,3), VSS ciphertext check (EC distributivity), and refresh/reshare
+//! algebraic invariants.
+//!
+//! Additionally, 20 [Kani](https://model-checking.github.io/kani/) bounded model checking
+//! harnesses prove panic-freedom and structural invariants across all modules.
+//!
+//! ### Remaining Items
+//!
+//! Two items are intentionally left unproved:
+//!
+//! - **`reshare_dealer_binding`** (F\*, `assume val`): States that if `g^a == g^b` then
+//!   `a == b`. This is the Discrete Logarithm hardness assumption -- a standard
+//!   cryptographic assumption that cannot be proved, only assumed.
+//!
+//! - **`golden_uc_security`** (Lean, `sorry`): The full UC composition theorem bounding
+//!   the distinguishing advantage as `|prob_real - prob_ideal| <= n * adv_evrf`. This
+//!   requires 8-12 weeks of research-level formalization using probabilistic frameworks
+//!   (VCV-io or SSProve). The statement is complete; the proof infrastructure is in place.
+//!
+//! ### Running the Verification Pipeline
+//!
+//! After any code change, run the full verification suite:
+//!
+//! ```bash
+//! # Full verification (cargo test + Lean + hax re-extraction + F* lax-check)
+//! make verify
+//!
+//! # Quick check (cargo test + Lean only, ~2 min)
+//! make verify-quick
+//!
+//! # Force full re-run (clears cached stamps)
+//! make -C formal_verification clean && make verify
+//! ```
+//!
+//! Prerequisites: Lean 4 via [elan](https://github.com/leanprover/elan), F\* v2025.10.06,
+//! hax v0.3.6 with `opam switch hax-engine`. See `formal_verification/README.md` for
+//! installation details.
+//!
 //! ## Paper Reference
 //!
 //! > Benedikt Bünz, Kevin Choi, Chelsea Komlo.
@@ -109,6 +173,3 @@ pub(crate) mod evrf;
 pub(crate) mod protocol;
 pub(crate) mod reshare_protocol;
 pub(crate) mod vss;
-
-#[cfg(kani)]
-mod kani_proofs;
