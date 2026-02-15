@@ -115,11 +115,16 @@ let expected_share_commitment_correct poly index = admit ()
 val ciphertext_check_identity :
   r_pad: scalar ->
   share: scalar ->
-  Pure unit
-    (requires True)
-    (ensures fun _ ->
+  g: g1_affine ->
+  Lemma
+    (ensures
       // (r + share) * g == r * g + share * g
-      // This is the distributivity of scalar multiplication over addition.
-      True) // Algebraic identity -- stated abstractly
+      // Distributivity of scalar multiplication over field addition.
+      Ark_ec.Models.Short_weierstrass.Group.smul
+        (Ark_ff.Fields.Models.Fp.fp_add r_pad share) g ==
+      Ark_ec.Models.Short_weierstrass.Group.g1_add
+        (Ark_ec.Models.Short_weierstrass.Group.smul r_pad g)
+        (Ark_ec.Models.Short_weierstrass.Group.smul share g))
 
-let ciphertext_check_identity r_pad share = admit ()
+let ciphertext_check_identity r_pad share g =
+  Ark_ec.Models.Short_weierstrass.Group.smul_add_scalar r_pad share g
