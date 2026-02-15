@@ -73,6 +73,8 @@ let poly_degree_lt (poly: Golden_dkg.Shamir.t_Polynomial) (n: nat) : prop =
 // Lemma 1: lagrange_interpolate_at_zero is correct
 //
 // STATUS: ADMITTED (universally quantified -- cannot close with fuel)
+// ENSURES: REAL (not True) -- states interpolation result == poly_constant_term
+//
 // BLOCKER: This lemma is universally quantified over ALL polynomials and
 //   ALL valid share sets. Even restricting to Seq.length shares <= 5, the
 //   proof must show Lagrange interpolation equals the constant term for
@@ -86,10 +88,21 @@ let poly_degree_lt (poly: Golden_dkg.Shamir.t_Polynomial) (n: nat) : prop =
 //     with 1 remaining algebraic cancellation admit
 //   These demonstrate the technique: fuel-based unrolling + field axiom chains.
 //
+// CASE-DISPATCH APPROACH (attempted but blocked):
+//   For n=2, the proof would chain:
+//     1. lagrange_interpolate_eq_spec (bridge axiom): extracted == spec
+//     2. shamir_2_2_spec_correct: spec returns secret for linear polys
+//   However, shamir_2_2_spec_correct takes SPECIFIC shares (y1=f(1), y2=f(2))
+//   while this lemma takes ARBITRARY shares satisfying the preconditions.
+//   Connecting them requires proving that the given shares match the
+//   evaluations at 1,2,...,n -- which is exactly generate_shares_valid
+//   (itself admitted). So closing this for n=2 requires generate_shares_valid.
+//
 // TO CLOSE: Requires either:
 //   (a) Loop invariants on fold_enumerated_slice (hax doesn't emit them)
 //   (b) Inductive proof over lagrange_interp_spec (recursive spec functions)
-//   (c) Case-split over small n values (done for n=2, n=3 above)
+//   (c) Case-split over small n values (done for n=2, n=3 in spec functions)
+//       + generate_shares_valid to connect extracted shares to spec shares
 // ============================================================================
 
 val lagrange_interpolate_at_zero_correct :
@@ -105,12 +118,27 @@ val lagrange_interpolate_at_zero_correct :
       Golden_dkg.Shamir.lagrange_interpolate_at_zero shares ==
       poly_constant_term poly)
 
-let lagrange_interpolate_at_zero_correct poly shares = admit ()
+let lagrange_interpolate_at_zero_correct poly shares =
+  // The (2,2) proof path for n=2 would be:
+  //   lagrange_interpolate_eq_spec shares;  // extracted == spec
+  //   // Then need: shares == [(1, f(1)), (2, f(2))] for some linear poly
+  //   // This requires generate_shares_valid (admitted) to establish
+  //   // that the shares have the right structure.
+  //   shamir_2_2_spec_correct secret a1;   // spec returns secret
+  //
+  // For n=3: same approach via shamir_3_3_spec_correct.
+  // For n=4,5: would need shamir_4_4 and shamir_5_5 concrete proofs.
+  //
+  // All paths blocked by generate_shares_valid (fold_range reasoning).
+  admit ()
 
 // ============================================================================
 // Lemma 2: generate_shares produces valid evaluations
 //
 // STATUS: ADMITTED (universally quantified -- cannot close with fuel)
+// ENSURES: REAL (not True) -- states shares are valid evaluations with
+//   distinct IDs. This is the strongest possible ensures for this lemma.
+//
 // BLOCKER: Universally quantified over ALL polynomials and ALL n > 0.
 //   Even with n <= 5, the proof requires showing that fold_range 0 n
 //   (which builds shares via push) produces a Vec where:
@@ -127,6 +155,12 @@ let lagrange_interpolate_at_zero_correct poly shares = admit ()
 // F* cannot deduce anything about the accumulated shares vector.
 // Closing this requires either custom fold_range lemmas or hax emitting
 // meaningful loop invariants.
+//
+// CONCRETE EVIDENCE: The (2,2) and (3,3) proofs (shamir_2_2_spec_correct,
+//   shamir_3_3_spec_correct) manually construct the share values using
+//   evaluate_at_one / evaluate_quadratic_poly, bypassing generate_shares.
+//   This demonstrates that the polynomial evaluations are correct; only
+//   the Vec construction proof is missing.
 // ============================================================================
 
 val generate_shares_valid :
@@ -139,7 +173,13 @@ val generate_shares_valid :
       shares_have_distinct_ids (Alloc.Vec.impl_1__as_slice shares) /\
       shares_are_valid_evaluations poly (Alloc.Vec.impl_1__as_slice shares))
 
-let generate_shares_valid poly n = admit ()
+let generate_shares_valid poly n =
+  // To close: need loop invariant for fold_range in generate_shares.
+  // After k iterations, shares has k elements with:
+  //   - shares[i] = (i+1, evaluate(poly, from_u64(i+1))) for i < k
+  //   - all IDs distinct (they are 1..k, trivially distinct)
+  // The invariant is obvious but hax emits (fun _ _ -> true).
+  admit ()
 
 // ============================================================================
 // Lemma 3: Polynomial evaluation via Horner's method is correct
@@ -165,6 +205,9 @@ let polynomial_evaluate_correct poly x y = ()
 // Lemma 4: The complete Shamir correctness chain
 //
 // STATUS: ADMITTED (depends on Lemmas 1 and 2)
+// ENSURES: REAL (not True) -- states the full generate-then-interpolate
+//   roundtrip recovers the polynomial's constant term (the secret).
+//
 // BLOCKER: This chains generate_shares_valid (Lemma 2) with
 //   lagrange_interpolate_at_zero_correct (Lemma 1). Both are admitted.
 //   Once Lemmas 1 and 2 are proved, this follows by composition:
@@ -173,7 +216,12 @@ let polynomial_evaluate_correct poly x y = ()
 //
 // CONCRETE EVIDENCE: The (2,2) and (3,3) cases are proved (or nearly so)
 //   in shamir_2_2_spec_correct and shamir_3_3_spec_correct, demonstrating
-//   the full chain for specific polynomial degrees.
+//   the full chain for specific polynomial degrees. These proofs manually
+//   construct shares (bypassing generate_shares) and show interpolation
+//   recovers the secret using the field axiom framework:
+//     - (2,2): Full algebraic cancellation proved via 11 field axiom steps
+//     - (3,3): Structural parts proved; final cancellation is a linear
+//       arithmetic identity (3a0+3a1+3a2 - 3a0-6a1-12a2 + a0+3a1+9a2 = a0)
 // ============================================================================
 
 val shamir_roundtrip_correct :
@@ -189,7 +237,16 @@ val shamir_roundtrip_correct :
         (Alloc.Vec.impl_1__as_slice all_shares) ==
       poly_constant_term poly)
 
-let shamir_roundtrip_correct poly n = admit ()
+let shamir_roundtrip_correct poly n =
+  // Proof sketch (once Lemmas 1 and 2 are closed):
+  //   generate_shares_valid poly n;
+  //   let shares = Golden_dkg.Shamir.generate_shares poly n in
+  //   let shares_slice = Alloc.Vec.impl_1__as_slice shares in
+  //   // generate_shares_valid gives: valid_evaluations + distinct_ids
+  //   // poly_degree_lt from precondition
+  //   lagrange_interpolate_at_zero_correct poly shares_slice
+  //   // => interpolation == poly_constant_term poly  QED
+  admit ()
 
 // ============================================================================
 // ============================================================================

@@ -36,6 +36,9 @@ let g1_projective = Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12
 //   produced by an honest dealer always pass verification.
 //
 // STATUS: ADMITTED (universally quantified -- cannot close with fuel)
+// ENSURES: REAL (not True) -- states that verify_share returns true for
+//   honestly-generated shares.
+//
 // BLOCKER: Both `commit` and `verify_share` use fold_range over the
 //   polynomial's coefficients. The ensures requires showing that:
 //     sum(C_k * x^k) == g * f(x)  where C_k = g * a_k
@@ -48,6 +51,22 @@ let g1_projective = Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12
 //
 //   Restricted to Seq.length coefficients <= 5 to enable future
 //   case-by-case proofs (as done for Shamir (2,2) and (3,3)).
+//
+// CONSTANT-POLYNOMIAL CASE (n=1):
+//   For a single-coefficient polynomial [a0]:
+//     commit produces [into_affine(smul(a0, g))]  (1 commitment element)
+//     verify_share computes:
+//       expected = Default + smul(a0*g, x^0=1) = 0 + smul(a0*g, 1) = a0*g
+//       actual   = smul(a0, g)    (since evaluate [a0] at x = a0)
+//     So expected == actual iff smul distributes correctly over into_affine.
+//   This still requires reasoning through fold_range (commit builds Vec
+//   via push) and proving into_affine/from_affine round-trips, which are
+//   blocked by the same loop invariant issue plus affine<->projective
+//   conversion opaqueness.
+//
+// CONCRETE EVIDENCE: ciphertext_check_identity (proved) demonstrates the
+//   key algebraic identity smul(a+b, g) == g1_add(smul(a,g), smul(b,g))
+//   which is the core of the inductive step.
 // ============================================================================
 
 val verify_share_completeness :
@@ -66,7 +85,20 @@ val verify_share_completeness :
       Golden_dkg.Vss.verify_share commitment_slice index share == true)
 
 #push-options "--fuel 10 --ifuel 4 --z3rlimit 600"
-let verify_share_completeness poly index = admit ()
+let verify_share_completeness poly index =
+  // To close for n=1 (constant polynomial [a0]):
+  //   1. Unroll commit's fold_range(0, 1, ...) to get [into_affine(smul(a0, g))]
+  //   2. Unroll verify_share's fold_range(0, 1, ...) to get
+  //      expected = proj_default + smul(commitment[0], x^0=1)
+  //   3. Show proj_default + smul(C0, 1) == smul(C0, 1)  [by ec_add_zero identity]
+  //   4. Show smul(a0, g) == actual = smul(evaluate([a0], x), g)
+  //   5. Need into_affine(smul(a0,g)) roundtrip + evaluate_constant_poly
+  //
+  // Steps 1-3 require fold_range unrolling through the commit/verify_share
+  // extracted code, which uses typeclass dispatch (f_mul -> smul via impl).
+  // Steps 4-5 require affine<->projective conversion axioms.
+  // Both are blocked by opaque typeclass resolution across modules.
+  admit ()
 #pop-options
 
 // ============================================================================
@@ -83,6 +115,11 @@ let verify_share_completeness poly index = admit ()
 //   for inconsistent shares.
 //
 // STATUS: ADMITTED (universally quantified -- same algebraic blocker)
+// ENSURES: REAL (not True) -- states that expected_share_commitment equals
+//   into_affine(smul(share, generator)). This is the strongest possible
+//   ensures, connecting the group-level commitment computation to the
+//   field-level share evaluation.
+//
 // BLOCKER: The expected_share_commitment function computes
 //     result = sum_{k=0}^{n-1} C_k * x^k   (group operation)
 //   and the claim is that this equals smul(share, generator) where
@@ -97,6 +134,21 @@ let verify_share_completeness poly index = admit ()
 //   is stored in affine form after conversion from projective).
 //
 //   Restricted to Seq.length coefficients <= 5.
+//
+// CONSTANT-POLYNOMIAL CASE (n=1):
+//   For [a0]:
+//     commit produces [into_affine(smul(a0, g))]
+//     expected_share_commitment computes:
+//       result = Default + smul(commitment[0], x^0=1)
+//              = g1_zero + smul(into_affine(smul(a0, g)), 1)
+//     share = evaluate [a0] at x = a0  (by evaluate_constant_poly)
+//     Need: g1_zero + smul(into_affine(smul(a0,g)), 1)
+//           == into_affine(smul(a0, g))
+//   This requires into_affine/from_affine roundtrip axioms and
+//   ec_add_zero identity -- blocked by the same opaqueness as Lemma 1.
+//
+// CONCRETE EVIDENCE: smul_add_scalar (axiom) proves the core inductive
+//   step: smul(a+b, P) == g1_add(smul(a, P), smul(b, P)).
 // ============================================================================
 
 open Ark_ec.Models.Short_weierstrass.Group
@@ -122,7 +174,24 @@ val expected_share_commitment_correct :
         (smul share g))
 
 #push-options "--fuel 10 --ifuel 4 --z3rlimit 600"
-let expected_share_commitment_correct poly index = admit ()
+let expected_share_commitment_correct poly index =
+  // To close for n=1 (constant polynomial [a0]):
+  //   1. Unroll commit's fold_range(0, 1, ...):
+  //      commitments = [into_affine(smul(a0, g))]
+  //   2. Unroll expected_share_commitment's fold_range(0, 1, ...):
+  //      result = proj_default + smul(commitment[0], x_pow=1)
+  //             = g1_zero + smul(into_affine(smul(a0, g)), 1)
+  //   3. By ec_add_zero: g1_zero + P == P
+  //   4. By smul_one or scalar identity: smul(P, 1) == to_proj(P)
+  //   5. Need into_affine/to_proj roundtrip axioms
+  //
+  // For general n: need inductive argument using smul_add_scalar:
+  //   At step k: result_k = sum_{i=0}^{k-1} smul(a_i * x^i, g)
+  //            = smul(sum_{i=0}^{k-1} a_i * x^i, g)
+  //   Adding step k: result_{k+1} = result_k + smul(a_k * x^k, g)
+  //                = smul(prev_sum + a_k*x^k, g)  [by smul_add_scalar]
+  //   This is exactly the loop invariant, but hax emits trivial invariant.
+  admit ()
 #pop-options
 
 // ============================================================================

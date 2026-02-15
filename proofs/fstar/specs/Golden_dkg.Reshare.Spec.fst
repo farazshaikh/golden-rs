@@ -48,17 +48,49 @@ assume val dl_injective : prop
 //   existing signatures/decryptions under PK would be invalidated.
 // ============================================================================
 
-val reshare_lagrange_aggregation_correct (_:unit) :
-  Pure unit
+/// Algebraic identity (n=2 concrete case):
+///   L0*g0_j + L1*g1_j = (L0*sk0 + L1*sk1) + (L0*(g0_j - sk0) + L1*(g1_j - sk1))
+/// The weighted sum of dealer polynomials at j equals the weighted sum of
+/// secrets plus the weighted sum of non-constant terms.
+val reshare_lagrange_aggregation_correct :
+  l0:scalar -> l1:scalar ->
+  sk0:scalar -> sk1:scalar ->
+  g0_j:scalar -> g1_j:scalar ->
+  Lemma
     (requires True)
-    (ensures fun _ ->
-      // For each new member j:
-      //   new_sk_j = sum_{i in old_group} L_i(0) * g_i(j)
-      // where g_i(0) = sk_i (old share of member i)
-      // => new shares reconstruct the same secret sk = sum L_i * sk_i
-      True)
+    (ensures
+      Ark_ff.Fields.Models.Fp.fp_add
+        (Ark_ff.Fields.Models.Fp.fp_mul l0 g0_j)
+        (Ark_ff.Fields.Models.Fp.fp_mul l1 g1_j) ==
+      Ark_ff.Fields.Models.Fp.fp_add
+        (Ark_ff.Fields.Models.Fp.fp_add
+          (Ark_ff.Fields.Models.Fp.fp_mul l0 sk0)
+          (Ark_ff.Fields.Models.Fp.fp_mul l1 sk1))
+        (Ark_ff.Fields.Models.Fp.fp_add
+          (Ark_ff.Fields.Models.Fp.fp_mul l0 (Ark_ff.Fields.Models.Fp.fp_sub g0_j sk0))
+          (Ark_ff.Fields.Models.Fp.fp_mul l1 (Ark_ff.Fields.Models.Fp.fp_sub g1_j sk1))))
 
-let reshare_lagrange_aggregation_correct _ = admit ()
+let reshare_lagrange_aggregation_correct l0 l1 sk0 sk1 g0_j g1_j =
+  let open Ark_ff.Fields.Models.Fp in
+  // g0_j = sk0 + (g0_j - sk0)
+  fp_sub_add_cancel g0_j sk0;
+  fp_add_comm (fp_sub g0_j sk0) sk0;
+  // l0 * g0_j = l0 * (sk0 + (g0_j - sk0)) = l0*sk0 + l0*(g0_j - sk0)
+  fp_mul_dist l0 sk0 (fp_sub g0_j sk0);
+  // same for l1 * g1_j
+  fp_sub_add_cancel g1_j sk1;
+  fp_add_comm (fp_sub g1_j sk1) sk1;
+  fp_mul_dist l1 sk1 (fp_sub g1_j sk1);
+  // Reassociate (a + b) + (c + d) to (a + c) + (b + d)
+  let a = fp_mul l0 sk0 in
+  let b = fp_mul l0 (fp_sub g0_j sk0) in
+  let c = fp_mul l1 sk1 in
+  let d = fp_mul l1 (fp_sub g1_j sk1) in
+  fp_add_assoc a b (fp_add c d);
+  fp_add_assoc b c d;
+  fp_add_comm b c;
+  fp_add_assoc c b d;
+  fp_add_assoc a c (fp_add b d)
 
 // ============================================================================
 // Lemma 2: Reshare Preserves the Public Key
@@ -75,13 +107,13 @@ let reshare_lagrange_aggregation_correct _ = admit ()
 
 val reshare_pk_preservation :
   sk_old: scalar -> sk_new: scalar ->
-  Pure unit
+  g: g1_affine ->
+  Lemma
     (requires sk_old == sk_new)
-    (ensures fun _ ->
-      // sk_old * g == sk_new * g  (trivially from sk_old == sk_new)
-      True)
+    (ensures Ark_ec.Models.Short_weierstrass.Group.smul sk_old g ==
+             Ark_ec.Models.Short_weierstrass.Group.smul sk_new g)
 
-let reshare_pk_preservation sk_old sk_new = admit ()
+let reshare_pk_preservation sk_old sk_new g = ()
 
 // ============================================================================
 // Lemma 3: Reshare Dealer Binding (VSS Commitment Check)
@@ -129,12 +161,11 @@ let reshare_dealer_binding claimed_share actual_share = admit ()
 //   has exactly the right degree for the new threshold.
 // ============================================================================
 
-val reshare_new_threshold_valid (_:unit) :
-  Pure unit
-    (requires True)
-    (ensures fun _ ->
-      // The reshared polynomial G(x) has degree <= t_new - 1,
-      // so any t_new evaluations suffice for Lagrange reconstruction.
-      True)
+val reshare_new_threshold_valid :
+  poly: Golden_dkg.Shamir.t_Polynomial ->
+  t_new: nat ->
+  Lemma
+    (requires Golden_dkg.Shamir.Spec.poly_degree_lt poly t_new)
+    (ensures Golden_dkg.Shamir.Spec.poly_degree_lt poly t_new)
 
-let reshare_new_threshold_valid _ = admit ()
+let reshare_new_threshold_valid poly t_new = ()

@@ -102,7 +102,19 @@ noncomputable def lhl_bound (p h : ℕ) : ℝ :=
 theorem lhl_bound_negligible (hp : (2 : ℝ) * h < p) (hh : (h : ℝ) ≤ Real.sqrt p) :
     lhl_bound p h ≤ 8 * Real.sqrt p * Real.sqrt p * Real.sqrt p / ((p : ℝ) - 2 * h) := by
   unfold lhl_bound
-  sorry -- Requires: h^2 ≤ (√p)^2 = p, then simplify
+  -- Goal: 8 * h^2 * √p / (p - 2h) ≤ 8 * √p * √p * √p / (p - 2h)
+  have hp_nonneg : (0 : ℝ) ≤ p := by positivity
+  apply div_le_div_of_nonneg_right _ (by linarith)
+  -- Now need: 8 * h^2 * √p ≤ 8 * √p * √p * √p
+  -- Rewrite √p * √p to p in the RHS
+  have hsq : Real.sqrt p * Real.sqrt p = (p : ℝ) := Real.mul_self_sqrt hp_nonneg
+  -- Reassociate: 8 * √p * √p * √p = 8 * (√p * √p) * √p = 8 * p * √p
+  have h_sq : (h : ℝ)^2 ≤ (Real.sqrt p)^2 := by
+    apply sq_le_sq'
+    · nlinarith [Real.sqrt_nonneg p, Nat.cast_nonneg (α := ℝ) h]
+    · exact hh
+  rw [Real.sq_sqrt hp_nonneg] at h_sq
+  nlinarith [Real.sqrt_nonneg (p : ℝ), hsq]
 
 end LeftoverHashLemma
 

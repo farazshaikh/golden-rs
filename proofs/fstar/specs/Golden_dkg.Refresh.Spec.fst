@@ -27,7 +27,11 @@ let g1_affine = Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.C
 // ============================================================================
 
 /// The polynomial has constant term equal to zero (zero-sharing).
-assume val is_zero_sharing : Golden_dkg.Shamir.t_Polynomial -> prop
+/// Made concrete: coefficients[0] == fp_from_u64(0).
+let is_zero_sharing (poly: Golden_dkg.Shamir.t_Polynomial) : prop =
+  let s = Alloc.Vec.Vec?._0 poly.Golden_dkg.Shamir.f_coefficients in
+  Seq.length s > 0 /\
+  Seq.index s 0 == Ark_ff.Fields.Models.Fp.fp_from_u64 (mk_u64 0)
 
 /// The Lagrange-weighted sum of deltas is zero.
 assume val zero_sharing_sum_vanishes :
@@ -49,6 +53,23 @@ assume val secret_preserved : scalar -> scalar -> prop
 //   SECRET DRIFT -- if zero-sharings don't vanish, the aggregated
 //   delta at the secret level would be nonzero, changing sk to sk + delta.
 //   The shared public key PK = g^sk would no longer match the shares.
+//
+// STATUS: ADMITTED (Category B -- ensures references extracted code)
+// ENSURES: REAL (not True) -- states that interpolation returns fp_from_u64(0)
+//
+// This is a specialization of shamir_roundtrip_correct to secret=0:
+//   poly_constant_term poly == fp_from_u64(0)  (by is_zero_sharing)
+//   => lagrange_interpolate_at_zero(generate_shares(poly, n)) == fp_from_u64(0)
+//
+// BLOCKER: Depends on shamir_roundtrip_correct (itself admitted), which
+//   requires reasoning through both generate_shares (fold_range with push)
+//   and lagrange_interpolate_at_zero (double-nested fold_enumerated_slice).
+//   The (2,2) and (3,3) concrete cases in Shamir.Spec demonstrate the
+//   algebraic technique; the general case needs loop invariants.
+//
+// CONCRETE EVIDENCE: shamir_2_2_spec_correct proves the full roundtrip
+//   for linear polynomials. When secret=0 (zero-sharing), this gives:
+//   lagrange_interp_spec [(1, a1), (2, 2*a1)] == 0.
 // ============================================================================
 
 val zero_sharing_vanishes :
@@ -57,13 +78,20 @@ val zero_sharing_vanishes :
   Pure unit
     (requires is_zero_sharing poly /\ n >. mk_u32 0)
     (ensures fun _ ->
-      // Lagrange interpolation of zero-sharing evaluations at 0 gives 0
+      // Lagrange interpolation of zero-sharing evaluations at 0 gives 0.
+      // This ensures is REAL: it states the interpolation result equals
+      // fp_from_u64(0), which is the concrete field zero.
       let shares = Golden_dkg.Shamir.generate_shares poly n in
       Golden_dkg.Shamir.lagrange_interpolate_at_zero
         (Alloc.Vec.impl_1__as_slice shares) ==
-      Ark_ff.Fields.f_ZERO #FStar.Tactics.Typeclasses.solve)
+      Ark_ff.Fields.Models.Fp.fp_from_u64 (mk_u64 0))
 
-let zero_sharing_vanishes poly n = admit ()
+let zero_sharing_vanishes poly n =
+  // Proof sketch (blocked by shamir_roundtrip_correct):
+  //   1. is_zero_sharing poly => poly_constant_term poly == fp_from_u64(0)
+  //   2. shamir_roundtrip_correct poly n => interpolation == poly_constant_term poly
+  //   3. Transitivity: interpolation == fp_from_u64(0)
+  admit ()
 
 // ============================================================================
 // Lemma 2: Refresh Preserves the Secret
@@ -81,16 +109,41 @@ let zero_sharing_vanishes poly n = admit ()
 //   This is the #1 most dangerous failure mode in the entire protocol.
 // ============================================================================
 
-val refresh_preserves_secret (_:unit) :
-  Pure unit
-    (requires True)
-    (ensures fun _ ->
-      // For any set of shares {sk_i} and zero-sharing deltas {delta_i},
-      // sum L_i * (sk_i + delta_i) = sum L_i * sk_i
-      // (stated abstractly -- the algebraic identity holds over Fr)
-      True)
+/// Refresh preserves the secret (n=2 concrete case):
+///   sum L_i * (sk_i + delta_i) = sum L_i * sk_i
+///   when sum L_i * delta_i = 0 (zero-sharing condition).
+val refresh_preserves_secret :
+  l0:scalar -> l1:scalar ->
+  sk0:scalar -> sk1:scalar ->
+  delta0:scalar -> delta1:scalar ->
+  Lemma
+    (requires
+      Ark_ff.Fields.Models.Fp.fp_add
+        (Ark_ff.Fields.Models.Fp.fp_mul l0 delta0)
+        (Ark_ff.Fields.Models.Fp.fp_mul l1 delta1) ==
+      Ark_ff.Fields.Models.Fp.fp_from_u64 (mk_u64 0))
+    (ensures
+      Ark_ff.Fields.Models.Fp.fp_add
+        (Ark_ff.Fields.Models.Fp.fp_mul l0 (Ark_ff.Fields.Models.Fp.fp_add sk0 delta0))
+        (Ark_ff.Fields.Models.Fp.fp_mul l1 (Ark_ff.Fields.Models.Fp.fp_add sk1 delta1)) ==
+      Ark_ff.Fields.Models.Fp.fp_add
+        (Ark_ff.Fields.Models.Fp.fp_mul l0 sk0)
+        (Ark_ff.Fields.Models.Fp.fp_mul l1 sk1))
 
-let refresh_preserves_secret _ = admit ()
+let refresh_preserves_secret l0 l1 sk0 sk1 delta0 delta1 =
+  let open Ark_ff.Fields.Models.Fp in
+  fp_mul_dist l0 sk0 delta0;
+  fp_mul_dist l1 sk1 delta1;
+  let a = fp_mul l0 sk0 in
+  let b = fp_mul l0 delta0 in
+  let c = fp_mul l1 sk1 in
+  let d = fp_mul l1 delta1 in
+  fp_add_assoc a b (fp_add c d);
+  fp_add_assoc b c d;
+  fp_add_comm b c;
+  fp_add_assoc c b d;
+  fp_add_assoc a c (fp_add b d);
+  fp_add_zero (fp_add a c)
 
 // ============================================================================
 // Lemma 3: Refresh Does Not Change the Public Key
@@ -105,14 +158,27 @@ let refresh_preserves_secret _ = admit ()
 //   produced by the refreshed key shares.
 // ============================================================================
 
-val refresh_pk_unchanged (_:unit) :
-  Pure unit
-    (requires True)
-    (ensures fun _ ->
-      // sum(omega_j * g) = 0 when all omega_j are zero-sharing constants
-      True)
+val refresh_pk_unchanged :
+  omega0: scalar -> omega1: scalar ->
+  g: Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config ->
+  Lemma
+    (requires
+      omega0 == Ark_ff.Fields.Models.Fp.fp_from_u64 (mk_u64 0) /\
+      omega1 == Ark_ff.Fields.Models.Fp.fp_from_u64 (mk_u64 0))
+    (ensures
+      Ark_ec.Models.Short_weierstrass.Group.g1_add
+        (Ark_ec.Models.Short_weierstrass.Group.smul omega0 g)
+        (Ark_ec.Models.Short_weierstrass.Group.smul omega1 g) ==
+      Ark_ec.Models.Short_weierstrass.Group.g1_zero)
 
-let refresh_pk_unchanged _ = admit ()
+let refresh_pk_unchanged omega0 omega1 g =
+  // omega0 = 0, so smul(0, g) = g1_zero by smul_zero
+  Ark_ec.Models.Short_weierstrass.Group.smul_zero g;
+  // omega1 = 0, so smul(0, g) = g1_zero by smul_zero
+  Ark_ec.Models.Short_weierstrass.Group.smul_zero g;
+  // g1_zero + g1_zero = g1_zero by ec_add_zero_r
+  Ark_ec.Models.Short_weierstrass.Group.ec_add_zero_r
+    Ark_ec.Models.Short_weierstrass.Group.g1_zero
 
 // ============================================================================
 // Lemma 4: Refresh Actually Changes the Shares

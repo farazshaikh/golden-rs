@@ -27,6 +27,7 @@ import Mathlib.Algebra.Field.Defs
 import Mathlib.Algebra.Module.Defs
 import Mathlib.Algebra.Group.Basic
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Algebra.BigOperators.Group.List.Basic
 
 /-!
 ## UC Framework (Lightweight)
@@ -92,6 +93,22 @@ section SimulatorConstruction
 variable {F : Type*} [Field F]
 variable {G : Type*} [AddCommGroup G] [Module F G]
 
+/-- Scalar multiplication distributes over list sums:
+    `sum(omega_i • g) = (sum omega_i) • g`.
+    This is the homomorphism property of `(· • g) : F →+ G`. -/
+private lemma list_sum_map_smul (g : G) (omegas : List F) :
+    (omegas.map (· • g)).sum = omegas.sum • g := by
+  induction omegas with
+  | nil => simp [List.map_nil, List.sum_nil, zero_smul]
+  | cons a rest ih =>
+    simp only [List.map_cons, List.sum_cons]
+    rw [ih, add_smul]
+
+/-- `List.foldl (· + ·) 0` equals `List.sum` for any `AddCommMonoid`. -/
+private lemma foldl_add_eq_sum {α : Type*} [AddCommMonoid α] (l : List α) :
+    l.foldl (· + ·) 0 = l.sum :=
+  List.sum_eq_foldl.symm
+
 /-- **Simulator's VSS commitment programming.**
     Paper: Appendix H (Simulator construction), Section 6 (Theorem 3 proof sketch)
 
@@ -118,7 +135,7 @@ theorem simulator_pk_programming
     (corrupt_omegas : List F)
     -- Honest commitments: A_{k,0} = omega_k • g
     (honest_commitments : List G)
-    (h_honest : honest_commitments = honest_omegas.map (· • g))
+    (_h_honest : honest_commitments = honest_omegas.map (· • g))
     -- Simulator programs: A_{tau,0} = Y - sum(honest A_{k,0})
     (A_tau_0 : G)
     (h_tau : A_tau_0 = Y - honest_commitments.foldl (· + ·) 0)
@@ -131,11 +148,15 @@ theorem simulator_pk_programming
     -- The resulting PK equals Y + delta • g
     A_tau_0 + honest_commitments.foldl (· + ·) 0 + corrupt_commitments.foldl (· + ·) 0
       = Y + delta • g := by
+  -- Rewrite all foldl to sum for easier algebraic manipulation
+  rw [foldl_add_eq_sum] at h_tau ⊢
+  rw [foldl_add_eq_sum] at h_delta ⊢
+  -- Substitute simulator's programming of A_{tau,0}
   rw [h_tau]
-  -- A_tau_0 + sum(honest) = Y - sum(honest) + sum(honest) = Y
-  simp [sub_add_cancel]
-  -- Remains: corrupt_commitments.foldl = delta • g
-  sorry -- Requires: foldl (+) (map (• g)) = (foldl (+)) • g (homomorphism of scalar mul)
+  -- Y - sum(honest) + sum(honest) cancels
+  simp only [sub_add_cancel, add_right_inj]
+  -- Remains: corrupt_commitments.sum = delta • g
+  rw [h_corrupt, h_delta, list_sum_map_smul]
 
 /-- **Simulated encryptions are indistinguishable.**
     Paper: Section 6, Theorem 3 proof -- Game 1 -> Game 2 transition
@@ -219,9 +240,8 @@ A complete formalization would require:
 1. **Hybrid argument lemma**: Composing n instances of game-based indistinguishability.
    Framework: VCV-io's `OracleComp` monad with `simulateQ` for oracle simulation.
 
-2. **Scalar multiplication homomorphism over lists**: Showing that
-   `list.foldl (+) (list.map (• g)) = (list.foldl (+)) • g`.
-   Framework: Mathlib's `AddMonoidHom` applied to `smul`.
+2. ~~**Scalar multiplication homomorphism over lists**~~: ✓ DONE.
+   Proved via `list_sum_map_smul` using `add_smul` induction.
 
 3. **Probabilistic indistinguishability**: Formalizing that
    `r + x` is uniform when `r` is uniform, independent of `x`.
