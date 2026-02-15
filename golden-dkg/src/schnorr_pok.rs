@@ -112,6 +112,10 @@ pub fn verify(pk: G1Affine, proof: &SchnorrPoK) -> bool {
 /// Uses SHA-256 with domain separator `"golden-schnorr-pok"` to hash the
 /// generator, public key, and commitment into a challenge scalar. This
 /// converts the interactive Sigma protocol into a non-interactive proof.
+///
+/// Excluded from hax extraction because serialize_compressed uses &mut.
+/// In F*, this is modeled as an opaque Random Oracle mapping.
+#[hax_lib::exclude]
 fn compute_challenge(pk: G1Affine, commitment: G1Affine) -> Scalar {
     let mut hasher = Sha256::new();
     hasher.update(b"golden-schnorr-pok");

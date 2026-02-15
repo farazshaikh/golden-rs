@@ -21,6 +21,7 @@ borsh = { workspace = true, optional = true }
 
 zeroize = { workspace = true }
 tracing = { workspace = true }
+hax-lib = { git = "https://github.com/hacspec/hax", rev = "021f916" }
 
 [features]
 default = []

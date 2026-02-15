@@ -16,28 +16,9 @@ let _ =
   let open Ark_ff.Biginteger in
   let open Ark_ff.Fields.Models.Fp in
   let open Ark_ff.Fields.Models.Fp.Montgomery_backend in
-  let open Ark_ff.Fields.Prime in
-  let open Ark_serialize in
-  let open Ark_serialize.Error in
   let open Ark_std.Rand_helper in
-  let open Block_buffer in
-  let open Digest in
-  let open Digest.Core_api in
-  let open Digest.Core_api.Ct_variable in
-  let open Digest.Core_api.Wrapper in
-  let open Digest.Digest in
-  let open Generic_array in
   let open Rand.Distributions.Distribution in
   let open Rand.Rng in
-  let open Sha2.Core_api in
-  let open Std.Io in
-  let open Std.Io.Impls in
-  let open Typenum in
-  let open Typenum.Bit in
-  let open Typenum.Marker_traits in
-  let open Typenum.Private in
-  let open Typenum.Type_operators in
-  let open Typenum.Uint in
   ()
 
 /// A Schnorr proof of knowledge of discrete log: proves knowledge of `sk` such
@@ -66,233 +47,15 @@ val impl_1': Core_models.Fmt.t_Debug t_SchnorrPoK
 unfold
 let impl_1 = impl_1'
 
-/// Compute the Fiat-Shamir challenge: `c = H(g || pk || R) mod r`.
-/// Uses SHA-256 with domain separator `"golden-schnorr-pok"` to hash the
-/// generator, public key, and commitment into a challenge scalar. This
-/// converts the interactive Sigma protocol into a non-interactive proof.
-let compute_challenge
-      (pk commitment:
-          Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
+/// Fiat-Shamir challenge: c = H(g || pk || R) mod r.
+/// Excluded from hax extraction (uses serialize_compressed with &mut).
+/// Modeled as an opaque Random Oracle mapping in F*.
+assume val compute_challenge
+      (pk: Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
+      (commitment: Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
     : Ark_ff.Fields.Models.Fp.t_Fp
       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig
-          (mk_usize 4)) (mk_usize 4) =
-  let hasher:Digest.Core_api.Wrapper.t_CoreWrapper
-  (Digest.Core_api.Ct_variable.t_CtVariableCoreWrapper Sha2.Core_api.t_Sha256VarCore
-      (Typenum.Uint.t_UInt
-          (Typenum.Uint.t_UInt
-              (Typenum.Uint.t_UInt
-                  (Typenum.Uint.t_UInt
-                      (Typenum.Uint.t_UInt
-                          (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                          Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-          Typenum.Bit.t_B0)
-      Sha2.t_OidSha256) =
-    Digest.Digest.f_new #(Digest.Core_api.Wrapper.t_CoreWrapper
-        (Digest.Core_api.Ct_variable.t_CtVariableCoreWrapper Sha2.Core_api.t_Sha256VarCore
-            (Typenum.Uint.t_UInt
-                (Typenum.Uint.t_UInt
-                    (Typenum.Uint.t_UInt
-                        (Typenum.Uint.t_UInt
-                            (Typenum.Uint.t_UInt
-                                (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                                Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-                    Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-            Sha2.t_OidSha256))
-      #FStar.Tactics.Typeclasses.solve
-      ()
-  in
-  let hasher:Digest.Core_api.Wrapper.t_CoreWrapper
-  (Digest.Core_api.Ct_variable.t_CtVariableCoreWrapper Sha2.Core_api.t_Sha256VarCore
-      (Typenum.Uint.t_UInt
-          (Typenum.Uint.t_UInt
-              (Typenum.Uint.t_UInt
-                  (Typenum.Uint.t_UInt
-                      (Typenum.Uint.t_UInt
-                          (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                          Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-          Typenum.Bit.t_B0)
-      Sha2.t_OidSha256) =
-    Digest.Digest.f_update #(Digest.Core_api.Wrapper.t_CoreWrapper
-        (Digest.Core_api.Ct_variable.t_CtVariableCoreWrapper Sha2.Core_api.t_Sha256VarCore
-            (Typenum.Uint.t_UInt
-                (Typenum.Uint.t_UInt
-                    (Typenum.Uint.t_UInt
-                        (Typenum.Uint.t_UInt
-                            (Typenum.Uint.t_UInt
-                                (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                                Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-                    Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-            Sha2.t_OidSha256))
-      #FStar.Tactics.Typeclasses.solve
-      #(t_Array u8 (mk_usize 18))
-      hasher
-      (let list =
-          [
-            mk_u8 103; mk_u8 111; mk_u8 108; mk_u8 100; mk_u8 101; mk_u8 110; mk_u8 45; mk_u8 115;
-            mk_u8 99; mk_u8 104; mk_u8 110; mk_u8 111; mk_u8 114; mk_u8 114; mk_u8 45; mk_u8 112;
-            mk_u8 111; mk_u8 107
-          ]
-        in
-        FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 18);
-        Rust_primitives.Hax.array_of_list 18 list)
-  in
-  let buf:Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global = Alloc.Vec.impl__new #u8 () in
-  let _:Prims.unit =
-    Core_models.Result.impl__expect #Prims.unit
-      #Ark_serialize.Error.t_SerializationError
-      (Rust_primitives.Hax.failure "The mutation of this &mut is not allowed here.\n\nThis is discussed in issue https://github.com/hacspec/hax/issues/420.\nPlease upvote or comment this issue if you see this error message.\nNote: the error was labeled with context `DirectAndMut`.\n"
-          "ark_serialize::f_serialize_compressed::<\n &mut alloc::vec::t_Vec<int, alloc::alloc::t_Global>,\n >(&(ark_ec::f_generator(Tuple0)), &mut (buf))"
-
-        <:
-        Core_models.Result.t_Result Prims.unit Ark_serialize.Error.t_SerializationError)
-      "serialize failed"
-  in
-  let hasher:Digest.Core_api.Wrapper.t_CoreWrapper
-  (Digest.Core_api.Ct_variable.t_CtVariableCoreWrapper Sha2.Core_api.t_Sha256VarCore
-      (Typenum.Uint.t_UInt
-          (Typenum.Uint.t_UInt
-              (Typenum.Uint.t_UInt
-                  (Typenum.Uint.t_UInt
-                      (Typenum.Uint.t_UInt
-                          (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                          Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-          Typenum.Bit.t_B0)
-      Sha2.t_OidSha256) =
-    Digest.Digest.f_update #(Digest.Core_api.Wrapper.t_CoreWrapper
-        (Digest.Core_api.Ct_variable.t_CtVariableCoreWrapper Sha2.Core_api.t_Sha256VarCore
-            (Typenum.Uint.t_UInt
-                (Typenum.Uint.t_UInt
-                    (Typenum.Uint.t_UInt
-                        (Typenum.Uint.t_UInt
-                            (Typenum.Uint.t_UInt
-                                (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                                Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-                    Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-            Sha2.t_OidSha256))
-      #FStar.Tactics.Typeclasses.solve
-      #(Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global)
-      hasher
-      buf
-  in
-  let buf:Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global =
-    Alloc.Vec.impl_1__clear #u8 #Alloc.Alloc.t_Global buf
-  in
-  let _:Prims.unit =
-    Core_models.Result.impl__expect #Prims.unit
-      #Ark_serialize.Error.t_SerializationError
-      (Rust_primitives.Hax.failure "The mutation of this &mut is not allowed here.\n\nThis is discussed in issue https://github.com/hacspec/hax/issues/420.\nPlease upvote or comment this issue if you see this error message.\nNote: the error was labeled with context `DirectAndMut`.\n"
-          "ark_serialize::f_serialize_compressed::<\n &mut alloc::vec::t_Vec<int, alloc::alloc::t_Global>,\n >(&(pk), &mut (buf))"
-
-        <:
-        Core_models.Result.t_Result Prims.unit Ark_serialize.Error.t_SerializationError)
-      "serialize failed"
-  in
-  let hasher:Digest.Core_api.Wrapper.t_CoreWrapper
-  (Digest.Core_api.Ct_variable.t_CtVariableCoreWrapper Sha2.Core_api.t_Sha256VarCore
-      (Typenum.Uint.t_UInt
-          (Typenum.Uint.t_UInt
-              (Typenum.Uint.t_UInt
-                  (Typenum.Uint.t_UInt
-                      (Typenum.Uint.t_UInt
-                          (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                          Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-          Typenum.Bit.t_B0)
-      Sha2.t_OidSha256) =
-    Digest.Digest.f_update #(Digest.Core_api.Wrapper.t_CoreWrapper
-        (Digest.Core_api.Ct_variable.t_CtVariableCoreWrapper Sha2.Core_api.t_Sha256VarCore
-            (Typenum.Uint.t_UInt
-                (Typenum.Uint.t_UInt
-                    (Typenum.Uint.t_UInt
-                        (Typenum.Uint.t_UInt
-                            (Typenum.Uint.t_UInt
-                                (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                                Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-                    Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-            Sha2.t_OidSha256))
-      #FStar.Tactics.Typeclasses.solve
-      #(Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global)
-      hasher
-      buf
-  in
-  let buf:Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global =
-    Alloc.Vec.impl_1__clear #u8 #Alloc.Alloc.t_Global buf
-  in
-  let _:Prims.unit =
-    Core_models.Result.impl__expect #Prims.unit
-      #Ark_serialize.Error.t_SerializationError
-      (Rust_primitives.Hax.failure "The mutation of this &mut is not allowed here.\n\nThis is discussed in issue https://github.com/hacspec/hax/issues/420.\nPlease upvote or comment this issue if you see this error message.\nNote: the error was labeled with context `DirectAndMut`.\n"
-          "ark_serialize::f_serialize_compressed::<\n &mut alloc::vec::t_Vec<int, alloc::alloc::t_Global>,\n >(&(commitment), &mut (buf))"
-
-        <:
-        Core_models.Result.t_Result Prims.unit Ark_serialize.Error.t_SerializationError)
-      "serialize failed"
-  in
-  let hasher:Digest.Core_api.Wrapper.t_CoreWrapper
-  (Digest.Core_api.Ct_variable.t_CtVariableCoreWrapper Sha2.Core_api.t_Sha256VarCore
-      (Typenum.Uint.t_UInt
-          (Typenum.Uint.t_UInt
-              (Typenum.Uint.t_UInt
-                  (Typenum.Uint.t_UInt
-                      (Typenum.Uint.t_UInt
-                          (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                          Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-          Typenum.Bit.t_B0)
-      Sha2.t_OidSha256) =
-    Digest.Digest.f_update #(Digest.Core_api.Wrapper.t_CoreWrapper
-        (Digest.Core_api.Ct_variable.t_CtVariableCoreWrapper Sha2.Core_api.t_Sha256VarCore
-            (Typenum.Uint.t_UInt
-                (Typenum.Uint.t_UInt
-                    (Typenum.Uint.t_UInt
-                        (Typenum.Uint.t_UInt
-                            (Typenum.Uint.t_UInt
-                                (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                                Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-                    Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-            Sha2.t_OidSha256))
-      #FStar.Tactics.Typeclasses.solve
-      #(Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global)
-      hasher
-      buf
-  in
-  let hash:Generic_array.t_GenericArray u8
-    (Typenum.Uint.t_UInt
-        (Typenum.Uint.t_UInt
-            (Typenum.Uint.t_UInt
-                (Typenum.Uint.t_UInt
-                    (Typenum.Uint.t_UInt (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                        Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-        Typenum.Bit.t_B0) =
-    Digest.Digest.f_finalize #(Digest.Core_api.Wrapper.t_CoreWrapper
-        (Digest.Core_api.Ct_variable.t_CtVariableCoreWrapper Sha2.Core_api.t_Sha256VarCore
-            (Typenum.Uint.t_UInt
-                (Typenum.Uint.t_UInt
-                    (Typenum.Uint.t_UInt
-                        (Typenum.Uint.t_UInt
-                            (Typenum.Uint.t_UInt
-                                (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                                Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-                    Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-            Sha2.t_OidSha256))
-      #FStar.Tactics.Typeclasses.solve
-      hasher
-  in
-  Ark_ff.Fields.Prime.f_from_le_bytes_mod_order #(Ark_ff.Fields.Models.Fp.t_Fp
-        (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-            Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
-    #FStar.Tactics.Typeclasses.solve
-    (Core_models.Ops.Deref.f_deref #(Generic_array.t_GenericArray u8
-            (Typenum.Uint.t_UInt
-                (Typenum.Uint.t_UInt
-                    (Typenum.Uint.t_UInt
-                        (Typenum.Uint.t_UInt
-                            (Typenum.Uint.t_UInt
-                                (Typenum.Uint.t_UInt Typenum.Uint.t_UTerm Typenum.Bit.t_B1)
-                                Typenum.Bit.t_B0) Typenum.Bit.t_B0) Typenum.Bit.t_B0)
-                    Typenum.Bit.t_B0) Typenum.Bit.t_B0))
-        #FStar.Tactics.Typeclasses.solve
-        hash
-      <:
-      t_Slice u8)
+          (mk_usize 4)) (mk_usize 4)
 
 /// Verify a Schnorr proof of knowledge.
 /// Checks the verification equation: `g^s == R + c * PK`
@@ -363,43 +126,43 @@ let verify
 /// Messages with mismatched session IDs are rejected.
 type t_SessionId = | SessionId : t_Array u8 (mk_usize 32) -> t_SessionId
 
-let impl_5: Core_models.Clone.t_Clone t_SessionId =
+let impl_4: Core_models.Clone.t_Clone t_SessionId =
   { f_clone = (fun x -> x); f_clone_pre = (fun _ -> True); f_clone_post = (fun _ _ -> True) }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume
-val impl_6': Core_models.Marker.t_Copy t_SessionId
+val impl_5': Core_models.Marker.t_Copy t_SessionId
+
+unfold
+let impl_5 = impl_5'
+
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume
+val impl_6': Core_models.Fmt.t_Debug t_SessionId
 
 unfold
 let impl_6 = impl_6'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume
-val impl_7': Core_models.Fmt.t_Debug t_SessionId
+val impl_7': Core_models.Marker.t_StructuralPartialEq t_SessionId
 
 unfold
 let impl_7 = impl_7'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume
-val impl_8': Core_models.Marker.t_StructuralPartialEq t_SessionId
+val impl_8': Core_models.Cmp.t_PartialEq t_SessionId t_SessionId
 
 unfold
 let impl_8 = impl_8'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume
-val impl_9': Core_models.Cmp.t_PartialEq t_SessionId t_SessionId
+val impl_9': Core_models.Cmp.t_Eq t_SessionId
 
 unfold
 let impl_9 = impl_9'
-
-[@@ FStar.Tactics.Typeclasses.tcinstance]
-assume
-val impl_10': Core_models.Cmp.t_Eq t_SessionId
-
-unfold
-let impl_10 = impl_10'
 
 /// Generate a random session ID.
 let impl__random
@@ -568,57 +331,6 @@ let impl_2: Core_models.Ops.Deref.t_Deref t_SecretScalar =
     f_deref = fun (self: t_SecretScalar) -> self._0
   }
 
-[@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_3: Core_models.Ops.Drop.t_Drop t_SecretScalar =
-  {
-    f_drop_pre = (fun (self: t_SecretScalar) -> true);
-    f_drop_post = (fun (self: t_SecretScalar) (out: t_SecretScalar) -> true);
-    f_drop
-    =
-    fun (self: t_SecretScalar) ->
-      let _:Prims.unit =
-        Rust_primitives.Hax.failure "Explicit rejection by a phase in the Hax engine:\na node of kind [Raw_pointer] have been found in the AST\n\nNote: the error was labeled with context `reject_RawOrMutPointer`.\n"
-          "{\n let ptr: raw_pointer!() = { cast(address_of) };\n {\n let len: int = {\n core_models::mem::size_of::<\n ark_ff::fields::models::fp::t_Fp<\n ark_ff::fields::models::fp::montgomery_backend::t_MontBackend<..."
-
-      in
-      self
-  }
-
-/// Helper: serialize an arkworks type to bytes via CanonicalSerialize (compressed).
-let ark_to_bytes
-      (#v_T: Type0)
-      (#[FStar.Tactics.Typeclasses.tcresolve ()] i0: Ark_serialize.t_CanonicalSerialize v_T)
-      (v_val: v_T)
-    : Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global =
-  let buf:Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global = Alloc.Vec.impl__new #u8 () in
-  let _:Prims.unit =
-    Core_models.Result.impl__expect #Prims.unit
-      #Ark_serialize.Error.t_SerializationError
-      (Rust_primitives.Hax.failure "The mutation of this &mut is not allowed here.\n\nThis is discussed in issue https://github.com/hacspec/hax/issues/420.\nPlease upvote or comment this issue if you see this error message.\nNote: the error was labeled with context `DirectAndMut`.\n"
-          "ark_serialize::f_serialize_compressed::<\n &mut alloc::vec::t_Vec<int, alloc::alloc::t_Global>,\n >(&(deref(val)), &mut (buf))"
-
-        <:
-        Core_models.Result.t_Result Prims.unit Ark_serialize.Error.t_SerializationError)
-      "ark serialization failed"
-  in
-  buf
-
-/// Helper: deserialize an arkworks type from bytes via CanonicalDeserialize (compressed).
-let ark_from_bytes
-      (#v_T: Type0)
-      (#[FStar.Tactics.Typeclasses.tcresolve ()] i0: Ark_serialize.t_CanonicalDeserialize v_T)
-      (bytes: t_Slice u8)
-    : v_T =
-  Core_models.Result.impl__expect #v_T
-    #Ark_serialize.Error.t_SerializationError
-    (Ark_serialize.f_deserialize_compressed #v_T
-        #FStar.Tactics.Typeclasses.solve
-        #(t_Slice u8)
-        bytes
-      <:
-      Core_models.Result.t_Result v_T Ark_serialize.Error.t_SerializationError)
-    "ark deserialization failed"
-
 /// A single encrypted share from node i to node j.
 /// Per Round 0 line 7 of Figure 4 in the Golden paper (IACR 2025/1924):
 /// > "sigma_{i,j} = (R_{i,j}, z_{i,j})"
@@ -759,7 +471,7 @@ type t_Participant = {
 /// Samples a random secret key `sk <- Z_p`, computes `pk = g^sk`, and
 /// generates a Schnorr proof of knowledge. The caller should distribute
 /// `pk` and `pok` to all other participants for PKI registration.
-let impl_4__new
+let impl_3__new
       (#iimpl_1039969868_: Type0)
       (#[FStar.Tactics.Typeclasses.tcresolve ()] i0: Rand.Rng.t_Rng iimpl_1039969868_)
       (id: u32)

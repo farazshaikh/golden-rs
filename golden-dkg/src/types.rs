@@ -99,6 +99,7 @@ impl std::ops::Deref for SecretScalar {
     }
 }
 
+#[hax_lib::exclude]
 impl Drop for SecretScalar {
     fn drop(&mut self) {
         // Zero the scalar's internal representation (BigInt<4> = [u64; 4])
@@ -112,6 +113,8 @@ impl Drop for SecretScalar {
 }
 
 /// Helper: serialize an arkworks type to bytes via CanonicalSerialize (compressed).
+/// Excluded from hax extraction because serialize_compressed uses &mut.
+#[hax_lib::exclude]
 fn ark_to_bytes<T: CanonicalSerialize>(val: &T) -> Vec<u8> {
     let mut buf = Vec::new();
     val.serialize_compressed(&mut buf)
@@ -120,6 +123,8 @@ fn ark_to_bytes<T: CanonicalSerialize>(val: &T) -> Vec<u8> {
 }
 
 /// Helper: deserialize an arkworks type from bytes via CanonicalDeserialize (compressed).
+/// Excluded from hax extraction because deserialize_compressed uses &mut.
+#[hax_lib::exclude]
 fn ark_from_bytes<T: CanonicalDeserialize>(bytes: &[u8]) -> T {
     T::deserialize_compressed(bytes).expect("ark deserialization failed")
 }

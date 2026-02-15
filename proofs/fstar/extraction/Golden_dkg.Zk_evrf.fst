@@ -3,6 +3,14 @@ module Golden_dkg.Zk_evrf
 open FStar.Mul
 open Core_models
 
+/// Serialize an ark-spartan NIZK proof to compressed bytes.
+/// Excluded from hax extraction (uses serialize_compressed with &mut).
+assume val serialize_nizk_proof
+      (proof: Libspartan.t_NIZK
+        (Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config))
+    : Core_models.Result.t_Result (Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global)
+        Alloc.String.t_String
+
 let _ =
   (* This module has implicit dependencies, here we make them explicit. *)
   (* The implicit dependencies arise from typeclasses instances. *)
@@ -128,47 +136,13 @@ let prove_evrf
         (Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config) =
           out
         in
-        let proof_bytes:Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global = Alloc.Vec.impl__new #u8 () in
         (match
-            Core_models.Result.impl__map_err #Prims.unit
-              #Ark_serialize.Error.t_SerializationError
-              #Alloc.String.t_String
-              #(Ark_serialize.Error.t_SerializationError -> Alloc.String.t_String)
-              (Rust_primitives.Hax.failure "The mutation of this &mut is not allowed here.\n\nThis is discussed in issue https://github.com/hacspec/hax/issues/420.\nPlease upvote or comment this issue if you see this error message.\nNote: the error was labeled with context `DirectAndMut`.\n"
-                  "ark_serialize::f_serialize_compressed::<\n &mut alloc::vec::t_Vec<int, alloc::alloc::t_Global>,\n >(&(proof), &mut (proof_bytes))"
-
-                <:
-                Core_models.Result.t_Result Prims.unit Ark_serialize.Error.t_SerializationError)
-              (fun e ->
-                  let e:Ark_serialize.Error.t_SerializationError = e in
-                  let args:Ark_serialize.Error.t_SerializationError =
-                    e <: Ark_serialize.Error.t_SerializationError
-                  in
-                  let args:t_Array Core_models.Fmt.Rt.t_Argument (mk_usize 1) =
-                    let list =
-                      [
-                        Core_models.Fmt.Rt.impl__new_display #Ark_serialize.Error.t_SerializationError
-                          args
-                      ]
-                    in
-                    FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
-                    Rust_primitives.Hax.array_of_list 1 list
-                  in
-                  Core_models.Hint.must_use #Alloc.String.t_String
-                    (Alloc.Fmt.format (Core_models.Fmt.Rt.impl_1__new_v1 (mk_usize 1)
-                            (mk_usize 1)
-                            (let list = ["Failed to serialize proof: "] in
-                              FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
-                              Rust_primitives.Hax.array_of_list 1 list)
-                            args
-                          <:
-                          Core_models.Fmt.t_Arguments)
-                      <:
-                      Alloc.String.t_String))
+            serialize_nizk_proof proof
             <:
-            Core_models.Result.t_Result Prims.unit Alloc.String.t_String
+            Core_models.Result.t_Result (Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global)
+              Alloc.String.t_String
           with
-          | Core_models.Result.Result_Ok _ ->
+          | Core_models.Result.Result_Ok proof_bytes ->
             Core_models.Result.Result_Ok
             ({
                 f_proof_bytes = proof_bytes;
@@ -283,47 +257,13 @@ let prove_evrf_batch
         (Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config) =
           out
         in
-        let proof_bytes:Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global = Alloc.Vec.impl__new #u8 () in
         (match
-            Core_models.Result.impl__map_err #Prims.unit
-              #Ark_serialize.Error.t_SerializationError
-              #Alloc.String.t_String
-              #(Ark_serialize.Error.t_SerializationError -> Alloc.String.t_String)
-              (Rust_primitives.Hax.failure "The mutation of this &mut is not allowed here.\n\nThis is discussed in issue https://github.com/hacspec/hax/issues/420.\nPlease upvote or comment this issue if you see this error message.\nNote: the error was labeled with context `DirectAndMut`.\n"
-                  "ark_serialize::f_serialize_compressed::<\n &mut alloc::vec::t_Vec<int, alloc::alloc::t_Global>,\n >(&(proof), &mut (proof_bytes))"
-
-                <:
-                Core_models.Result.t_Result Prims.unit Ark_serialize.Error.t_SerializationError)
-              (fun e ->
-                  let e:Ark_serialize.Error.t_SerializationError = e in
-                  let args:Ark_serialize.Error.t_SerializationError =
-                    e <: Ark_serialize.Error.t_SerializationError
-                  in
-                  let args:t_Array Core_models.Fmt.Rt.t_Argument (mk_usize 1) =
-                    let list =
-                      [
-                        Core_models.Fmt.Rt.impl__new_display #Ark_serialize.Error.t_SerializationError
-                          args
-                      ]
-                    in
-                    FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
-                    Rust_primitives.Hax.array_of_list 1 list
-                  in
-                  Core_models.Hint.must_use #Alloc.String.t_String
-                    (Alloc.Fmt.format (Core_models.Fmt.Rt.impl_1__new_v1 (mk_usize 1)
-                            (mk_usize 1)
-                            (let list = ["Failed to serialize proof: "] in
-                              FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
-                              Rust_primitives.Hax.array_of_list 1 list)
-                            args
-                          <:
-                          Core_models.Fmt.t_Arguments)
-                      <:
-                      Alloc.String.t_String))
+            serialize_nizk_proof proof
             <:
-            Core_models.Result.t_Result Prims.unit Alloc.String.t_String
+            Core_models.Result.t_Result (Alloc.Vec.t_Vec u8 Alloc.Alloc.t_Global)
+              Alloc.String.t_String
           with
-          | Core_models.Result.Result_Ok _ ->
+          | Core_models.Result.Result_Ok proof_bytes ->
             Core_models.Result.Result_Ok
             ({
                 f_proof_bytes = proof_bytes;

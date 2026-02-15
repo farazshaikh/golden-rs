@@ -50,6 +50,17 @@ use self::circuit::{BatchEVRFCircuit, EVRFCircuit};
 use crate::types::NodeId;
 use libspartan::{NIZKGens, NIZK};
 
+/// Serialize an ark-spartan NIZK proof to compressed bytes.
+/// Excluded from hax extraction because serialize_compressed uses &mut.
+#[hax_lib::exclude]
+fn serialize_nizk_proof(proof: &NIZK<G1Projective>) -> Result<Vec<u8>, String> {
+    let mut proof_bytes = Vec::new();
+    proof
+        .serialize_compressed(&mut proof_bytes)
+        .map_err(|e| format!("Failed to serialize proof: {}", e))?;
+    Ok(proof_bytes)
+}
+
 /// An eVRF proof using ark-spartan's NIZK proof system.
 ///
 /// Per Golden paper Section 3.4: "We use Bulletproofs \[15\] to prove R1CS satisfiability."
@@ -153,11 +164,7 @@ pub fn prove_evrf(
         &mut transcript,
     );
 
-    // Serialize the proof
-    let mut proof_bytes = Vec::new();
-    proof
-        .serialize_compressed(&mut proof_bytes)
-        .map_err(|e| format!("Failed to serialize proof: {}", e))?;
+    let proof_bytes = serialize_nizk_proof(&proof)?;
 
     Ok(EVRFProof {
         proof_bytes,
@@ -211,10 +218,7 @@ pub fn prove_evrf_batch(
         &mut transcript,
     );
 
-    let mut proof_bytes = Vec::new();
-    proof
-        .serialize_compressed(&mut proof_bytes)
-        .map_err(|e| format!("Failed to serialize proof: {}", e))?;
+    let proof_bytes = serialize_nizk_proof(&proof)?;
 
     Ok(EVRFProof {
         proof_bytes,
