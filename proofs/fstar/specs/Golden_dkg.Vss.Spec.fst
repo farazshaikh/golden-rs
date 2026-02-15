@@ -24,23 +24,6 @@ let g1_affine = Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.C
 let g1_projective = Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12_381_.Curves.G1.t_Config
 
 // ============================================================================
-// Specification predicates
-// ============================================================================
-
-/// The Feldman commitment C_k = a_k * g for each coefficient a_k.
-assume val commitment_is_feldman :
-  Golden_dkg.Shamir.t_Polynomial ->
-  t_Slice g1_affine -> prop
-
-/// A share value equals the polynomial evaluated at the given index.
-assume val share_equals_eval :
-  Golden_dkg.Shamir.t_Polynomial -> u32 -> scalar -> prop
-
-/// Scalar multiplication: point = scalar * generator.
-assume val is_scalar_mul_generator :
-  scalar -> g1_affine -> prop
-
-// ============================================================================
 // Lemma 1: VSS Completeness -- honest shares always verify
 //
 // Lean theorem: feldman_vss_completeness (VSSCorrectness.lean)
@@ -51,13 +34,29 @@ assume val is_scalar_mul_generator :
 //   FALSE REJECTION -- if verify_share incorrectly rejects honest shares,
 //   the DKG protocol cannot complete. This lemma ensures that shares
 //   produced by an honest dealer always pass verification.
+//
+// STATUS: ADMITTED (universally quantified -- cannot close with fuel)
+// BLOCKER: Both `commit` and `verify_share` use fold_range over the
+//   polynomial's coefficients. The ensures requires showing that:
+//     sum(C_k * x^k) == g * f(x)  where C_k = g * a_k
+//   This is distributivity of scalar multiplication over group addition:
+//     sum(g * a_k * x^k) == g * sum(a_k * x^k)
+//   Even with fuel to unroll fold_range for small n, this is an algebraic
+//   identity over SYMBOLIC field and group elements, not a computational
+//   check. The proof requires EC group axioms (smul_add_scalar) applied
+//   inductively at each loop step -- i.e., a loop invariant.
+//
+//   Restricted to Seq.length coefficients <= 5 to enable future
+//   case-by-case proofs (as done for Shamir (2,2) and (3,3)).
 // ============================================================================
 
 val verify_share_completeness :
   poly: Golden_dkg.Shamir.t_Polynomial ->
   index: u32 ->
   Pure unit
-    (requires index >. mk_u32 0)
+    (requires
+      index >. mk_u32 0 /\
+      Seq.length (Alloc.Vec.Vec?._0 poly.Golden_dkg.Shamir.f_coefficients) <= 5)
     (ensures fun _ ->
       let commitment = Golden_dkg.Vss.commit poly in
       let commitment_slice = Alloc.Vec.impl_1__as_slice commitment in
@@ -66,7 +65,9 @@ val verify_share_completeness :
           (cast (index <: u32) <: u64)) in
       Golden_dkg.Vss.verify_share commitment_slice index share == true)
 
+#push-options "--fuel 10 --ifuel 4 --z3rlimit 600"
 let verify_share_completeness poly index = admit ()
+#pop-options
 
 // ============================================================================
 // Lemma 2: VSS Expected Share Commitment
@@ -80,13 +81,33 @@ let verify_share_completeness poly index = admit ()
 //   the commitment vector and share values is correct. If this fails,
 //   a malicious dealer could produce commitments that pass verification
 //   for inconsistent shares.
+//
+// STATUS: ADMITTED (universally quantified -- same algebraic blocker)
+// BLOCKER: The expected_share_commitment function computes
+//     result = sum_{k=0}^{n-1} C_k * x^k   (group operation)
+//   and the claim is that this equals smul(share, generator) where
+//     share = sum_{k=0}^{n-1} a_k * x^k     (field operation)
+//   With C_k = smul(a_k, generator) (from commit), the identity is:
+//     sum(smul(a_k, g) * x^k) == smul(sum(a_k * x^k), g)
+//   This requires the EC module axiom (smul distributes over group add)
+//   applied at each loop iteration -- a loop invariant, not fuel.
+//
+//   Concrete form: uses smul from the group model instead of abstract
+//   is_scalar_mul_generator. into_affine is still opaque (the commitment
+//   is stored in affine form after conversion from projective).
+//
+//   Restricted to Seq.length coefficients <= 5.
 // ============================================================================
+
+open Ark_ec.Models.Short_weierstrass.Group
 
 val expected_share_commitment_correct :
   poly: Golden_dkg.Shamir.t_Polynomial ->
   index: u32 ->
   Pure unit
-    (requires index >. mk_u32 0)
+    (requires
+      index >. mk_u32 0 /\
+      Seq.length (Alloc.Vec.Vec?._0 poly.Golden_dkg.Shamir.f_coefficients) <= 5)
     (ensures fun _ ->
       let commitment = Golden_dkg.Vss.commit poly in
       let commitment_slice = Alloc.Vec.impl_1__as_slice commitment in
@@ -94,10 +115,15 @@ val expected_share_commitment_correct :
         (Core_models.Convert.f_from #scalar #u64 #FStar.Tactics.Typeclasses.solve
           (cast (index <: u32) <: u64)) in
       let expected = Golden_dkg.Vss.expected_share_commitment commitment_slice index in
-      // expected == share * g (algebraic identity)
-      is_scalar_mul_generator share expected)
+      let g : g1_affine = Ark_ec.f_generator #g1_affine #FStar.Tactics.Typeclasses.solve () in
+      // expected == into_affine(smul(share, g))
+      // i.e., the expected commitment is the generator scaled by the share value
+      expected == Ark_ec.f_into_affine #g1_projective #FStar.Tactics.Typeclasses.solve
+        (smul share g))
 
+#push-options "--fuel 10 --ifuel 4 --z3rlimit 600"
 let expected_share_commitment_correct poly index = admit ()
+#pop-options
 
 // ============================================================================
 // Lemma 3: Ciphertext Check Identity
