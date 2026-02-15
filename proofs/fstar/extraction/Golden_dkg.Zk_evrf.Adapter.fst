@@ -476,7 +476,15 @@ let to_spartan (captured: t_CapturedR1CS)
             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                 Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) Alloc.Alloc.t_Global
       =
-        Rust_primitives.Hax.Folds.fold_enumerated_slice ark_matrix
+        Rust_primitives.Hax.Folds.fold_range (mk_usize 0)
+          (Core_models.Slice.impl__len #(Alloc.Vec.t_Vec
+                  (Ark_ff.Fields.Models.Fp.t_Fp
+                      (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                          Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) &
+                    usize) Alloc.Alloc.t_Global)
+              ark_matrix
+            <:
+            usize)
           (fun triples temp_1_ ->
               let triples:Alloc.Vec.t_Vec
                 (usize & usize &
@@ -489,7 +497,7 @@ let to_spartan (captured: t_CapturedR1CS)
               let _:usize = temp_1_ in
               true)
           triples
-          (fun triples temp_1_ ->
+          (fun triples row ->
               let triples:Alloc.Vec.t_Vec
                 (usize & usize &
                   Ark_ff.Fields.Models.Fp.t_Fp
@@ -498,15 +506,13 @@ let to_spartan (captured: t_CapturedR1CS)
                 Alloc.Alloc.t_Global =
                 triples
               in
-              let
-              (row: usize),
-              (row_entries:
-                Alloc.Vec.t_Vec
-                  (Ark_ff.Fields.Models.Fp.t_Fp
-                      (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                          Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) &
-                    usize) Alloc.Alloc.t_Global) =
-                temp_1_
+              let row:usize = row in
+              let row_entries:Alloc.Vec.t_Vec
+                (Ark_ff.Fields.Models.Fp.t_Fp
+                    (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                        Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) &
+                  usize) Alloc.Alloc.t_Global =
+                ark_matrix.[ row ]
               in
               Core_models.Iter.Traits.Iterator.f_fold (Core_models.Iter.Traits.Collect.f_into_iter #(
                       Alloc.Vec.t_Vec
@@ -567,14 +573,7 @@ let to_spartan (captured: t_CapturedR1CS)
                               (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                   Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
                     in
-                    triples)
-              <:
-              Alloc.Vec.t_Vec
-                (usize & usize &
-                  Ark_ff.Fields.Models.Fp.t_Fp
-                    (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                        Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
-                Alloc.Alloc.t_Global)
+                    triples))
       in
       triples
   in

@@ -829,14 +829,15 @@ let reshare_receive
               (mk_u64 0)
           in
           match
-            Rust_primitives.Hax.Folds.fold_enumerated_slice_return (Alloc.Vec.impl_1__as_slice sub_shares
-
+            Rust_primitives.Hax.Folds.fold_range_return (mk_usize 0)
+              (Alloc.Vec.impl_1__len #(u32 &
+                    Ark_ff.Fields.Models.Fp.t_Fp
+                      (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                          Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+                  #Alloc.Alloc.t_Global
+                  sub_shares
                 <:
-                t_Slice
-                (u32 &
-                  Ark_ff.Fields.Models.Fp.t_Fp
-                    (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                        Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
+                usize)
               (fun new_secret_share temp_1_ ->
                   let new_secret_share:Ark_ff.Fields.Models.Fp.t_Fp
                     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -846,20 +847,29 @@ let reshare_receive
                   let _:usize = temp_1_ in
                   true)
               new_secret_share
-              (fun new_secret_share temp_1_ ->
+              (fun new_secret_share idx ->
                   let new_secret_share:Ark_ff.Fields.Models.Fp.t_Fp
                     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                         Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
                     new_secret_share
                   in
+                  let idx:usize = idx in
                   let
-                  (idx: usize),
-                  ((xi_id: u32),
-                    (sub_share:
+                  (share_i:
+                    (u32 &
                       Ark_ff.Fields.Models.Fp.t_Fp
                         (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                            Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))) =
-                    temp_1_
+                            Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))):(u32 &
+                    Ark_ff.Fields.Models.Fp.t_Fp
+                      (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                          Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) =
+                    sub_shares.[ idx ]
+                  in
+                  let xi_id:u32 = share_i._1 in
+                  let sub_share:Ark_ff.Fields.Models.Fp.t_Fp
+                    (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                        Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
+                    share_i._2
                   in
                   let xi:Ark_ff.Fields.Models.Fp.t_Fp
                     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -882,14 +892,15 @@ let reshare_receive
                       (mk_u64 1)
                   in
                   match
-                    Rust_primitives.Hax.Folds.fold_enumerated_slice_return (Alloc.Vec.impl_1__as_slice
+                    Rust_primitives.Hax.Folds.fold_range_return (mk_usize 0)
+                      (Alloc.Vec.impl_1__len #(u32 &
+                            Ark_ff.Fields.Models.Fp.t_Fp
+                              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+                          #Alloc.Alloc.t_Global
                           sub_shares
                         <:
-                        t_Slice
-                        (u32 &
-                          Ark_ff.Fields.Models.Fp.t_Fp
-                            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
+                        usize)
                       (fun li temp_1_ ->
                           let li:Ark_ff.Fields.Models.Fp.t_Fp
                             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -899,22 +910,13 @@ let reshare_receive
                           let _:usize = temp_1_ in
                           true)
                       li
-                      (fun li temp_1_ ->
+                      (fun li jdx ->
                           let li:Ark_ff.Fields.Models.Fp.t_Fp
                             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                 Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
                             li
                           in
-                          let
-                          (jdx: usize),
-                          ((xj_id: u32),
-                            (_:
-                              Ark_ff.Fields.Models.Fp.t_Fp
-                                (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                                    Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)))
-                          =
-                            temp_1_
-                          in
+                          let jdx:usize = jdx in
                           if idx =. jdx <: bool
                           then
                             Core_models.Ops.Control_flow.ControlFlow_Continue li
@@ -933,6 +935,20 @@ let reshare_receive
                                       Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)
                               )
                           else
+                            let
+                            (share_j:
+                              (u32 &
+                                Ark_ff.Fields.Models.Fp.t_Fp
+                                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)
+                              )):(u32 &
+                              Ark_ff.Fields.Models.Fp.t_Fp
+                                (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                                    Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+                            =
+                              sub_shares.[ jdx ]
+                            in
+                            let xj_id:u32 = share_j._1 in
                             let xj:Ark_ff.Fields.Models.Fp.t_Fp
                               (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                   Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
@@ -1215,15 +1231,16 @@ let reshare_receive
                             ()
                         in
                         match
-                          Rust_primitives.Hax.Folds.fold_enumerated_slice_return (Alloc.Vec.impl_1__as_slice
+                          Rust_primitives.Hax.Folds.fold_range_return (mk_usize 0)
+                            (Alloc.Vec.impl_1__len #(u32 &
+                                  Ark_ff.Fields.Models.Fp.t_Fp
+                                    (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                                        Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
+                                    (mk_usize 4))
+                                #Alloc.Alloc.t_Global
                                 sub_shares
                               <:
-                              t_Slice
-                              (u32 &
-                                Ark_ff.Fields.Models.Fp.t_Fp
-                                  (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                                      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)
-                              ))
+                              usize)
                             (fun pk_k temp_1_ ->
                                 let pk_k:Ark_ec.Models.Short_weierstrass.Group.t_Projective
                                 Ark_bls12_381_.Curves.G1.t_Config =
@@ -1232,21 +1249,26 @@ let reshare_receive
                                 let _:usize = temp_1_ in
                                 true)
                             pk_k
-                            (fun pk_k temp_1_ ->
+                            (fun pk_k idx ->
                                 let pk_k:Ark_ec.Models.Short_weierstrass.Group.t_Projective
                                 Ark_bls12_381_.Curves.G1.t_Config =
                                   pk_k
                                 in
+                                let idx:usize = idx in
                                 let
-                                (idx: usize),
-                                ((sender_id: u32),
-                                  (_:
+                                (share_i:
+                                  (u32 &
                                     Ark_ff.Fields.Models.Fp.t_Fp
                                       (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                           Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
-                                      (mk_usize 4))) =
-                                  temp_1_
+                                      (mk_usize 4))):(u32 &
+                                  Ark_ff.Fields.Models.Fp.t_Fp
+                                    (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                                        Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
+                                    (mk_usize 4)) =
+                                  sub_shares.[ idx ]
                                 in
+                                let sender_id:u32 = share_i._1 in
                                 let xi:Ark_ff.Fields.Models.Fp.t_Fp
                                   (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                       Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)
@@ -1272,15 +1294,16 @@ let reshare_receive
                                     (mk_u64 1)
                                 in
                                 match
-                                  Rust_primitives.Hax.Folds.fold_enumerated_slice_return (Alloc.Vec.impl_1__as_slice
+                                  Rust_primitives.Hax.Folds.fold_range_return (mk_usize 0)
+                                    (Alloc.Vec.impl_1__len #(u32 &
+                                          Ark_ff.Fields.Models.Fp.t_Fp
+                                            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                                                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
+                                            (mk_usize 4))
+                                        #Alloc.Alloc.t_Global
                                         sub_shares
                                       <:
-                                      t_Slice
-                                      (u32 &
-                                        Ark_ff.Fields.Models.Fp.t_Fp
-                                          (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                                              Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
-                                          (mk_usize 4)))
+                                      usize)
                                     (fun li temp_1_ ->
                                         let li:Ark_ff.Fields.Models.Fp.t_Fp
                                           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -1291,23 +1314,14 @@ let reshare_receive
                                         let _:usize = temp_1_ in
                                         true)
                                     li
-                                    (fun li temp_1_ ->
+                                    (fun li jdx ->
                                         let li:Ark_ff.Fields.Models.Fp.t_Fp
                                           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
                                           (mk_usize 4) =
                                           li
                                         in
-                                        let
-                                        (jdx: usize),
-                                        ((xj_id: u32),
-                                          (_:
-                                            Ark_ff.Fields.Models.Fp.t_Fp
-                                              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                                                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
-                                              (mk_usize 4))) =
-                                          temp_1_
-                                        in
+                                        let jdx:usize = jdx in
                                         if idx =. jdx <: bool
                                         then
                                           Core_models.Ops.Control_flow.ControlFlow_Continue li
@@ -1327,6 +1341,20 @@ let reshare_receive
                                                     Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)
                                                 ) (mk_usize 4))
                                         else
+                                          let
+                                          (share_j:
+                                            (u32 &
+                                              Ark_ff.Fields.Models.Fp.t_Fp
+                                                (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                                                    Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)
+                                                ) (mk_usize 4))):(u32 &
+                                            Ark_ff.Fields.Models.Fp.t_Fp
+                                              (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                                                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))
+                                              (mk_usize 4)) =
+                                            sub_shares.[ jdx ]
+                                          in
+                                          let xj_id:u32 = share_j._1 in
                                           let xj:Ark_ff.Fields.Models.Fp.t_Fp
                                             (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                                                 Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4))

@@ -116,21 +116,27 @@ pub fn generate_shares(poly: &Polynomial, n: u32) -> Vec<(NodeId, Scalar)> {
 pub fn lagrange_interpolate_at_zero(shares: &[(NodeId, Scalar)]) -> Scalar {
     let mut result = Scalar::from(0u64);
 
-    // NOTE: Uses iter().enumerate() pattern which hax extracts as
-    // fold_enumerated_slice (no FnOnce needed). Direct index shares[i]
-    // generates .[ ] notation requiring Index typeclass instances.
+    // Uses index-based for loops so hax extracts as transparent fold_range
+    // (instead of opaque fold_enumerated_slice from iter().enumerate()).
     // See: formal_verification/Implementation.md "Extraction-Friendly Rust"
-    for (i, &(xi_id, yi)) in shares.iter().enumerate() {
+    for i in 0..shares.len() {
+        // Explicit type annotation forces hax to emit a concrete tuple type
+        // in F*, avoiding the opaque Index::Output projection error.
+        let share_i: &(NodeId, Scalar) = &shares[i];
+        let xi_id = share_i.0;
+        let yi = share_i.1;
         let xi = Scalar::from(xi_id as u64);
 
         // Lagrange basis polynomial evaluated at 0:
         //   L_i(0) = product_{j != i} (0 - x_j) / (x_i - x_j)
         //          = product_{j != i} x_j / (x_j - x_i)
         let mut li = Scalar::from(1u64);
-        for (j, &(xj_id, _)) in shares.iter().enumerate() {
+        for j in 0..shares.len() {
             if i == j {
                 continue;
             }
+            let share_j: &(NodeId, Scalar) = &shares[j];
+            let xj_id = share_j.0;
             let xj = Scalar::from(xj_id as u64);
             // L_i(0) *= x_j / (x_j - x_i)
             li *= xj * (xj - xi).inverse().expect("duplicate x values in shares");

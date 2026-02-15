@@ -358,7 +358,14 @@ let lagrange_interpolate_at_zero
       #FStar.Tactics.Typeclasses.solve
       (mk_u64 0)
   in
-  Rust_primitives.Hax.Folds.fold_enumerated_slice shares
+  Rust_primitives.Hax.Folds.fold_range (mk_usize 0)
+    (Core_models.Slice.impl__len #(u32 &
+          Ark_ff.Fields.Models.Fp.t_Fp
+            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+        shares
+      <:
+      usize)
     (fun result temp_1_ ->
         let result:Ark_ff.Fields.Models.Fp.t_Fp
           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -368,20 +375,29 @@ let lagrange_interpolate_at_zero
         let _:usize = temp_1_ in
         true)
     result
-    (fun result temp_1_ ->
+    (fun result i ->
         let result:Ark_ff.Fields.Models.Fp.t_Fp
           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
           result
         in
+        let i:usize = i in
         let
-        (i: usize),
-        ((xi_id: u32),
-          (yi:
+        (share_i:
+          (u32 &
             Ark_ff.Fields.Models.Fp.t_Fp
               (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))) =
-          temp_1_
+                  Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))):(u32 &
+          Ark_ff.Fields.Models.Fp.t_Fp
+            (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) =
+          shares.[ i ]
+        in
+        let xi_id:u32 = share_i._1 in
+        let yi:Ark_ff.Fields.Models.Fp.t_Fp
+          (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+              Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
+          share_i._2
         in
         let xi:Ark_ff.Fields.Models.Fp.t_Fp
           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -406,7 +422,14 @@ let lagrange_interpolate_at_zero
         let li:Ark_ff.Fields.Models.Fp.t_Fp
           (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
               Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
-          Rust_primitives.Hax.Folds.fold_enumerated_slice shares
+          Rust_primitives.Hax.Folds.fold_range (mk_usize 0)
+            (Core_models.Slice.impl__len #(u32 &
+                  Ark_ff.Fields.Models.Fp.t_Fp
+                    (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                        Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))
+                shares
+              <:
+              usize)
             (fun li temp_1_ ->
                 let li:Ark_ff.Fields.Models.Fp.t_Fp
                   (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
@@ -416,24 +439,28 @@ let lagrange_interpolate_at_zero
                 let _:usize = temp_1_ in
                 true)
             li
-            (fun li temp_1_ ->
+            (fun li j ->
                 let li:Ark_ff.Fields.Models.Fp.t_Fp
                   (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                       Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =
                   li
                 in
-                let
-                (j: usize),
-                ((xj_id: u32),
-                  (_:
-                    Ark_ff.Fields.Models.Fp.t_Fp
-                      (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
-                          Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))) =
-                  temp_1_
-                in
+                let j:usize = j in
                 if i =. j <: bool
                 then li
                 else
+                  let
+                  (share_j:
+                    (u32 &
+                      Ark_ff.Fields.Models.Fp.t_Fp
+                        (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                            Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4))):(u32 &
+                    Ark_ff.Fields.Models.Fp.t_Fp
+                      (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
+                          Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4)) =
+                    shares.[ j ]
+                  in
+                  let xj_id:u32 = share_j._1 in
                   let xj:Ark_ff.Fields.Models.Fp.t_Fp
                     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend
                         Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)) (mk_usize 4) =

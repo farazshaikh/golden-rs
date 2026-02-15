@@ -164,15 +164,21 @@ pub fn reshare_receive(
     // new_sk_j = sum_{i in S} g_i(j) * L_i(0)
     // where L_i(0) = product_{k != i} k / (k - i) using OLD member indices
     let mut new_secret_share = Scalar::from(0u64);
-    for (idx, &(xi_id, sub_share)) in sub_shares.iter().enumerate() {
+    for idx in 0..sub_shares.len() {
+        // Explicit type annotation forces hax to emit concrete tuple type in F*
+        let share_i: &(NodeId, Scalar) = &sub_shares[idx];
+        let xi_id = share_i.0;
+        let sub_share = share_i.1;
         let xi = Scalar::from(xi_id as u64);
 
         // Compute Lagrange coefficient L_i(0)
         let mut li = Scalar::from(1u64);
-        for (jdx, &(xj_id, _)) in sub_shares.iter().enumerate() {
+        for jdx in 0..sub_shares.len() {
             if idx == jdx {
                 continue;
             }
+            let share_j: &(NodeId, Scalar) = &sub_shares[jdx];
+            let xj_id = share_j.0;
             let xj = Scalar::from(xj_id as u64);
             li *= xj
                 * (xj - xi)
@@ -192,13 +198,17 @@ pub fn reshare_receive(
     let mut public_key_shares = HashMap::new();
     for &k in &new_member_ids {
         let mut pk_k = G1Projective::default(); // identity
-        for (idx, &(sender_id, _)) in sub_shares.iter().enumerate() {
+        for idx in 0..sub_shares.len() {
+            let share_i: &(NodeId, Scalar) = &sub_shares[idx];
+            let sender_id = share_i.0;
             let xi = Scalar::from(sender_id as u64);
             let mut li = Scalar::from(1u64);
-            for (jdx, &(xj_id, _)) in sub_shares.iter().enumerate() {
+            for jdx in 0..sub_shares.len() {
                 if idx == jdx {
                     continue;
                 }
+                let share_j: &(NodeId, Scalar) = &sub_shares[jdx];
+                let xj_id = share_j.0;
                 let xj = Scalar::from(xj_id as u64);
                 li *= xj
                     * (xj - xi)

@@ -111,7 +111,8 @@ pub fn to_spartan(captured: &CapturedR1CS) -> Result<SpartanData, String> {
     // with remapped column indices
     let convert_matrix = |ark_matrix: &[Vec<(Fr, usize)>]| -> Vec<(usize, usize, Fr)> {
         let mut triples = Vec::new();
-        for (row, row_entries) in ark_matrix.iter().enumerate() {
+        for row in 0..ark_matrix.len() {
+            let row_entries = &ark_matrix[row];
             for &(coeff, ark_col) in row_entries {
                 let spartan_col = if ark_col == 0 {
                     // constant 1 -> col num_witness in spartan
