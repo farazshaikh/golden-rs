@@ -170,10 +170,10 @@ Golden (Bunz, Choi, Komlo -- IACR 2025/1924) is a one-round DKG protocol achievi
 
 ### Permanent Remaining Items
 
-| Item | Location | Why it remains |
-|------|----------|----------------|
-| `reshare_dealer_binding` | Reshare.Spec.fst | DL hardness assumption: "if g^a == g^b then a == b". Standard cryptographic axiom -- cannot be proved, only assumed. |
-| `golden_uc_security` | UCSimulation.lean | Full UC composition theorem: requires 8-12 weeks of probabilistic formalization. Statement is complete; algebraic core (simulator PK programming, LHL bound) is proved. |
+| Item                     | Location          | Why it remains                                                                                                                                                          |
+| ------------------------ | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reshare_dealer_binding` | Reshare.Spec.fst  | DL hardness assumption: "if g^a == g^b then a == b". Standard cryptographic axiom -- cannot be proved, only assumed.                                                    |
+| `golden_uc_security`     | UCSimulation.lean | Full UC composition theorem: requires 8-12 weeks of probabilistic formalization. Statement is complete; algebraic core (simulator PK programming, LHL bound) is proved. |
 
 ## Three Verification Layers
 
