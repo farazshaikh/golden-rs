@@ -28,8 +28,14 @@ let g1_projective = Ark_ec.Models.Short_weierstrass.Group.t_Projective Ark_bls12
 // Specification predicates
 // ============================================================================
 
-/// pk = sk * g (public key is the scalar multiple of the generator).
-assume val is_pk_of_sk : scalar -> g1_affine -> prop
+/// pk = into_affine(g * sk) -- concrete definition enables SMT substitution
+let is_pk_of_sk (sk: scalar) (pk: g1_affine) : prop =
+  pk == Ark_ec.f_into_affine #g1_projective #FStar.Tactics.Typeclasses.solve
+    (Ark_ec.Models.Short_weierstrass.Group.affine_scalar_mul
+      Ark_bls12_381_.Curves.G1.t_Config
+      Ark_bls12_381_.Fields.Fr.t_FrConfig (mk_usize 4)
+      (Ark_ec.f_generator #g1_affine #FStar.Tactics.Typeclasses.solve ())
+      sk)
 
 /// Two derive_pad outputs are equal (both r and R components).
 assume val pad_outputs_equal :
@@ -57,7 +63,9 @@ val dh_shared_secret_symmetric :
       // sk_i * pk_j == sk_j * pk_i  (as DH shared secrets)
       True)
 
-let dh_shared_secret_symmetric sk_i sk_j pk_i pk_j = admit ()
+let dh_shared_secret_symmetric sk_i sk_j pk_i pk_j =
+  let g = Ark_ec.f_generator #g1_affine #FStar.Tactics.Typeclasses.solve () in
+  Ark_ec.dh_affine_symmetric sk_i sk_j g
 
 // ============================================================================
 // Lemma 2: derive_pad Symmetry
@@ -86,7 +94,9 @@ val derive_pad_symmetric :
       Golden_dkg.Evrf.derive_pad sk_i pk_j msg beta ==
       Golden_dkg.Evrf.derive_pad sk_j pk_i msg beta)
 
-let derive_pad_symmetric sk_i sk_j pk_i pk_j msg beta = admit ()
+let derive_pad_symmetric sk_i sk_j pk_i pk_j msg beta =
+  let g = Ark_ec.f_generator #g1_affine #FStar.Tactics.Typeclasses.solve () in
+  Ark_ec.dh_affine_symmetric sk_i sk_j g
 
 // ============================================================================
 // Lemma 3: Encrypt/Decrypt Roundtrip
@@ -169,4 +179,5 @@ val evrf_full_pipeline_correct :
       // 2. Decryption recovers the share: (r_i + share) - r_j == share
       // 3. R_eVRF holds for the witness sk_i (ZK proof is valid)
 
-let evrf_full_pipeline_correct sk_i sk_j pk_i pk_j msg beta share = admit ()
+let evrf_full_pipeline_correct sk_i sk_j pk_i pk_j msg beta share =
+  derive_pad_symmetric sk_i sk_j pk_i pk_j msg beta
