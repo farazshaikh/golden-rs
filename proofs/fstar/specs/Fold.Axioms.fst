@@ -111,3 +111,62 @@ assume val fold_enumerated_slice_three :
         (fun (acc:acc_t) (i:(usize & t){v (fst i) < v (length s) /\ snd i == Seq.index s (v (fst i)) /\ True})
          -> f acc i)
       == f acc2 item2))
+
+/// Axiom: fold_enumerated_slice over a 4-element slice applies f four times.
+assume val fold_enumerated_slice_four :
+  #t:Type0 -> #acc_t:Type0 ->
+  s:t_Slice t ->
+  init:acc_t ->
+  f:(acc:acc_t -> i:(usize & t){v (fst i) < v (length s) /\ snd i == Seq.index s (v (fst i))}
+             -> acc_t) ->
+  Lemma
+    (requires Seq.length s == 4)
+    (ensures (
+      let item0 : (x:(usize & t){v (fst x) < v (length s) /\ snd x == Seq.index s (v (fst x))}) =
+        (sz 0, Seq.index s 0) in
+      let acc1 = f init item0 in
+      let item1 : (x:(usize & t){v (fst x) < v (length s) /\ snd x == Seq.index s (v (fst x))}) =
+        (sz 1, Seq.index s 1) in
+      let acc2 = f acc1 item1 in
+      let item2 : (x:(usize & t){v (fst x) < v (length s) /\ snd x == Seq.index s (v (fst x))}) =
+        (sz 2, Seq.index s 2) in
+      let acc3 = f acc2 item2 in
+      let item3 : (x:(usize & t){v (fst x) < v (length s) /\ snd x == Seq.index s (v (fst x))}) =
+        (sz 3, Seq.index s 3) in
+      Rust_primitives.Hax.Folds.fold_enumerated_slice s
+        (fun (_:acc_t) (_:usize{v _ <= Seq.length s}) -> True)
+        init
+        (fun (acc:acc_t) (i:(usize & t){v (fst i) < v (length s) /\ snd i == Seq.index s (v (fst i)) /\ True})
+         -> f acc i)
+      == f acc3 item3))
+
+/// Axiom: fold_enumerated_slice over a 5-element slice applies f five times.
+assume val fold_enumerated_slice_five :
+  #t:Type0 -> #acc_t:Type0 ->
+  s:t_Slice t ->
+  init:acc_t ->
+  f:(acc:acc_t -> i:(usize & t){v (fst i) < v (length s) /\ snd i == Seq.index s (v (fst i))}
+             -> acc_t) ->
+  Lemma
+    (requires Seq.length s == 5)
+    (ensures (
+      let item0 : (x:(usize & t){v (fst x) < v (length s) /\ snd x == Seq.index s (v (fst x))}) =
+        (sz 0, Seq.index s 0) in
+      let acc1 = f init item0 in
+      let item1 : (x:(usize & t){v (fst x) < v (length s) /\ snd x == Seq.index s (v (fst x))}) =
+        (sz 1, Seq.index s 1) in
+      let acc2 = f acc1 item1 in
+      let item2 : (x:(usize & t){v (fst x) < v (length s) /\ snd x == Seq.index s (v (fst x))}) =
+        (sz 2, Seq.index s 2) in
+      let acc3 = f acc2 item2 in
+      let item3 : (x:(usize & t){v (fst x) < v (length s) /\ snd x == Seq.index s (v (fst x))}) =
+        (sz 3, Seq.index s 3) in
+      let acc4 = f acc3 item3 in
+      let item4 : (x:(usize & t){v (fst x) < v (length s) /\ snd x == Seq.index s (v (fst x))}) =
+        (sz 4, Seq.index s 4) in
+      Rust_primitives.Hax.Folds.fold_enumerated_slice s
+        (fun (_:acc_t) (_:usize{v _ <= Seq.length s}) -> True)
+        init
+        (fun (acc:acc_t) (i:(usize & t){v (fst i) < v (length s) /\ snd i == Seq.index s (v (fst i)) /\ True})
+         -> f acc i)
+      == f acc4 item4))
