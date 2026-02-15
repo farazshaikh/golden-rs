@@ -2,6 +2,7 @@
 name = "golden-dkg"
 version = "0.1.0"
 edition = "2021"
+authors = ["Faraz Shaikh <faraz.shaikh@gmail.com>"]
 description = "Golden non-interactive distributed key generation (Bünz, Choi, Komlo 2025)"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/farazshaikh/golden-rs"
