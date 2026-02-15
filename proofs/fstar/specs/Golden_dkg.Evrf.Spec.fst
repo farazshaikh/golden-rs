@@ -104,14 +104,20 @@ let derive_pad_symmetric sk_i sk_j pk_i pk_j msg beta = admit ()
 
 val encrypt_decrypt_roundtrip :
   r_pad: scalar -> share: scalar ->
-  Pure unit
-    (requires True)
-    (ensures fun _ ->
+  Lemma
+    (ensures
       // (r + share) - r == share
       // In the field: addition then subtraction is identity.
-      True) // Algebraic identity over Fr
+      Ark_ff.Fields.Models.Fp.fp_sub
+        (Ark_ff.Fields.Models.Fp.fp_add r_pad share)
+        r_pad == share)
 
-let encrypt_decrypt_roundtrip r_pad share = admit ()
+let encrypt_decrypt_roundtrip r_pad share =
+  // Proof: by fp_add_comm and fp_add_sub_cancel
+  // Step 1: r + share == share + r  (commutativity)
+  Ark_ff.Fields.Models.Fp.fp_add_comm r_pad share;
+  // Step 2: (share + r) - r == share  (add-sub cancellation)
+  Ark_ff.Fields.Models.Fp.fp_add_sub_cancel share r_pad
 
 // ============================================================================
 // Lemma 4: eVRF Uniqueness (VRF property)

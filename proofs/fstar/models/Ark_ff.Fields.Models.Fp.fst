@@ -249,5 +249,10 @@ assume val fp_mul_dist_r : #config:Type0 -> #n:usize ->
   a:t_Fp config n -> b:t_Fp config n -> c:t_Fp config n ->
   Lemma (fp_mul (fp_add a b) c == fp_add (fp_mul a c) (fp_mul b c))
 
+/// (a + b) - b == a (add-then-sub cancellation)
+assume val fp_add_sub_cancel : #config:Type0 -> #n:usize ->
+  a:t_Fp config n -> b:t_Fp config n ->
+  Lemma (fp_sub (fp_add a b) b == a)
+
 /// NOTE: Inverse axioms (fp_inverse_exists, fp_mul_inverse) live in
 /// Golden_dkg.Shamir.Spec.fst to avoid circular dependency with Ark_ff.Fields.

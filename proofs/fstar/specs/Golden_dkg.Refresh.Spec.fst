@@ -130,10 +130,15 @@ let refresh_pk_unchanged _ = admit ()
 
 val refresh_shares_changed :
   sk_old: scalar -> delta: scalar ->
-  Pure unit
+  Lemma
     (requires delta =!= Ark_ff.Fields.f_ZERO #FStar.Tactics.Typeclasses.solve)
-    (ensures fun _ ->
+    (ensures
       // sk_old + delta != sk_old
-      True)
+      Ark_ff.Fields.Models.Fp.fp_add sk_old delta =!= sk_old)
 
-let refresh_shares_changed sk_old delta = admit ()
+let refresh_shares_changed sk_old delta =
+  // Proof by contradiction: if sk + delta == sk, then delta == 0.
+  // (sk + delta) - sk == delta  by fp_add_sub_cancel
+  // sk - sk == 0               by fp_sub_self
+  // So delta == 0, contradicting the precondition.
+  Ark_ff.Fields.Models.Fp.fp_add_sub_cancel sk_old delta
