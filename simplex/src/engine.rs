@@ -195,10 +195,13 @@ impl ConsensusEngine {
         let n = self.replicas.len();
 
         // ── Leader election ─────────────────────────────────────────────
-        // Paper: L_h := H*(h) mod n. No override -- replicas compute the
-        // same leader from VRF. Capitulation relies on f+1 capitulators
-        // being naturally elected often enough (~40% of views).
-        let leader = vrf::elect_leader(&self.chain_state.vrf_seed, n as u32);
+        // Paper: L_h := H*(h) mod n. Use the first honest replica's VRF
+        // seed so the engine and replicas always agree on who the leader is.
+        let replica_vrf_seed = self.replicas.iter()
+            .find(|r| self.is_honest(r.id()))
+            .map(|r| r.chain_state().vrf_seed)
+            .unwrap_or(self.chain_state.vrf_seed);
+        let leader = vrf::elect_leader(&replica_vrf_seed, n as u32);
         let leader_beh = self.behavior(leader);
 
         let proposal_action = naughty::should_propose(leader_beh, true, view);
@@ -217,7 +220,14 @@ impl ConsensusEngine {
         }
 
         // ── Phase 1: Leader proposes ────────────────────────────────────
-        let leader_tip = self.replicas.iter().find(|r| r.id() == leader).unwrap().chain_state().tip_hash;
+        // Use the first honest replica's tip for the block parent_hash.
+        // Byzantine leaders in the real protocol would have the same tip
+        // (they receive the same notarizations), but in our sim their
+        // Replicas may lag because they bypass apply_message.
+        let leader_tip = self.replicas.iter()
+            .find(|r| self.is_honest(r.id()))
+            .map(|r| r.chain_state().tip_hash)
+            .unwrap_or([0u8; 32]);
 
         let (block_a, block_b) = match proposal_action {
             ProposalAction::Propose => {
@@ -392,16 +402,30 @@ impl ConsensusEngine {
 
         // ── Phase 3: Route votes to all replicas ────────────────────────
         // Feed collected votes into each replica so they can reach notarization.
-        for (bh, votes) in &collected_votes {
-            for &nid in &node_ids {
-                let replica = self.replicas.iter_mut().find(|r| r.id() == nid).unwrap();
+        // IMPORTANT: Route each replica's OWN block's votes FIRST so that in
+        // the equivocation case, each partition notarizes its own block before
+        // seeing the other partition's block reach threshold.
+        for &nid in &node_ids {
+            let replica = self.replicas.iter_mut().find(|r| r.id() == nid).unwrap();
+            // First: route votes for the block this node was shown
+            let my_bh = node_block.get(&nid).and_then(|b| b.as_ref()).map(block_hash);
+            if let Some(mbh) = my_bh {
+                if let Some(votes) = collected_votes.get(&mbh) {
+                    for (signer, partial) in votes {
+                        if *signer == nid { continue; }
+                        let _ = replica.apply_message(Message::Vote {
+                            view, block_hash: mbh, signer: *signer, partial: partial.clone(),
+                        });
+                    }
+                }
+            }
+            // Then: route votes for all other blocks
+            for (bh, votes) in &collected_votes {
+                if my_bh == Some(*bh) { continue; } // already routed above
                 for (signer, partial) in votes {
-                    if *signer == nid { continue; } // Already have our own
+                    if *signer == nid { continue; }
                     let _ = replica.apply_message(Message::Vote {
-                        view,
-                        block_hash: *bh,
-                        signer: *signer,
-                        partial: partial.clone(),
+                        view, block_hash: *bh, signer: *signer, partial: partial.clone(),
                     });
                 }
             }
@@ -417,6 +441,56 @@ impl ConsensusEngine {
                     signer: *signer,
                     partial: partial.clone(),
                 });
+            }
+        }
+
+        // ── Phase 3b: Timeout any replicas still stuck in current view ───
+        // In the real protocol, timers fire after 3*Delta. In our sim,
+        // if a replica hasn't advanced after vote routing, it means
+        // neither block reached threshold -> force timeout so the view
+        // can be nullified and the replica can advance.
+        let mut extra_nullify: Vec<(NodeId, threshold_crypto::types::PartialSignature)> = Vec::new();
+        for &nid in &node_ids {
+            let replica = self.replicas.iter_mut().find(|r| r.id() == nid).unwrap();
+            if replica.current_view() == view {
+                // Still in this view -> trigger timeout (Paper Step 2: timer fires)
+                let (_, timeout_out) = replica.apply_message(Message::Timeout { view });
+                for out in &timeout_out {
+                    if let Outgoing::NullifyVote { partial, .. } = out {
+                        extra_nullify.push((nid, partial.clone()));
+                    }
+                }
+            }
+        }
+
+        // Route extra nullify votes to all replicas still in this view
+        if !extra_nullify.is_empty() {
+            // Also add capitulator nullify votes so honest replicas can
+            // reach the nullification threshold even in capitulation mode.
+            for &nid in &node_ids {
+                let beh = self.behavior(nid);
+                if beh == ByzantineBehavior::Capitulator {
+                    let share = &self.shares[&nid];
+                    let msg = vrf::vrf_message(view);
+                    let digest = beacon::digest_message(view, Some(&msg));
+                    let msg_hash = beacon::hash_to_g2(&digest);
+                    let sig = signing::partial_sign(&msg_hash, share);
+                    extra_nullify.push((nid, sig));
+                }
+            }
+
+            for &nid in &node_ids {
+                let replica = self.replicas.iter_mut().find(|r| r.id() == nid).unwrap();
+                if replica.current_view() == view {
+                    for (signer, partial) in &extra_nullify {
+                        if *signer == nid { continue; }
+                        let _ = replica.apply_message(Message::NullifyVote {
+                            view,
+                            signer: *signer,
+                            partial: partial.clone(),
+                        });
+                    }
+                }
             }
         }
 
