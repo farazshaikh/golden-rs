@@ -387,7 +387,7 @@ fn filter_vote(
         }
         VoteAction::DoubleVote => {
             // Send the original vote to all peers.
-            let mut deliveries = broadcast_vote_to_all(view, bh, ctx.sender, partial, ctx.all_node_ids);
+            let deliveries = broadcast_vote_to_all(view, bh, ctx.sender, partial, ctx.all_node_ids);
             // For capitulators: also forge a vote for ANY other block hash
             // they might know about. In practice this is the other equivocation
             // block. The engine will inject the second block hash when it
