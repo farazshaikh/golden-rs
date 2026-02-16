@@ -1,0 +1,16 @@
+[package]
+name = "simplex-consensus"
+version = "0.1.0"
+edition = "2021"
+authors = ["Faraz Shaikh <faraz.shaikh@gmail.com>"]
+description = "Simplex BFT consensus core -- pure state machine for formal verification"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+threshold-crypto = { path = "../threshold_crypto" }
+golden-dkg = { path = "../golden-dkg" }
+ark-bls12-381 = { workspace = true }
+ark-ec = { workspace = true }
+ark-ff = { workspace = true }
+ark-serialize = { workspace = true }
+sha2 = { workspace = true }

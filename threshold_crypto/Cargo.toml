@@ -1,0 +1,22 @@
+[package]
+name = "threshold-crypto"
+version = "0.1.0"
+edition = "2021"
+authors = ["Faraz Shaikh <faraz.shaikh@gmail.com>"]
+description = "BLS12-381 threshold signatures with drand-compatible beacon format"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+golden-dkg = { path = "../golden-dkg" }
+ark-bls12-381 = { workspace = true }
+ark-ec = { workspace = true }
+ark-ff = { workspace = true }
+ark-std = { workspace = true }
+ark-serialize = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+rayon = "1"
+rand_chacha = "0.3"
+clap = { version = "4", features = ["derive"] }
+comfy-table = "7"
+crossterm = "0.28"

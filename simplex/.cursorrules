@@ -1,0 +1,70 @@
+# Simplex BFT Consensus -- Cursor Rules
+
+## Required Reading
+
+Before modifying ANY code in the `simplex/` crate, you MUST read the following reference papers:
+
+1. **simplex/papers/simplex-consensus.pdf** -- Chan & Pass 2023, the original Simplex protocol
+2. **simplex/papers/dispersed-simplex.pdf** -- Shoup 2025, DispersedSimplex analysis and variations
+
+## Protocol Invariants (from the paper, Section 2.1)
+
+The Simplex protocol has these critical rules that MUST be preserved in our simulation:
+
+### Honest Node Voting Rules
+
+1. **One vote per iteration**: An honest node votes for AT MOST ONE non-dummy block per iteration h.
+   It multicasts `<vote, h, b_h>` for the FIRST valid proposal it sees from the designated leader L_h.
+
+2. **Vote or nullify, never both**: An honest node either:
+   - Multicasts `<finalize, h>` (if timer did NOT fire before seeing a notarized chain of height h), OR
+   - Multicasts `<vote, h, dummy_h>` (if timer fired)
+   - NEVER BOTH for the same height h.
+
+3. **Only vote for the designated leader**: An honest node only votes for a proposal from L_h (the
+   elected leader for iteration h). It NEVER votes for a block proposed by a non-leader. Honest nodes
+   know who the leader is for each iteration.
+
+4. **Validate the proposal**: Before voting, an honest node checks:
+   - The block is NOT the dummy block
+   - The blockchain b_0, ..., b_h is valid
+   - The parent chain (b_0, ..., b_{h-1}, S) is a notarized blockchain
+
+### Safety (Consistency)
+
+Safety relies on TWO quorum intersection arguments (Lemmas 3.2 and 3.3):
+
+- **Lemma 3.2**: Two distinct non-dummy blocks at the same height CANNOT both be notarized
+  (requires 2 * 2n/3 > n + f votes, impossible with f < n/3).
+
+- **Lemma 3.3**: If height h is finalized, the dummy block at height h CANNOT be notarized
+  (honest nodes never both finalize AND vote-dummy for the same height).
+
+These guarantees BREAK when f >= n/3 (capitulation mode), because Byzantine nodes can
+double-vote, providing enough signatures for BOTH blocks to be notarized simultaneously.
+
+### Liveness
+
+- Honest leader at height h proposes at time t: block finalized by t + 3*delta.
+- Faulty leader: all honest nodes move to h+1 within 3*Delta + delta (timer fires, vote dummy).
+- Expected view-based liveness: 3.5*delta + 1.5*Delta.
+
+### Two-Phase Commit (Notarize then Finalize)
+
+A block is:
+1. **Notarized** when it receives >= 2n/3 `<vote, h, b_h>` messages (or dummy votes).
+2. **Finalized** when it is notarized AND receives >= 2n/3 `<finalize, h>` messages.
+
+The finalize vote is sent when a node enters the next iteration WITHOUT its timer having fired.
+This two-phase structure is what makes the protocol simple and correct.
+
+## Simulation Notes
+
+Our simulation simplifies some aspects:
+- We use threshold BLS signatures instead of individual digital signatures
+- We combine notarize + finalize into a single "view outcome" for display purposes
+- The block strip shows: Yellow = notarized (waiting), Green = finalized, Grey = nullified
+
+The `Capitulation` scenario (f+1 Byzantine) deliberately violates the f < n/3 assumption to
+demonstrate what happens when safety breaks: two conflicting blocks get notarized at the same
+height, honest nodes diverge, and the chain forks irrecoverably.

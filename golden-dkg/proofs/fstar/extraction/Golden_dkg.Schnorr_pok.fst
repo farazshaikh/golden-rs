@@ -3,6 +3,8 @@ module Golden_dkg.Schnorr_pok
 open FStar.Mul
 open Core_models
 
+include Golden_dkg.Bundle {compute_challenge as compute_challenge}
+
 include Golden_dkg.Bundle {t_SchnorrPoK as t_SchnorrPoK}
 
 include Golden_dkg.Bundle {impl as impl}

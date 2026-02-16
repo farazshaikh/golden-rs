@@ -35,6 +35,11 @@ borsh = ["dep:borsh"]
 
 [dev-dependencies]
 criterion = { version = "0.5" }
+clap = { version = "4", features = ["derive"] }
+comfy-table = "7"
+crossterm = "0.28"
+rayon = "1"
+rand_chacha = "0.3"
 
 [[bench]]
 name = "dkg"

@@ -12,6 +12,7 @@
 use ark_bls12_381::{Fr, G1Affine, G1Projective};
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::UniformRand;
+#[cfg(feature = "borsh")]
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::Rng;
 #[cfg(feature = "borsh")]
@@ -114,6 +115,8 @@ impl Drop for SecretScalar {
 
 /// Helper: serialize an arkworks type to bytes via CanonicalSerialize (compressed).
 /// Excluded from hax extraction because serialize_compressed uses &mut.
+/// Only used by Borsh serialization impls.
+#[cfg(feature = "borsh")]
 #[hax_lib::exclude]
 fn ark_to_bytes<T: CanonicalSerialize>(val: &T) -> Vec<u8> {
     let mut buf = Vec::new();
@@ -124,6 +127,8 @@ fn ark_to_bytes<T: CanonicalSerialize>(val: &T) -> Vec<u8> {
 
 /// Helper: deserialize an arkworks type from bytes via CanonicalDeserialize (compressed).
 /// Excluded from hax extraction because deserialize_compressed uses &mut.
+/// Only used by Borsh serialization impls.
+#[cfg(feature = "borsh")]
 #[hax_lib::exclude]
 fn ark_from_bytes<T: CanonicalDeserialize>(bytes: &[u8]) -> T {
     T::deserialize_compressed(bytes).expect("ark deserialization failed")
