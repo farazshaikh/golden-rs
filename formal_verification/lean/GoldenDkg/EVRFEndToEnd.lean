@@ -20,8 +20,8 @@
   src/evrf.rs and src/zk_evrf/ of the Rust implementation.
 -/
 
-import GoldenProofs.EVRFSymmetry
-import GoldenProofs.EVRFCircuit
+import GoldenDkg.EVRFSymmetry
+import GoldenDkg.EVRFCircuit
 
 /-!
 ## Part 1: Honest Evaluation Satisfies R_eVRF

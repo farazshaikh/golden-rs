@@ -39,3 +39,4 @@ pub mod signing;
 pub mod beacon;
 pub mod cache;
 pub mod dkg;
+pub mod ibe;

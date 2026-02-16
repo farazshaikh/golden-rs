@@ -25,8 +25,8 @@ SHELL := /bin/bash
 
 # Paths
 GOLDEN_RS_ROOT := $(shell cd .. && pwd)
-LEAN_DIR := $(CURDIR)
-FSTAR_DIR := $(GOLDEN_RS_ROOT)/proofs/fstar
+LEAN_DIR := $(CURDIR)/lean
+FSTAR_DIR := $(CURDIR)/proofs/fstar
 FSTAR := $(HOME)/.local/fstar/fstar/bin/fstar.exe
 HAX_NIGHTLY := nightly-2025-11-08
 
@@ -35,8 +35,8 @@ RUST_SOURCES := $(wildcard $(GOLDEN_RS_ROOT)/golden-dkg/src/*.rs $(GOLDEN_RS_ROO
 
 # F* include flags (reused across targets)
 FSTAR_INCLUDES := --include $(FSTAR_DIR)/models \
-                  --include $(FSTAR_DIR)/extraction \
-                  --include $(FSTAR_DIR)/specs \
+                  --include $(FSTAR_DIR)/golden-dkg/extraction \
+                  --include $(FSTAR_DIR)/golden-dkg/specs \
                   --include $(FSTAR_DIR)/hax-libs/core \
                   --include $(FSTAR_DIR)/hax-libs/rust_primitives \
                   --include $(FSTAR_DIR)/hax-libs/hax_lib
@@ -107,8 +107,8 @@ $(EXTRACT_STAMP): $(RUST_SOURCES)
 	@# HAX0003: "&mut mutation not allowed" -- known limitation for serialize_compressed (hax #420)
 	@# HAX0008: "Raw_pointer rejected" -- known limitation for Drop zeroization
 	@# These affect serialization/zeroization code, not cryptographic logic.
-	@unexpected=$$(grep -c '\[HAX' /tmp/hax-output.log 2>/dev/null || echo 0); \
-	known=$$(grep -c 'HAX0003\|HAX0008' /tmp/hax-output.log 2>/dev/null || echo 0); \
+	@unexpected=$$(grep -c '\[HAX' /tmp/hax-output.log 2>/dev/null || true); \
+	known=$$(grep -c 'HAX0003\|HAX0008' /tmp/hax-output.log 2>/dev/null || true); \
 	other=$$((unexpected - known)); \
 	if [ "$$other" -gt 0 ]; then \
 		echo "ERROR: hax produced $$other unexpected error(s) (beyond known HAX0003/HAX0008):"; \
@@ -124,11 +124,25 @@ $(EXTRACT_STAMP): $(RUST_SOURCES)
 		echo "ERROR: hax extraction produced only $$count files (expected 18)."; \
 		exit 1; \
 	fi
-	@echo "Copying extraction to proofs/fstar/extraction/..."
-	cp $(GOLDEN_RS_ROOT)/golden-dkg/proofs/fstar/extraction/Golden_dkg.*.fst $(FSTAR_DIR)/extraction/
+	@echo "Copying extraction to proofs/fstar/golden-dkg/extraction/..."
+	cp $(GOLDEN_RS_ROOT)/golden-dkg/proofs/fstar/extraction/Golden_dkg.*.fst $(FSTAR_DIR)/golden-dkg/extraction/
+	@# ---- Post-extraction patches ----
+	@# hax extraction produces F* code with 3 known issues that must be patched:
+	@#   001: Bundle/Schnorr_pok circular dependency (F* Error 308)
+	@#   002: Schnorr_pok re-exports compute_challenge from Bundle (cycle)
+	@#   003: Missing serialize_nizk_proof (HAX0003: &mut serialization)
+	@# Patches are stored in proofs/fstar/patches/ and applied via `patch`.
+	@# If a patch fails, hax output changed -- regenerate patches manually.
+	@echo "  Applying 3 post-extraction patches..."
+	@cd $(FSTAR_DIR)/golden-dkg/extraction && \
+		for p in $(FSTAR_DIR)/patches/*.patch; do \
+			echo "    $$(basename $$p)"; \
+			patch -s -p1 < "$$p" || (echo "ERROR: patch $$(basename $$p) failed -- hax output may have changed. Regenerate patches." && exit 1); \
+		done
+	@echo "  All patches applied."
 	@mkdir -p $(STAMP_DIR)
 	@touch $@
-	@echo "[PASS] hax extraction complete (18 modules)."
+	@echo "[PASS] hax extraction complete (18 modules, 3 patches applied)."
 
 # ============================================================
 # F* lax-checking
@@ -142,7 +156,7 @@ $(FSTAR_EXT_STAMP): $(EXTRACT_STAMP) $(wildcard $(FSTAR_DIR)/models/*.fst) $(wil
 	@echo "=== F* lax-checking 18 extraction modules ==="
 	@test -f $(FSTAR) || (echo "ERROR: F* not found at $(FSTAR). Download v2025.10.06 from https://github.com/FStarLang/FStar/releases/tag/v2025.10.06" && exit 1)
 	@pass=0; fail=0; \
-	for f in $(FSTAR_DIR)/extraction/Golden_dkg.*.fst; do \
+	for f in $(FSTAR_DIR)/golden-dkg/extraction/Golden_dkg.*.fst; do \
 		mod=$$(basename "$$f" .fst); \
 		if $(FSTAR) --lax --warn_error -331 $(FSTAR_INCLUDES) "$$f" 2>&1 | grep -q "discharged successfully"; then \
 			pass=$$((pass+1)); \
@@ -159,10 +173,10 @@ $(FSTAR_EXT_STAMP): $(EXTRACT_STAMP) $(wildcard $(FSTAR_DIR)/models/*.fst) $(wil
 
 fstar-specs: $(FSTAR_SPEC_STAMP)
 
-$(FSTAR_SPEC_STAMP): $(FSTAR_EXT_STAMP) $(wildcard $(FSTAR_DIR)/specs/*.fst)
+$(FSTAR_SPEC_STAMP): $(FSTAR_EXT_STAMP) $(wildcard $(FSTAR_DIR)/golden-dkg/specs/*.fst)
 	@echo "=== F* lax-checking spec files ==="
 	@pass=0; fail=0; \
-	for f in $(FSTAR_DIR)/specs/Golden_dkg.*.fst $(FSTAR_DIR)/specs/Fold.Axioms.fst; do \
+	for f in $(FSTAR_DIR)/golden-dkg/specs/Golden_dkg.*.fst $(FSTAR_DIR)/golden-dkg/specs/Fold.Axioms.fst; do \
 		mod=$$(basename "$$f" .fst); \
 		if $(FSTAR) --lax --warn_error -331 $(FSTAR_INCLUDES) "$$f" 2>&1 | grep -q "discharged successfully"; then \
 			pass=$$((pass+1)); \
@@ -277,7 +291,7 @@ kani-zk-evrf: kani-zk_evrf_generator_slice_bounds kani-zk_evrf_power_of_two_nonz
 
 lean: $(LEAN_STAMP)
 
-$(LEAN_STAMP): $(wildcard $(LEAN_DIR)/GoldenProofs/*.lean) $(LEAN_DIR)/lakefile.toml
+$(LEAN_STAMP): $(wildcard $(LEAN_DIR)/GoldenDkg/*.lean) $(LEAN_DIR)/GoldenProofs.lean $(LEAN_DIR)/lakefile.toml
 	@echo "=== Building all Lean 4 proofs ==="
 	cd $(LEAN_DIR) && lake build
 	@mkdir -p $(STAMP_DIR)
@@ -286,47 +300,47 @@ $(LEAN_STAMP): $(wildcard $(LEAN_DIR)/GoldenProofs/*.lean) $(LEAN_DIR)/lakefile.
 
 lean-shamir:
 	@echo "=== Building Shamir correctness proof ==="
-	cd $(LEAN_DIR) && lake build GoldenProofs.ShamirCorrectness
+	cd $(LEAN_DIR) && lake build GoldenDkg.ShamirCorrectness
 	@echo "[PASS] ShamirCorrectness.lean verified (5 theorems)."
 
 lean-vss:
 	@echo "=== Building VSS correctness proof ==="
-	cd $(LEAN_DIR) && lake build GoldenProofs.VSSCorrectness
+	cd $(LEAN_DIR) && lake build GoldenDkg.VSSCorrectness
 	@echo "[PASS] VSSCorrectness.lean verified (4 theorems)."
 
 lean-symmetry:
 	@echo "=== Building eVRF DH symmetry proof (Task 5) ==="
-	cd $(LEAN_DIR) && lake build GoldenProofs.EVRFSymmetry
+	cd $(LEAN_DIR) && lake build GoldenDkg.EVRFSymmetry
 	@echo "[PASS] EVRFSymmetry.lean verified (7 theorems, 0 sorry)."
 
 lean-circuit:
 	@echo "=== Building R_eVRF circuit proof (Task 8) ==="
-	cd $(LEAN_DIR) && lake build GoldenProofs.EVRFCircuit
+	cd $(LEAN_DIR) && lake build GoldenDkg.EVRFCircuit
 	@echo "[PASS] EVRFCircuit.lean verified (circuit completeness + constraint count)."
 
 lean-evrf-e2e:
 	@echo "=== Building eVRF end-to-end correctness proof ==="
-	cd $(LEAN_DIR) && lake build GoldenProofs.EVRFEndToEnd
+	cd $(LEAN_DIR) && lake build GoldenDkg.EVRFEndToEnd
 	@echo "[PASS] EVRFEndToEnd.lean verified (pipeline correctness + uniqueness)."
 
 lean-refresh:
 	@echo "=== Building refresh correctness proof ==="
-	cd $(LEAN_DIR) && lake build GoldenProofs.RefreshCorrectness
+	cd $(LEAN_DIR) && lake build GoldenDkg.RefreshCorrectness
 	@echo "[PASS] RefreshCorrectness.lean verified (4 theorems)."
 
 lean-reshare:
 	@echo "=== Building reshare correctness proof ==="
-	cd $(LEAN_DIR) && lake build GoldenProofs.ReshareCorrectness
+	cd $(LEAN_DIR) && lake build GoldenDkg.ReshareCorrectness
 	@echo "[PASS] ReshareCorrectness.lean verified (4+ theorems)."
 
 lean-security:
 	@echo "=== Building eVRF security proof (Task 7) ==="
-	cd $(LEAN_DIR) && lake build GoldenProofs.EVRFSecurity
+	cd $(LEAN_DIR) && lake build GoldenDkg.EVRFSecurity
 	@echo "[PASS] EVRFSecurity.lean verified (game hops + LHL bound + composition)."
 
 lean-uc:
 	@echo "=== Building UC simulation proof (Task 9) ==="
-	cd $(LEAN_DIR) && lake build GoldenProofs.UCSimulation
+	cd $(LEAN_DIR) && lake build GoldenDkg.UCSimulation
 	@echo "[PASS] UCSimulation.lean verified (simulator construction + programming)."
 
 # ============================================================
