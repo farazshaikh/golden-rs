@@ -474,6 +474,7 @@ fn main() {
     let mut prev_output_lines: u16 = 0;
     let mut latency = LatencyTracker::new(20);
     let mut strip = BlockStrip::new();
+    let mut last_vetkey_line: Option<String> = None;
 
     let mut view: u64 = 1;
     let mut finalized_count: u64 = 0;
@@ -501,26 +502,32 @@ fn main() {
         }
 
         // ── vetKeys IBE demo (every N views) ────────────────────────
-        let vetkey_line = if cli.vetkey_interval > 0 && view % cli.vetkey_interval == 0 {
+        if cli.vetkey_interval > 0 && view % cli.vetkey_interval == 0 {
             let vk_result = engine_vetkeys::run_vetkeys_demo(
                 &engine.replicas,
                 &pk,
                 t as usize,
                 view,
             );
-            Some(engine_vetkeys::format_vetkeys_result(&vk_result))
+            last_vetkey_line = Some(engine_vetkeys::format_vetkeys_result(&vk_result));
+        }
+
+        // Build the vetKeys status table (single row, shown between pk_table and view table)
+        let vetkey_table_str = if let Some(ref vk_line) = last_vetkey_line {
+            let mut vk_table = Table::new();
+            vk_table
+                .load_preset(UTF8_FULL)
+                .set_content_arrangement(ContentArrangement::Dynamic);
+            vk_table.add_row(vec![Cell::new(vk_line).fg(Color::Magenta)]);
+            format!("{vk_table}\n")
         } else {
-            None
+            String::new()
         };
 
         let strip_rendered = strip.render();
         let table = build_view_table(view, &result, &latency);
         let table_rendered = table.to_string();
-        let vetkey_suffix = vetkey_line
-            .as_ref()
-            .map(|l| format!("\n {l}"))
-            .unwrap_or_default();
-        let full_output = format!("{}\n{}{}", strip_rendered, table_rendered, vetkey_suffix);
+        let full_output = format!("{}{}\n{}", vetkey_table_str, strip_rendered, table_rendered);
 
         if overwrite && view > 1 {
             execute!(
