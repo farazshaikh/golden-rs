@@ -1,6 +1,13 @@
 # golden-rs
 
-Rust workspace for **threshold cryptography**, **BFT consensus**, and **identity-based encryption** -- all formally verified.
+Rust workspace for **threshold cryptography**, **BFT consensus**, and **identity-based encryption**.
+
+| Component | Formal Verification Status |
+|-----------|---------------------------|
+| Golden DKG (Shamir, VSS, eVRF, Refresh, Reshare) | **Verified** -- 37 Lean theorems, 18 F* modules, 20 Kani harnesses |
+| Threshold BLS signatures | Pending |
+| Simplex BFT consensus | Pending |
+| vetKeys IBE | Pending |
 
 ![Simplex Consensus with vetKeys IBE Demo](assets/simplex-vetkeys-demo.png)
 
