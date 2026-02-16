@@ -1,5 +1,5 @@
 [workspace]
-members = ["golden-dkg", "golden-demo", "threshold_crypto", "simplex-consensus", "simplex"]
+members = ["golden-dkg", "golden-demo", "threshold_crypto", "simplex-consensus"]
 resolver = "2"
 
 [workspace.dependencies]

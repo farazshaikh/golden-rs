@@ -25,8 +25,8 @@ use golden_dkg::types::NodeId;
 use threshold_crypto::cache::LagrangeCache;
 use threshold_crypto::dkg;
 
-use simplex::engine::{ConsensusEngine, ViewOutcome};
-use simplex::naughty::{ByzantineBehavior, Scenario};
+use simplex_consensus::sim::engine::{ConsensusEngine, ViewOutcome};
+use simplex_consensus::sim::naughty::{ByzantineBehavior, Scenario};
 
 // ── CLI ─────────────────────────────────────────────────────────────────
 
@@ -269,7 +269,7 @@ fn behavior_color(beh: ByzantineBehavior) -> Color {
 
 fn build_view_table(
     view: u64,
-    result: &simplex::engine::ViewResult,
+    result: &simplex_consensus::sim::engine::ViewResult,
     latency: &LatencyTracker,
 ) -> Table {
     let mut table = Table::new();
@@ -333,7 +333,7 @@ fn build_view_table(
 
     // One row per node
     for action in &result.node_actions {
-        let is_leader = matches!(action.role, simplex::engine::NodeRole::Leader);
+        let is_leader = matches!(action.role, simplex_consensus::sim::engine::NodeRole::Leader);
         let beh = action.behavior;
 
         // Node name cell

@@ -15,10 +15,10 @@ use golden_dkg::types::NodeId;
 use threshold_crypto::cache::LagrangeCache;
 use threshold_crypto::types::{GroupInfo, KeyShare};
 
-use simplex_consensus::replica::Replica;
-use simplex_consensus::types::*;
+use crate::replica::Replica;
+use crate::types::*;
 
-use crate::naughty::{self, ByzantineBehavior, Delivery, FilterContext, Scenario};
+use crate::sim::naughty::{self, ByzantineBehavior, Delivery, FilterContext, Scenario};
 
 // ── Display-oriented types (simulation only) ────────────────────────────
 
@@ -340,7 +340,7 @@ impl ConsensusEngine {
             for &nid in &self.node_ids {
                 if self.behavior(nid) == ByzantineBehavior::Capitulator {
                     let share = &self.shares[&nid];
-                    let msg = simplex_consensus::vrf::vrf_message(view);
+                    let msg = crate::vrf::vrf_message(view);
                     let digest = threshold_crypto::beacon::digest_message(view, Some(&msg));
                     let msg_hash = threshold_crypto::beacon::hash_to_g2(&digest);
                     let sig = threshold_crypto::signing::partial_sign(&msg_hash, share);

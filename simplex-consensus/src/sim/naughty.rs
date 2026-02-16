@@ -11,7 +11,7 @@ use golden_dkg::types::NodeId;
 use std::collections::HashMap;
 use std::fmt;
 
-use simplex_consensus::types::*;
+use crate::types::*;
 use threshold_crypto::types::KeyShare;
 
 /// What kind of adversary a node is.

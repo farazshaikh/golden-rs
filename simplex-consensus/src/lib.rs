@@ -1,11 +1,18 @@
-//! # Simplex Consensus Core
+//! # Simplex Consensus
 //!
 //! Pure state machine implementation of the Simplex BFT consensus protocol
 //! (Chan & Pass, 2023) using BLS12-381 threshold signatures.
 //!
-//! This crate is the formal verification target. It contains NO networking,
-//! timers, display, or simulation logic. The single entry point is
-//! [`replica::Replica::apply_message`].
+//! ## Crate structure
+//!
+//! **Formal verification target** (the consensus core):
+//! - [`types`] -- Protocol data structures (Block, Certificate, Message, etc.)
+//! - [`replica`] -- The state machine: [`Replica::apply_message`]
+//! - [`vrf`] -- Leader election oracle
+//!
+//! **Simulation** (NOT in scope for verification):
+//! - [`sim::engine`] -- Message-routing engine that drives N replicas
+//! - [`sim::naughty`] -- Byzantine behavior presets
 //!
 //! ## Protocol summary (Paper Section 2.1)
 //!
@@ -19,6 +26,10 @@
 //!
 //! Safety (Theorem 3.1) holds for f < n/3 via quorum intersection.
 
+// ── Consensus core (formal verification target) ────────────────────────
 pub mod types;
 pub mod replica;
 pub mod vrf;
+
+// ── Simulation (NOT in scope for formal verification) ──────────────────
+pub mod sim;
