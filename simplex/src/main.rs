@@ -471,6 +471,8 @@ fn main() {
     let mut strip = BlockStrip::new();
 
     let mut view: u64 = 1;
+    let mut finalized_count: u64 = 0;
+    let mut nullified_count: u64 = 0;
     loop {
         if let Some(max) = max_rounds {
             if view > max {
@@ -481,10 +483,16 @@ fn main() {
         let result = engine.run_view(view);
         latency.push(result.latency_ms);
 
-        // Record outcome in the block strip
+        // Track finalized/nullified counts for display.
         match &result.outcome {
-            ViewOutcome::Finalized { .. } => strip.push(BlockSlot::Finalized),
-            ViewOutcome::Nullified { .. } => strip.push(BlockSlot::Nullified),
+            ViewOutcome::Finalized { .. } => {
+                finalized_count += 1;
+                strip.push(BlockSlot::Finalized);
+            }
+            ViewOutcome::Nullified { .. } => {
+                nullified_count += 1;
+                strip.push(BlockSlot::Nullified);
+            }
         }
 
         let strip_rendered = strip.render();
@@ -518,11 +526,10 @@ fn main() {
         view += 1;
     }
 
-    let state = &engine.chain_state;
     eprintln!(
         "\n{} views complete. Finalized: {}, Nullified: {}",
         view,
-        state.finalized_count,
-        state.nullified_count,
+        finalized_count,
+        nullified_count,
     );
 }

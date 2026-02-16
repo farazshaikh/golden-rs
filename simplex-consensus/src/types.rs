@@ -114,6 +114,15 @@ pub enum Message {
         block: Block,
         certificate: Certificate,
     },
+
+    /// Request this replica to propose a block for the given view.
+    /// Paper Step 1: "If p = L_h, p multicasts a single proposal."
+    /// The replica checks it IS the leader and builds the block from
+    /// its own chain state (parent_hash = self.chain_state.tip_hash).
+    ProposeRequest {
+        view: View,
+        payload: Vec<u8>,
+    },
 }
 
 /// The state transition produced by a Replica after processing a Message.
@@ -201,6 +210,12 @@ pub enum Outgoing {
         view: View,
         block: Block,
         certificate: Certificate,
+    },
+
+    /// A block proposal to broadcast to all peers.
+    /// Paper Step 1: leader multicasts "<propose, h, b_0..b_h, S>"
+    Proposal {
+        block: Block,
     },
 }
 

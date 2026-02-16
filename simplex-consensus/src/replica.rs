@@ -125,6 +125,9 @@ impl Replica {
             Message::Notarization { view, block, certificate } => {
                 self.handle_notarization(view, block, certificate)
             }
+            Message::ProposeRequest { view, payload } => {
+                self.handle_propose_request(view, payload)
+            }
         }
     }
 
@@ -147,6 +150,50 @@ impl Replica {
     /// Paper: "L_h := H*(h) mod n"
     pub fn leader_for(&self, _view: View) -> NodeId {
         vrf::elect_leader(&self.chain_state.vrf_seed, self.config.n)
+    }
+
+    // ── Step 1: Handle propose request (Paper Section 2.1, Step 1) ────
+
+    /// Paper Step 1: "If p = L_h, p multicasts a single proposal."
+    ///
+    /// The replica checks it IS the designated leader, then builds a block
+    /// from its own chain state and votes for it. Returns the block in
+    /// `Outgoing::Proposal` for the engine to broadcast, plus the vote.
+    fn handle_propose_request(
+        &mut self,
+        view: View,
+        payload: Vec<u8>,
+    ) -> (StateTransition, Vec<Outgoing>) {
+        if view != self.current_view {
+            return (StateTransition::Pending, vec![]);
+        }
+
+        // Only the designated leader proposes.
+        let leader = self.leader_for(view);
+        if leader != self.id {
+            return (StateTransition::Pending, vec![]);
+        }
+
+        // Build block from OWN chain state (no god-view).
+        let block = Block {
+            view,
+            parent_hash: self.chain_state.tip_hash,
+            payload,
+            proposer: self.id,
+        };
+
+        // Leader also votes for its own block (Paper Step 3).
+        let bh = block_hash(&block);
+        self.voted_in_view = true;
+        self.voted_block = Some(block.clone());
+        self.known_blocks.insert(bh, block.clone());
+        let sig = self.sign_vote(view, &bh);
+        self.notarize_votes.entry(bh).or_default().push((self.id, sig.clone()));
+
+        (StateTransition::Pending, vec![
+            Outgoing::Proposal { block },
+            Outgoing::Vote { view, block_hash: bh, partial: sig },
+        ])
     }
 
     // ── Step 1 + 3: Handle proposal (Paper Section 2.1, Steps 1 & 3) ───
@@ -396,10 +443,12 @@ impl Replica {
             return (StateTransition::Pending, vec![]);
         }
 
-        // Threshold reached: block is notarized.
+        // Threshold reached: block is notarized (NOT finalized yet).
+        // Paper: notarization != finalization. Finalization requires a
+        // SECOND round of 2n/3 <finalize, h> votes (Paper Step 4+5).
         self.notarized_in_view = Some(bh);
 
-        // Update chain state.
+        // Update chain state: tip advances on notarization.
         self.chain_state.tip_hash = bh;
 
         // Paper Step 4: if timer has NOT fired, send <finalize, h>.
@@ -467,6 +516,7 @@ impl Replica {
         self.chain_state.vrf_seed = vrf_seed;
 
         // Note: tip_hash does NOT change on nullification (dummy doesn't extend chain).
+        self.chain_state.nullified_count += 1;
 
         self.advance_view();
 

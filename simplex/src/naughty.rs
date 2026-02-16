@@ -1,11 +1,18 @@
 //! Byzantine behavior presets for Simplex consensus simulation.
 //!
-//! All adversarial logic is isolated here. The engine consults these
-//! functions to decide what each node does each view.
+//! All adversarial logic is isolated here. The engine's message router
+//! passes outgoing messages through [`filter_outgoing`] before delivery.
+//! Byzantine behavior is modeled as message manipulation in transit:
+//! - Drop (silent leader, non-voter)
+//! - Duplicate with modification (equivocation, double-vote)
+//! - Inject (fake leader)
 
 use golden_dkg::types::NodeId;
 use std::collections::HashMap;
 use std::fmt;
+
+use simplex_consensus::types::*;
+use threshold_crypto::types::KeyShare;
 
 /// What kind of adversary a node is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -259,4 +266,201 @@ pub fn should_vote(behavior: ByzantineBehavior, view: u64) -> VoteAction {
             }
         }
     }
+}
+
+// ── Message filter (Byzantine manipulation in transit) ───────────────
+
+/// A delivery action: who gets what message.
+pub struct Delivery {
+    pub recipient: NodeId,
+    pub message: Message,
+}
+
+/// Context needed by the filter to forge signatures or modify blocks.
+pub struct FilterContext<'a> {
+    pub sender: NodeId,
+    pub sender_behavior: ByzantineBehavior,
+    pub view: View,
+    pub all_node_ids: &'a [NodeId],
+    pub shares: &'a HashMap<NodeId, KeyShare>,
+}
+
+/// Filter an outgoing message from a sender before delivery.
+///
+/// Returns the list of (recipient, message) pairs to deliver.
+/// Honest nodes: the message is delivered to all peers unchanged.
+/// Byzantine nodes: messages may be dropped, modified, or duplicated.
+pub fn filter_outgoing(
+    out: &Outgoing,
+    ctx: &FilterContext,
+) -> Vec<Delivery> {
+    let beh = ctx.sender_behavior;
+
+    // Honest nodes: broadcast to all peers.
+    if !beh.is_byzantine() {
+        return broadcast_to_all(out, ctx.sender, ctx.all_node_ids);
+    }
+
+    match out {
+        Outgoing::Proposal { block } => filter_proposal(block, ctx),
+        Outgoing::Vote { view, block_hash, partial } => {
+            filter_vote(*view, *block_hash, partial, ctx)
+        }
+        Outgoing::NullifyVote { .. } => {
+            // Byzantine: drop nullify votes for Abstain scenarios,
+            // otherwise broadcast normally (capitulators want views to advance).
+            let vote_action = should_vote(beh, ctx.view);
+            if matches!(vote_action, VoteAction::Abstain) {
+                vec![] // drop
+            } else {
+                broadcast_to_all(out, ctx.sender, ctx.all_node_ids)
+            }
+        }
+        Outgoing::FinalizeVote { .. } | Outgoing::RelayNotarization { .. } => {
+            // Broadcast normally (Byzantine nodes still want to advance).
+            broadcast_to_all(out, ctx.sender, ctx.all_node_ids)
+        }
+    }
+}
+
+/// Filter a proposal from a Byzantine leader.
+fn filter_proposal(block: &Block, ctx: &FilterContext) -> Vec<Delivery> {
+    let beh = ctx.sender_behavior;
+    let action = should_propose(beh, true, ctx.view);
+
+    match action {
+        ProposalAction::Skip => vec![], // silent leader: drop proposal
+        ProposalAction::Propose => {
+            // Normal proposal
+            broadcast_to_all(
+                &Outgoing::Proposal { block: block.clone() },
+                ctx.sender, ctx.all_node_ids,
+            )
+        }
+        ProposalAction::Equivocate => {
+            // Send block A to even-indexed peers, block B to odd-indexed.
+            // Block B has different payload but same parent/view/proposer.
+            let block_b = Block {
+                view: block.view,
+                parent_hash: block.parent_hash,
+                payload: format!("equivoc-B-v{}-by-{}", block.view, block.proposer).into_bytes(),
+                proposer: block.proposer,
+            };
+
+            let mut deliveries = Vec::new();
+            for (idx, &nid) in ctx.all_node_ids.iter().enumerate() {
+                if nid == ctx.sender { continue; }
+                let b = if idx % 2 == 0 { block.clone() } else { block_b.clone() };
+                deliveries.push(Delivery {
+                    recipient: nid,
+                    message: Message::Proposal { block: b },
+                });
+            }
+            deliveries
+        }
+        ProposalAction::FakePropose => {
+            // Fake leader: inject proposal even though not the real leader.
+            // Most replicas will reject (WrongLeader).
+            broadcast_to_all(
+                &Outgoing::Proposal { block: block.clone() },
+                ctx.sender, ctx.all_node_ids,
+            )
+        }
+    }
+}
+
+/// Filter a vote from a Byzantine voter.
+fn filter_vote(
+    view: View,
+    bh: BlockHash,
+    partial: &threshold_crypto::types::PartialSignature,
+    ctx: &FilterContext,
+) -> Vec<Delivery> {
+    let beh = ctx.sender_behavior;
+    let vote_action = should_vote(beh, view);
+
+    match vote_action {
+        VoteAction::Abstain => vec![], // drop the vote
+        VoteAction::Vote => {
+            // Send the vote normally.
+            broadcast_vote_to_all(view, bh, ctx.sender, partial, ctx.all_node_ids)
+        }
+        VoteAction::DoubleVote => {
+            // Send the original vote to all peers.
+            let mut deliveries = broadcast_vote_to_all(view, bh, ctx.sender, partial, ctx.all_node_ids);
+            // For capitulators: also forge a vote for ANY other block hash
+            // they might know about. In practice this is the other equivocation
+            // block. The engine will inject the second block hash when it
+            // detects equivocation.
+            // (The actual double-vote injection is handled by the engine
+            // because the filter doesn't know the other block hash.)
+            deliveries
+        }
+    }
+}
+
+/// Broadcast an Outgoing message as a Message to all peers (except sender).
+fn broadcast_to_all(out: &Outgoing, sender: NodeId, all_ids: &[NodeId]) -> Vec<Delivery> {
+    let msg = outgoing_to_message(out, sender);
+    all_ids.iter()
+        .filter(|&&nid| nid != sender)
+        .map(|&nid| Delivery { recipient: nid, message: msg.clone() })
+        .collect()
+}
+
+/// Broadcast a vote to all peers.
+fn broadcast_vote_to_all(
+    view: View,
+    bh: BlockHash,
+    sender: NodeId,
+    partial: &threshold_crypto::types::PartialSignature,
+    all_ids: &[NodeId],
+) -> Vec<Delivery> {
+    all_ids.iter()
+        .filter(|&&nid| nid != sender)
+        .map(|&nid| Delivery {
+            recipient: nid,
+            message: Message::Vote {
+                view,
+                block_hash: bh,
+                signer: sender,
+                partial: partial.clone(),
+            },
+        })
+        .collect()
+}
+
+/// Convert an Outgoing to a Message for delivery.
+pub fn outgoing_to_message(out: &Outgoing, sender: NodeId) -> Message {
+    match out {
+        Outgoing::Vote { view, block_hash, partial } => Message::Vote {
+            view: *view, block_hash: *block_hash, signer: sender, partial: partial.clone(),
+        },
+        Outgoing::NullifyVote { view, partial } => Message::NullifyVote {
+            view: *view, signer: sender, partial: partial.clone(),
+        },
+        Outgoing::FinalizeVote { view, partial } => Message::FinalizeVote {
+            view: *view, signer: sender, partial: partial.clone(),
+        },
+        Outgoing::RelayNotarization { view, block, certificate } => Message::Notarization {
+            view: *view, block: block.clone(), certificate: certificate.clone(),
+        },
+        Outgoing::Proposal { block } => Message::Proposal {
+            block: block.clone(),
+        },
+    }
+}
+
+/// Forge a vote for a given block hash using a Byzantine node's key share.
+pub fn forge_vote(
+    share: &KeyShare,
+    view: View,
+    bh: &BlockHash,
+) -> threshold_crypto::types::PartialSignature {
+    use threshold_crypto::{beacon, signing};
+    let mut msg = view.to_be_bytes().to_vec();
+    msg.extend_from_slice(bh);
+    let digest = beacon::digest_message(view, Some(&msg));
+    let msg_hash = beacon::hash_to_g2(&digest);
+    signing::partial_sign(&msg_hash, share)
 }
