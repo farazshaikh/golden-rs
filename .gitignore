@@ -6,3 +6,4 @@ Cargo.lock
 .DS_Store
 .verification-stamps/
 dep.graph
+.vmonad/

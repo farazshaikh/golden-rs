@@ -56,13 +56,13 @@
 
 use std::collections::HashMap;
 
-use golden_dkg::types::NodeId;
-use threshold_crypto::beacon;
-use threshold_crypto::signing;
-use threshold_crypto::types::{KeyShare, PartialSignature};
+use crate::types::NodeId;
+use crate::threshold::beacon;
+use crate::threshold::signing;
+use crate::threshold::types::{KeyShare, PartialSignature};
 
-use crate::types::*;
-use crate::vrf;
+use crate::consensus::types::*;
+use crate::consensus::vrf;
 
 /// A Simplex consensus replica (one participant's state machine).
 ///
@@ -249,10 +249,10 @@ impl Replica {
     pub fn vetkd_encrypted_key_share(
         &self,
         identity: &[u8],
-        tpk: &threshold_crypto::ibe::TransportPublicKey,
-    ) -> threshold_crypto::ibe::EncryptedKeyShare {
+        tpk: &crate::threshold::ibe::TransportPublicKey,
+    ) -> crate::threshold::ibe::EncryptedKeyShare {
         let mut rng = rand::thread_rng();
-        threshold_crypto::ibe::encrypt_key_share(
+        crate::threshold::ibe::encrypt_key_share(
             &self.share,
             identity,
             tpk,

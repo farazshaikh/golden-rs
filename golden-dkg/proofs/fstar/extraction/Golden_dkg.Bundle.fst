@@ -47,16 +47,6 @@ val impl_1': Core_models.Fmt.t_Debug t_SchnorrPoK
 unfold
 let impl_1 = impl_1'
 
-/// Fiat-Shamir challenge: c = H(g || pk || R) mod r.
-/// Excluded from hax extraction (uses serialize_compressed with &mut).
-/// Modeled as an opaque Random Oracle mapping in F*.
-assume val compute_challenge
-      (pk: Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
-      (commitment: Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config)
-    : Ark_ff.Fields.Models.Fp.t_Fp
-      (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig
-          (mk_usize 4)) (mk_usize 4)
-
 /// Verify a Schnorr proof of knowledge.
 /// Checks the verification equation: `g^s == R + c * PK`
 /// where `c = H(g || pk || R)`.
@@ -69,7 +59,7 @@ let verify
   let challenge:Ark_ff.Fields.Models.Fp.t_Fp
     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig
         (mk_usize 4)) (mk_usize 4) =
-    compute_challenge pk proof.f_commitment
+    Golden_dkg.Schnorr_pok.compute_challenge pk proof.f_commitment
   in
   let lhs:Ark_ec.Models.Short_weierstrass.Affine.t_Affine Ark_bls12_381_.Curves.G1.t_Config =
     Ark_ec.f_into_affine #(Ark_ec.Models.Short_weierstrass.Group.t_Projective
@@ -273,7 +263,7 @@ let prove
   let challenge:Ark_ff.Fields.Models.Fp.t_Fp
     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig
         (mk_usize 4)) (mk_usize 4) =
-    compute_challenge pk commitment
+    Golden_dkg.Schnorr_pok.compute_challenge pk commitment
   in
   let response:Ark_ff.Fields.Models.Fp.t_Fp
     (Ark_ff.Fields.Models.Fp.Montgomery_backend.t_MontBackend Ark_bls12_381_.Fields.Fr.t_FrConfig

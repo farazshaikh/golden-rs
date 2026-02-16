@@ -29,7 +29,7 @@ use std::time::Instant;
 
 use ark_bls12_381::G1Affine;
 use ark_ec::AffineRepr;
-use threshold_crypto::ibe;
+use golden_dkg::threshold::ibe;
 
 use crate::replica::Replica;
 

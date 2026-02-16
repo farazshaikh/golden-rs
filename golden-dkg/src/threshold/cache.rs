@@ -5,9 +5,9 @@
 //! repeated field inversions.
 
 use ark_bls12_381::Fr;
-use golden_dkg::types::NodeId;
+use crate::types::NodeId;
 
-use crate::signing::lagrange_coeff;
+use crate::threshold::signing::lagrange_coeff;
 
 /// Precomputed Lagrange coefficients for each selected subset.
 ///

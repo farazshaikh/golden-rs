@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::types::*;
-use threshold_crypto::types::KeyShare;
+use golden_dkg::threshold::types::KeyShare;
 
 /// What kind of adversary a node is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -373,7 +373,7 @@ fn filter_proposal(block: &Block, ctx: &FilterContext) -> Vec<Delivery> {
 fn filter_vote(
     view: View,
     bh: BlockHash,
-    partial: &threshold_crypto::types::PartialSignature,
+    partial: &golden_dkg::threshold::types::PartialSignature,
     ctx: &FilterContext,
 ) -> Vec<Delivery> {
     let beh = ctx.sender_behavior;
@@ -413,7 +413,7 @@ fn broadcast_vote_to_all(
     view: View,
     bh: BlockHash,
     sender: NodeId,
-    partial: &threshold_crypto::types::PartialSignature,
+    partial: &golden_dkg::threshold::types::PartialSignature,
     all_ids: &[NodeId],
 ) -> Vec<Delivery> {
     all_ids.iter()
@@ -456,8 +456,8 @@ pub fn forge_vote(
     share: &KeyShare,
     view: View,
     bh: &BlockHash,
-) -> threshold_crypto::types::PartialSignature {
-    use threshold_crypto::{beacon, signing};
+) -> golden_dkg::threshold::types::PartialSignature {
+    use golden_dkg::threshold::{beacon, signing};
     let mut msg = view.to_be_bytes().to_vec();
     msg.extend_from_slice(bh);
     let digest = beacon::digest_message(view, Some(&msg));

@@ -12,8 +12,8 @@ use std::collections::{HashMap, VecDeque};
 use std::time::Instant;
 
 use golden_dkg::types::NodeId;
-use threshold_crypto::cache::LagrangeCache;
-use threshold_crypto::types::{GroupInfo, KeyShare};
+use golden_dkg::threshold::cache::LagrangeCache;
+use golden_dkg::threshold::types::{GroupInfo, KeyShare};
 
 use crate::replica::Replica;
 use crate::types::*;
@@ -341,9 +341,9 @@ impl ConsensusEngine {
                 if self.behavior(nid) == ByzantineBehavior::Capitulator {
                     let share = &self.shares[&nid];
                     let msg = crate::vrf::vrf_message(view);
-                    let digest = threshold_crypto::beacon::digest_message(view, Some(&msg));
-                    let msg_hash = threshold_crypto::beacon::hash_to_g2(&digest);
-                    let sig = threshold_crypto::signing::partial_sign(&msg_hash, share);
+                    let digest = golden_dkg::threshold::beacon::digest_message(view, Some(&msg));
+                    let msg_hash = golden_dkg::threshold::beacon::hash_to_g2(&digest);
+                    let sig = golden_dkg::threshold::signing::partial_sign(&msg_hash, share);
                     timeout_outgoing.push((nid, vec![Outgoing::NullifyVote { view, partial: sig }]));
                 }
             }

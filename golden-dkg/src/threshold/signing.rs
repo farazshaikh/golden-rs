@@ -8,10 +8,10 @@ use ark_bls12_381::{Bls12_381, Fr, G1Affine, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::Field;
-use golden_dkg::types::NodeId;
+use crate::types::NodeId;
 
-use crate::cache::LagrangeCache;
-use crate::types::{KeyShare, PartialSignature, ThresholdSignature};
+use crate::threshold::cache::LagrangeCache;
+use crate::threshold::types::{KeyShare, PartialSignature, ThresholdSignature};
 
 /// Compute a partial BLS signature: `sigma_i = H(m)^{sk_i}`.
 ///

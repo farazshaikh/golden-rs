@@ -1,31 +1,27 @@
 [package]
-name = "simplex-consensus"
+name = "simplex-demo"
 version = "0.2.5"
 edition = "2021"
 authors = ["Faraz Shaikh <faraz.shaikh@gmail.com>"]
-description = "Simplex BFT consensus -- pure state machine core + simulation demo"
+description = "Simplex BFT consensus demo with vetKeys IBE (workspace-only, not published)"
 license = "MIT OR Apache-2.0"
-
-# The library (formal verification target) has minimal deps.
-# The binary (demo) adds clap, comfy-table, crossterm.
+publish = false
 
 [dependencies]
-# Core consensus deps (used by lib)
-threshold-crypto = { path = "../threshold_crypto" }
 golden-dkg = { path = "../golden-dkg" }
 ark-bls12-381 = { workspace = true }
 ark-ec = { workspace = true }
 ark-ff = { workspace = true }
 ark-serialize = { workspace = true }
 sha2 = { workspace = true }
+rand = { workspace = true }
+rand_chacha = "0.3"
+rayon = "1"
 
 # Demo binary deps
 clap = { version = "4", features = ["derive"] }
 comfy-table = "7"
 crossterm = "0.28"
-rand = { workspace = true }
-rand_chacha = "0.3"
-rayon = "1"
 
 [[bin]]
 name = "simplex-demo"

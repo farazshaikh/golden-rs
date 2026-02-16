@@ -2,6 +2,10 @@
 members = ["golden-dkg", "golden-demo", "threshold_crypto", "simplex-consensus"]
 resolver = "2"
 
+# Note: threshold_crypto/ is now "threshold-demo" (publish=false)
+# and simplex-consensus/ is now "simplex-demo" (publish=false).
+# Only golden-dkg is published to crates.io.
+
 [workspace.dependencies]
 ark-bls12-381 = "0.5"
 ark-ec = "0.5"

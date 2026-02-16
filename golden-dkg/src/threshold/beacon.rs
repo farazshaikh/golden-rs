@@ -15,7 +15,7 @@ use ark_std::rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use sha2::{Digest, Sha256};
 
-use crate::types::{Beacon, BeaconMode, ThresholdSignature};
+use crate::threshold::types::{Beacon, BeaconMode, ThresholdSignature};
 
 /// Compute the message digest for a given round.
 ///
@@ -95,6 +95,6 @@ impl Beacon {
         };
 
         let threshold_sig = ThresholdSignature { signature: sig };
-        crate::signing::verify(&msg_hash, &threshold_sig, group_pk)
+        crate::threshold::signing::verify(&msg_hash, &threshold_sig, group_pk)
     }
 }

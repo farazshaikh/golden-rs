@@ -5,7 +5,7 @@
 //! with drand-compatible beacon output.
 
 use ark_bls12_381::{Fr, G1Affine, G2Affine};
-use golden_dkg::types::NodeId;
+use crate::types::NodeId;
 
 /// Information about the threshold group derived from DKG output.
 ///

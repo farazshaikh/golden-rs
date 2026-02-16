@@ -15,7 +15,7 @@
 //! | "H: collision-resistant hash function" | [`block_hash()`] using SHA-256 |
 
 use ark_bls12_381::{G1Affine, G2Affine};
-use golden_dkg::types::NodeId;
+use crate::types::NodeId;
 
 // ── Protocol data structures (Paper Section 2) ─────────────────────────
 
@@ -125,7 +125,7 @@ pub enum Message {
         view: View,
         block_hash: BlockHash,
         signer: NodeId,
-        partial: threshold_crypto::types::PartialSignature,
+        partial: crate::threshold::types::PartialSignature,
     },
 
     /// Paper Step 2: Local timer T_h fired.
@@ -139,7 +139,7 @@ pub enum Message {
     NullifyVote {
         view: View,
         signer: NodeId,
-        partial: threshold_crypto::types::PartialSignature,
+        partial: crate::threshold::types::PartialSignature,
     },
 
     /// Paper Step 4: A finalize vote `<finalize, h>` from another node.
@@ -149,7 +149,7 @@ pub enum Message {
     FinalizeVote {
         view: View,
         signer: NodeId,
-        partial: threshold_crypto::types::PartialSignature,
+        partial: crate::threshold::types::PartialSignature,
     },
 
     /// Paper Step 4: A relayed notarized blockchain of height h.
@@ -246,21 +246,21 @@ pub enum Outgoing {
     Vote {
         view: View,
         block_hash: BlockHash,
-        partial: threshold_crypto::types::PartialSignature,
+        partial: crate::threshold::types::PartialSignature,
     },
 
     /// Broadcast `<vote, h, ⊥_h>` to all peers (dummy/timeout vote).
     /// Paper Step 2: "vote for the dummy block by multicasting `<vote, h, ⊥_h>`."
     NullifyVote {
         view: View,
-        partial: threshold_crypto::types::PartialSignature,
+        partial: crate::threshold::types::PartialSignature,
     },
 
     /// Broadcast `<finalize, h>` to all peers.
     /// Paper Step 4: "cancel T_h and multicast `<finalize, h>`."
     FinalizeVote {
         view: View,
-        partial: threshold_crypto::types::PartialSignature,
+        partial: crate::threshold::types::PartialSignature,
     },
 
     /// Relay the notarized blockchain to all peers.

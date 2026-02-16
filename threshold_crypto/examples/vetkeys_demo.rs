@@ -15,7 +15,7 @@
 use std::time::Instant;
 
 use ark_ec::AffineRepr;
-use threshold_crypto::{dkg, ibe};
+use threshold_demo::{dkg, ibe};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

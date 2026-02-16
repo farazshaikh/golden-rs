@@ -1,42 +1,12 @@
-//! BLS12-381 threshold signatures with drand-compatible beacon format.
+//! Threshold BLS signatures -- re-exports from `golden_dkg::threshold`.
 //!
-//! This crate provides a clean API for threshold BLS signing built on top of
-//! [`golden_dkg`]. It separates the pure cryptographic operations (signing,
-//! verification, Lagrange interpolation, beacon construction) from any
-//! display or CLI concerns.
-//!
-//! # Modules
-//!
-//! - [`types`] -- Core data structures: `KeyShare`, `GroupInfo`, `PartialSignature`,
-//!   `ThresholdSignature`, `Beacon`, `BeaconMode`.
-//! - [`signing`] -- Partial signing, combination, and verification.
-//! - [`beacon`] -- drand-compatible message digests, hash-to-curve, and randomness derivation.
-//! - [`cache`] -- Precomputed Lagrange coefficient cache for fast multi-round signing.
-//! - [`dkg`] -- Bridge from `golden_dkg::DkgOutput` to this crate's `KeyShare`/`GroupInfo`.
-//!
-//! # Example
-//!
-//! ```rust,no_run
-//! use threshold_crypto::{dkg, signing, beacon, cache};
-//!
-//! let (shares, group) = dkg::run_dkg(10, 7);
-//! let node_ids: Vec<_> = shares.iter().map(|s| s.id).collect();
-//! let lc = cache::LagrangeCache::new(&node_ids, group.threshold, 1);
-//!
-//! let digest = beacon::digest_message(1, None);
-//! let msg_hash = beacon::hash_to_g2(&digest);
-//!
-//! let partials: Vec<_> = shares.iter()
-//!     .map(|s| signing::partial_sign(&msg_hash, s))
-//!     .collect();
-//!
-//! let sig = signing::combine(&partials, &node_ids, &lc);
-//! assert!(signing::verify(&msg_hash, &sig, &group.public_key));
-//! ```
+//! This crate is a thin wrapper around `golden_dkg::threshold` for the demo
+//! binaries. The library code lives in the `golden-dkg` crate. This crate is
+//! `publish = false` (workspace-only).
 
-pub mod types;
-pub mod signing;
-pub mod beacon;
-pub mod cache;
-pub mod dkg;
-pub mod ibe;
+pub use golden_dkg::threshold::types;
+pub use golden_dkg::threshold::signing;
+pub use golden_dkg::threshold::beacon;
+pub use golden_dkg::threshold::cache;
+pub use golden_dkg::threshold::dkg;
+pub use golden_dkg::threshold::ibe;

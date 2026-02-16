@@ -5,12 +5,12 @@
 
 use ark_bls12_381::{Fr, G1Affine};
 use ark_ff::UniformRand;
-use golden_dkg::types::*;
-use golden_dkg::dkg;
+use crate::types::*;
+use crate::dkg;
 use rayon::prelude::*;
 use std::collections::HashMap;
 
-use crate::types::{GroupInfo, KeyShare};
+use crate::threshold::types::{GroupInfo, KeyShare};
 
 /// Convert raw DKG outputs into threshold-crypto key shares and group info.
 ///

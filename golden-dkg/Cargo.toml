@@ -1,14 +1,14 @@
 [package]
 name = "golden-dkg"
-version = "0.1.1"
+version = "0.2.5"
 edition = "2021"
 authors = ["Faraz Shaikh <faraz.shaikh@gmail.com>"]
-description = "Golden non-interactive distributed key generation (Bünz, Choi, Komlo 2025)"
+description = "Golden DKG + threshold BLS signatures + vetKeys IBE + Simplex BFT consensus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/farazshaikh/golden-rs"
 documentation = "https://docs.rs/golden-dkg"
 readme = "README.md"
-keywords = ["dkg", "threshold-crypto", "bls12-381", "zero-knowledge"]
+keywords = ["dkg", "threshold-crypto", "bls12-381", "vetkeys", "consensus"]
 categories = ["cryptography"]
 
 [dependencies]
@@ -29,9 +29,15 @@ zeroize = { workspace = true }
 tracing = { workspace = true }
 hax-lib = "0.3.6"
 
+# Optional deps for threshold and consensus features
+rand_chacha = { version = "0.3", optional = true }
+rayon = { version = "1", optional = true }
+
 [features]
-default = []
+default = ["threshold", "consensus"]
 borsh = ["dep:borsh"]
+threshold = ["dep:rand_chacha", "dep:rayon"]
+consensus = ["threshold"]
 
 [dev-dependencies]
 criterion = { version = "0.5" }

@@ -21,11 +21,11 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, Write};
 use std::time::Instant;
 
-use threshold_crypto::beacon;
-use threshold_crypto::cache::{combinations, LagrangeCache};
-use threshold_crypto::dkg;
-use threshold_crypto::signing;
-use threshold_crypto::types::KeyShare;
+use threshold_demo::beacon;
+use threshold_demo::cache::{combinations, LagrangeCache};
+use threshold_demo::dkg;
+use threshold_demo::signing;
+use threshold_demo::types::KeyShare;
 
 // ── CLI ─────────────────────────────────────────────────────────────────
 
@@ -247,7 +247,7 @@ fn threshold_combine(
         let combined = combine_one(&cache.subsets[0], partials);
         let sig_bytes = g2_to_bytes(&combined);
         let valid = if do_verify {
-            signing::verify(msg_hash, &threshold_crypto::types::ThresholdSignature { signature: combined }, pk)
+            signing::verify(msg_hash, &threshold_demo::types::ThresholdSignature { signature: combined }, pk)
         } else {
             true
         };
@@ -265,7 +265,7 @@ fn threshold_combine(
         g2_to_bytes(&w[0]) == g2_to_bytes(&w[1])
     });
     let valid = if do_verify {
-        signing::verify(msg_hash, &threshold_crypto::types::ThresholdSignature { signature: results[0] }, pk)
+        signing::verify(msg_hash, &threshold_demo::types::ThresholdSignature { signature: results[0] }, pk)
     } else {
         true
     };

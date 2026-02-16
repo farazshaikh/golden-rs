@@ -173,3 +173,17 @@ pub(crate) mod evrf;
 pub(crate) mod protocol;
 pub(crate) mod reshare_protocol;
 pub(crate) mod vss;
+
+// Feature-gated modules. These are NOT part of the DKG formal verification
+// target (hax extracts only the core DKG modules above). The threshold and
+// consensus modules have their own verification path.
+
+/// Threshold BLS signatures, vetKeys IBE, and drand-compatible beacon.
+/// Enabled by the `threshold` feature (on by default).
+#[cfg(feature = "threshold")]
+pub mod threshold;
+
+/// Simplex BFT consensus -- pure state machine core.
+/// Enabled by the `consensus` feature (on by default).
+#[cfg(feature = "consensus")]
+pub mod consensus;

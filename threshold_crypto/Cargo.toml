@@ -1,10 +1,11 @@
 [package]
-name = "threshold-crypto"
+name = "threshold-demo"
 version = "0.2.5"
 edition = "2021"
 authors = ["Faraz Shaikh <faraz.shaikh@gmail.com>"]
-description = "BLS12-381 threshold signatures with drand-compatible beacon format"
+description = "Threshold BLS beacon demo (workspace-only, not published)"
 license = "MIT OR Apache-2.0"
+publish = false
 
 [dependencies]
 golden-dkg = { path = "../golden-dkg" }

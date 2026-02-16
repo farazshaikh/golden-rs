@@ -22,12 +22,12 @@ use std::collections::VecDeque;
 use std::io::{self, Write};
 
 use golden_dkg::types::NodeId;
-use threshold_crypto::cache::LagrangeCache;
-use threshold_crypto::dkg;
+use golden_dkg::threshold::cache::LagrangeCache;
+use golden_dkg::threshold::dkg;
 
-use simplex_consensus::sim::engine::{ConsensusEngine, ViewOutcome};
-use simplex_consensus::sim::engine_vetkeys;
-use simplex_consensus::sim::naughty::{ByzantineBehavior, Scenario};
+use simplex_demo::sim::engine::{ConsensusEngine, ViewOutcome};
+use simplex_demo::sim::engine_vetkeys;
+use simplex_demo::sim::naughty::{ByzantineBehavior, Scenario};
 
 // ── CLI ─────────────────────────────────────────────────────────────────
 
@@ -274,7 +274,7 @@ fn behavior_color(beh: ByzantineBehavior) -> Color {
 
 fn build_view_table(
     view: u64,
-    result: &simplex_consensus::sim::engine::ViewResult,
+    result: &simplex_demo::sim::engine::ViewResult,
     latency: &LatencyTracker,
 ) -> Table {
     let mut table = Table::new();
@@ -292,7 +292,7 @@ fn build_view_table(
 
     let (status_text, status_color, block_text) = match &result.outcome {
         ViewOutcome::Finalized { block, .. } => {
-            let block_h = simplex_consensus::types::block_hash(block);
+            let block_h = simplex_demo::types::block_hash(block);
             ("FINALIZED", Color::Green, format!("#{} ({})", view, to_hex(&block_h, 6)))
         }
         ViewOutcome::Nullified { .. } => ("NULLIFIED", Color::Yellow, "dummy".to_string()),
@@ -338,7 +338,7 @@ fn build_view_table(
 
     // One row per node
     for action in &result.node_actions {
-        let is_leader = matches!(action.role, simplex_consensus::sim::engine::NodeRole::Leader);
+        let is_leader = matches!(action.role, simplex_demo::sim::engine::NodeRole::Leader);
         let beh = action.behavior;
 
         // Node name cell

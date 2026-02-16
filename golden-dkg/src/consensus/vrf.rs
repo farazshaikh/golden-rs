@@ -22,10 +22,10 @@
 //! liveness." The random leader oracle ensures that after at most ~1.5
 //! faulty leaders in expectation, an honest leader is elected.
 
-use golden_dkg::types::NodeId;
+use crate::types::NodeId;
 use sha2::{Digest, Sha256};
 
-use crate::types::View;
+use crate::consensus::types::View;
 
 /// Construct the VRF message bytes for a given view.
 ///

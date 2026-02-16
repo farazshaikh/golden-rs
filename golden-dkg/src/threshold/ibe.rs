@@ -67,11 +67,11 @@ use ark_ec::{AffineRepr, CurveGroup};
 use ark_ff::UniformRand;
 use ark_serialize::CanonicalSerialize;
 use ark_std::rand::Rng;
-use golden_dkg::types::NodeId;
+use crate::types::NodeId;
 use sha2::{Digest, Sha256};
 
-use crate::signing::lagrange_coeff;
-use crate::types::KeyShare;
+use crate::threshold::signing::lagrange_coeff;
+use crate::threshold::types::KeyShare;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -608,9 +608,9 @@ pub fn ibe_decrypt(vetkey: &VetKey, ct: &IBECiphertext) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dkg;
+    use crate::threshold::dkg;
 
-    fn setup(n: u32, t: u32) -> (Vec<KeyShare>, crate::types::GroupInfo) {
+    fn setup(n: u32, t: u32) -> (Vec<KeyShare>, crate::threshold::types::GroupInfo) {
         dkg::run_dkg(n, t)
     }
 
