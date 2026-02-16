@@ -215,6 +215,51 @@ impl Replica {
         vrf::elect_leader(&self.chain_state.vrf_seed, self.config.n)
     }
 
+    /// Access this replica's threshold key share (for vetKD operations).
+    pub fn key_share(&self) -> &KeyShare {
+        &self.share
+    }
+
+    /// Access this replica's network config.
+    pub fn network_config(&self) -> &NetworkConfig {
+        &self.config
+    }
+
+    // ── vetKD: Encrypted key share production ────────────────────────────
+    //
+    // DFINITY vetKeys reference: "Each node uses its share of the master key
+    // to compute an encrypted share of the derived key, which is encrypted
+    // with the user's transport public key."
+    // (https://docs.internetcomputer.org/references/vetkeys-overview)
+    //
+    // vetKeys paper, Section 5.3, pi_vetbls-agg2, Figure 9 (p.27):
+    // "On (sid, encsign, m, tpk), S_i computes sigma_i = H(m)^{sk_i},
+    //  encrypts sigma_i as (C1, C2, C3) = (g1^r, g2^r, tpk^r * sigma_i)"
+
+    /// Produce an encrypted key share for the given identity.
+    ///
+    /// Mirrors DFINITY's per-node behavior in `vetkd_derive_key`:
+    /// each node computes its partial BLS signature on the identity,
+    /// encrypts it under the user's transport public key, and returns
+    /// the encrypted share. The share is publicly verifiable via pairing
+    /// without revealing the partial signature.
+    ///
+    /// This is a **pure function** on the replica's key share -- no
+    /// consensus state is modified, no messages are queued.
+    pub fn vetkd_encrypted_key_share(
+        &self,
+        identity: &[u8],
+        tpk: &threshold_crypto::ibe::TransportPublicKey,
+    ) -> threshold_crypto::ibe::EncryptedKeyShare {
+        let mut rng = rand::thread_rng();
+        threshold_crypto::ibe::encrypt_key_share(
+            &self.share,
+            identity,
+            tpk,
+            &mut rng,
+        )
+    }
+
     // ── Step 1: Leader Proposal (Paper Section 2.1, Step 1) ─────────────
     //
     // Paper: "If p = L_h, p multicasts a single proposal of the form

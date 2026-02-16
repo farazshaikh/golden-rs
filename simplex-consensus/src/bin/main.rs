@@ -26,6 +26,7 @@ use threshold_crypto::cache::LagrangeCache;
 use threshold_crypto::dkg;
 
 use simplex_consensus::sim::engine::{ConsensusEngine, ViewOutcome};
+use simplex_consensus::sim::engine_vetkeys;
 use simplex_consensus::sim::naughty::{ByzantineBehavior, Scenario};
 
 // ── CLI ─────────────────────────────────────────────────────────────────
@@ -53,6 +54,10 @@ struct Cli {
     /// Keep running after a safety violation (fork) instead of halting
     #[arg(long)]
     continue_after_fork: bool,
+
+    /// Run a vetKeys IBE demo every N views (0 = disabled) [default: 0]
+    #[arg(long, default_value_t = 0)]
+    vetkey_interval: u64,
 }
 
 // ── Display helpers ─────────────────────────────────────────────────────
@@ -495,10 +500,27 @@ fn main() {
             }
         }
 
+        // ── vetKeys IBE demo (every N views) ────────────────────────
+        let vetkey_line = if cli.vetkey_interval > 0 && view % cli.vetkey_interval == 0 {
+            let vk_result = engine_vetkeys::run_vetkeys_demo(
+                &engine.replicas,
+                &pk,
+                t as usize,
+                view,
+            );
+            Some(engine_vetkeys::format_vetkeys_result(&vk_result))
+        } else {
+            None
+        };
+
         let strip_rendered = strip.render();
         let table = build_view_table(view, &result, &latency);
         let table_rendered = table.to_string();
-        let full_output = format!("{}\n{}", strip_rendered, table_rendered);
+        let vetkey_suffix = vetkey_line
+            .as_ref()
+            .map(|l| format!("\n {l}"))
+            .unwrap_or_default();
+        let full_output = format!("{}\n{}{}", strip_rendered, table_rendered, vetkey_suffix);
 
         if overwrite && view > 1 {
             execute!(
