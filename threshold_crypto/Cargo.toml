@@ -1,6 +1,6 @@
 [package]
 name = "threshold-crypto"
-version = "0.1.0"
+version = "0.2.5"
 edition = "2021"
 authors = ["Faraz Shaikh <faraz.shaikh@gmail.com>"]
 description = "BLS12-381 threshold signatures with drand-compatible beacon format"

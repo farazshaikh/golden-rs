@@ -1,6 +1,6 @@
 [package]
 name = "simplex-consensus"
-version = "0.1.0"
+version = "0.2.5"
 edition = "2021"
 authors = ["Faraz Shaikh <faraz.shaikh@gmail.com>"]
 description = "Simplex BFT consensus -- pure state machine core + simulation demo"
