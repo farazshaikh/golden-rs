@@ -1,6 +1,6 @@
 [package]
 name = "golden-dkg"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2021"
 authors = ["Faraz Shaikh <faraz.shaikh@gmail.com>"]
 description = "Golden DKG + threshold BLS signatures + vetKeys IBE + Simplex BFT consensus"
