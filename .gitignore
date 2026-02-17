@@ -7,3 +7,4 @@ Cargo.lock
 .verification-stamps/
 dep.graph
 .vmonad/
+safetee-demo/papers/

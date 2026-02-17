@@ -1,5 +1,5 @@
 [workspace]
-members = ["golden-dkg", "golden-demo", "threshold_crypto", "simplex-consensus"]
+members = ["golden-dkg", "golden-demo", "threshold_crypto", "simplex-consensus", "safetee-demo"]
 resolver = "2"
 
 # Note: threshold_crypto/ is now "threshold-demo" (publish=false)

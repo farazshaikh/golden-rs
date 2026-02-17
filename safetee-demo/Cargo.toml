@@ -1,0 +1,28 @@
+[package]
+name = "safetee-demo"
+version = "0.1.0"
+edition = "2021"
+authors = ["Faraz Shaikh <faraz.shaikh@gmail.com>"]
+description = "SAFE-TEE demo: GCP Confidential VM + vetKeys key delivery"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+golden-dkg = { path = "../golden-dkg" }
+ark-bls12-381 = { workspace = true }
+ark-ec = { workspace = true }
+ark-ff = { workspace = true }
+ark-serialize = { workspace = true }
+ark-std = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+rand_chacha = "0.3"
+rayon = "1"
+clap = { version = "4", features = ["derive"] }
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[[bin]]
+name = "safetee-demo"
+path = "src/main.rs"

@@ -92,7 +92,11 @@ pub enum CertKind {
 /// BLS signatures so the certificate is a single combined G2 point.
 #[derive(Clone, Debug)]
 pub struct Certificate {
+    /// The view (iteration h) this certificate was produced in.
+    /// Paper: certificates are tied to a specific height h.
     pub view: View,
+    /// Whether this is a notarization, nullification, or finalization.
+    /// Paper Section 2, pages 8-9: three distinct certificate types.
     pub kind: CertKind,
     /// The combined threshold BLS signature (G2 point).
     pub signature: G2Affine,
@@ -118,13 +122,25 @@ pub struct Certificate {
 #[derive(Clone, Debug)]
 pub enum Message {
     /// Paper Step 1: Leader proposal `<propose, h, b_0, ..., b_h, S>`.
-    Proposal { block: Block },
+    Proposal {
+        /// The proposed block containing view, parent hash, and payload.
+        /// Paper (p.9): "p multicasts a single proposal `<propose, h, b_0, ..., b_h, S>`."
+        block: Block,
+    },
 
     /// Paper Step 3: A notarization vote `<vote, h, b_h>` from another node.
     Vote {
+        /// The iteration h this vote is for.
+        /// Paper (p.9): "multicast `<vote, h, b_h>`."
         view: View,
+        /// Hash of the block being voted on.
+        /// Paper (p.9): "b_h" in `<vote, h, b_h>`.
         block_hash: BlockHash,
+        /// The node that cast this vote.
+        /// Paper (p.9): "process p in [n]."
         signer: NodeId,
+        /// Threshold BLS partial signature on the vote message.
+        /// Used to aggregate into a notarization certificate (>= 2n/3).
         partial: crate::threshold::types::PartialSignature,
     },
 
@@ -133,12 +149,22 @@ pub enum Message {
     /// Paper: "Each process p starts a new timer T_h, set to fire locally
     /// after 3*Delta time. If T_h fires, vote for the dummy block."
     /// The timer itself is external; this message triggers the vote.
-    Timeout { view: View },
+    Timeout {
+        /// The iteration h whose timer expired.
+        /// Paper (p.9): "If T_h fires..."
+        view: View,
+    },
 
     /// Paper Step 2: A nullification vote `<vote, h, ⊥_h>` from another node.
     NullifyVote {
+        /// The iteration h this dummy vote is for.
+        /// Paper (p.9): "vote for the dummy block by multicasting `<vote, h, ⊥_h>`."
         view: View,
+        /// The node that cast this dummy vote.
+        /// Paper (p.9): "process p in [n]."
         signer: NodeId,
+        /// Threshold BLS partial signature on the dummy vote.
+        /// Used to aggregate into a nullification certificate (>= 2n/3).
         partial: crate::threshold::types::PartialSignature,
     },
 
@@ -147,8 +173,14 @@ pub enum Message {
     /// Paper: "If the timer T_h did not fire yet: cancel T_h and multicast
     /// `<finalize, h>`."
     FinalizeVote {
+        /// The iteration h being finalized.
+        /// Paper (p.10): "`<finalize, h>`."
         view: View,
+        /// The node that cast this finalize vote.
+        /// Paper (p.10): "process p in [n]."
         signer: NodeId,
+        /// Threshold BLS partial signature on the finalize message.
+        /// Used to aggregate into a finalization certificate (>= 2n/3).
         partial: crate::threshold::types::PartialSignature,
     },
 
@@ -158,8 +190,14 @@ pub enum Message {
     /// iteration h+1. At the same time, p multicasts its view of the
     /// notarized blockchain to everyone else."
     Notarization {
+        /// The iteration h that was notarized.
+        /// Paper (p.10): "notarized blockchain of height h."
         view: View,
+        /// The notarized block at height h.
+        /// Paper (p.10): the block that received >= 2n/3 votes.
         block: Block,
+        /// The threshold BLS certificate proving notarization.
+        /// Paper (p.8): ">= 2n/3 signed messages `<vote, h, b>`."
         certificate: Certificate,
     },
 
@@ -169,7 +207,11 @@ pub enum Message {
     /// The replica checks it IS the leader and builds the block from
     /// its own chain state (`parent_hash = self.chain_state.tip_hash`).
     ProposeRequest {
+        /// The iteration h to propose for.
+        /// Paper (p.9): "If p = L_h" (leader of iteration h).
         view: View,
+        /// Application-level transaction data for the block.
+        /// Paper (p.8): "txs -- an arbitrary sequence of strings."
         payload: Vec<u8>,
     },
 }
@@ -187,18 +229,36 @@ pub enum Message {
 pub enum StateTransition {
     /// Block notarized at this height (>= 2n/3 votes).
     /// Paper: "A notarized block is a block augmented with a notarization."
-    Notarized { view: View, block_hash: BlockHash },
+    Notarized {
+        /// The iteration h where notarization was achieved.
+        view: View,
+        /// Hash of the notarized block.
+        block_hash: BlockHash,
+    },
 
     /// Block finalized (notarized + >= 2n/3 finalize votes).
     /// Paper Step 5: "output LOG <- linearize(b_0, ..., b_h')"
-    Finalized { view: View, block_hash: BlockHash },
+    Finalized {
+        /// The iteration h where finalization was achieved.
+        view: View,
+        /// Hash of the finalized block.
+        block_hash: BlockHash,
+    },
 
     /// Dummy block notarized (>= 2n/3 dummy votes). View nullified.
     /// Paper: "vote for the dummy block -> notarized dummy -> next iteration."
-    Nullified { view: View },
+    Nullified {
+        /// The iteration h that was nullified (no real block agreed upon).
+        view: View,
+    },
 
     /// Proposal rejected (invalid leader, bad parent, duplicate vote).
-    Rejected { view: View, reason: RejectReason },
+    Rejected {
+        /// The iteration h where the rejection occurred.
+        view: View,
+        /// The specific validation check that failed (see Paper Step 3).
+        reason: RejectReason,
+    },
 
     /// No state change yet (accumulating votes, waiting for threshold).
     Pending,
@@ -244,36 +304,50 @@ pub enum Outgoing {
     /// Broadcast `<vote, h, b_h>` to all peers.
     /// Paper Step 3: "If all checks pass, multicast `<vote, h, b_h>`."
     Vote {
+        /// The iteration h this vote is for.
         view: View,
+        /// Hash of the block being voted on.
         block_hash: BlockHash,
+        /// This node's threshold BLS partial signature on the vote.
         partial: crate::threshold::types::PartialSignature,
     },
 
     /// Broadcast `<vote, h, ⊥_h>` to all peers (dummy/timeout vote).
     /// Paper Step 2: "vote for the dummy block by multicasting `<vote, h, ⊥_h>`."
     NullifyVote {
+        /// The iteration h this dummy vote is for.
         view: View,
+        /// This node's threshold BLS partial signature on the dummy vote.
         partial: crate::threshold::types::PartialSignature,
     },
 
     /// Broadcast `<finalize, h>` to all peers.
     /// Paper Step 4: "cancel T_h and multicast `<finalize, h>`."
     FinalizeVote {
+        /// The iteration h being finalized.
         view: View,
+        /// This node's threshold BLS partial signature on the finalize message.
         partial: crate::threshold::types::PartialSignature,
     },
 
     /// Relay the notarized blockchain to all peers.
     /// Paper Step 4: "p multicasts its view of the notarized blockchain."
     RelayNotarization {
+        /// The iteration h that was notarized.
         view: View,
+        /// The notarized block at height h.
         block: Block,
+        /// The threshold BLS certificate proving >= 2n/3 votes.
         certificate: Certificate,
     },
 
     /// A block proposal to broadcast to all peers.
     /// Paper Step 1: "leader multicasts `<propose, h, b_0..b_h, S>`."
-    Proposal { block: Block },
+    Proposal {
+        /// The proposed block (view, parent_hash, payload, proposer).
+        /// Paper (p.8): "A block b is a tuple (h, parent, txs)."
+        block: Block,
+    },
 }
 
 // ── Configuration ──────────────────────────────────────────────────────
