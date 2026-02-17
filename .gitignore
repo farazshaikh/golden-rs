@@ -8,3 +8,4 @@ Cargo.lock
 dep.graph
 .vmonad/
 safetee-demo/papers/
+safetee-demo/.env.local

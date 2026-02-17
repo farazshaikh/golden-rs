@@ -28,17 +28,20 @@
 //!          ibe_decrypt(vetkey, ciphertext) -> secret
 //! ```
 
+mod crypto;
+
 use std::fs;
 use std::path::PathBuf;
 
-use ark_bls12_381::{G1Affine, G2Affine};
+use ark_bls12_381::G1Affine;
 use ark_ec::AffineRepr;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_serialize::CanonicalDeserialize;
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
 use golden_dkg::threshold::dkg;
 use golden_dkg::threshold::ibe;
+use crypto::{serialize_point, deserialize_g1, deserialize_g2};
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -137,25 +140,7 @@ struct DecryptionResult {
     success: bool,
 }
 
-// ---------------------------------------------------------------------------
-// Serialization helpers
-// ---------------------------------------------------------------------------
-
-fn serialize_point<T: CanonicalSerialize>(p: &T) -> String {
-    let mut buf = Vec::new();
-    p.serialize_compressed(&mut buf).expect("serialize point");
-    hex::encode(&buf)
-}
-
-fn deserialize_g1(hex_str: &str) -> G1Affine {
-    let bytes = hex::decode(hex_str).expect("hex decode G1");
-    G1Affine::deserialize_compressed(&bytes[..]).expect("deserialize G1")
-}
-
-fn deserialize_g2(hex_str: &str) -> G2Affine {
-    let bytes = hex::decode(hex_str).expect("hex decode G2");
-    G2Affine::deserialize_compressed(&bytes[..]).expect("deserialize G2")
-}
+// Serialization helpers are in crypto.rs
 
 // ---------------------------------------------------------------------------
 // Subcommands

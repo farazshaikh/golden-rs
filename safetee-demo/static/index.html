@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAFE-TEE Private AI</title>
+<style>
+  :root { --bg: #0a0e17; --surface: #111827; --border: #1e2d4a; --accent: #4f8ff7; --green: #22c55e; --red: #ef4444; --text: #e2e8f0; --dim: #64748b; --yellow: #eab308; --purple: #a78bfa; --orange: #f97316; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 1rem; font-weight: 700; }
+  .badges { display: flex; gap: 8px; }
+  .badge { font-size: 0.6rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .badge-on { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+  .badge-warn { background: rgba(249,115,22,0.15); color: var(--orange); border: 1px solid rgba(249,115,22,0.3); }
+  .badge-off { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+
+  .main { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 49px); }
+
+  .sidebar { border-right: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+  .sidebar video { width: 100%; border-radius: 6px; background: #000; }
+  .sidebar canvas { display: none; }
+  .btn { padding: 7px 12px; border-radius: 5px; border: none; cursor: pointer; font-size: 0.75rem; font-weight: 600; font-family: inherit; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-green { background: var(--green); color: #000; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .btn:hover { opacity: 0.85; } .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .row { display: flex; gap: 6px; }
+  .row.wrap { flex-wrap: wrap; }
+  label { font-size: 0.6rem; color: var(--dim); display: block; margin-bottom: 2px; }
+  input { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 4px 6px; border-radius: 4px; font-family: inherit; font-size: 0.7rem; width: 100%; }
+  .nonce-box { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; font-family: 'SF Mono', monospace; font-size: 0.65rem; color: var(--yellow); word-break: break-all; }
+  .stats { font-size: 0.6rem; color: var(--dim); display: grid; grid-template-columns: 1fr 1fr; gap: 1px 10px; }
+  .stats span { color: var(--text); font-weight: 600; }
+
+  .content { padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  .flow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .card h3 { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; }
+  .tag { font-size: 0.55rem; padding: 1px 5px; border-radius: 3px; font-weight: 600; text-transform: uppercase; }
+  .tag-plain { background: rgba(79,143,247,0.15); color: var(--accent); }
+  .tag-enc { background: rgba(234,179,8,0.15); color: var(--yellow); }
+  .tag-dec { background: rgba(34,197,94,0.15); color: var(--green); }
+  .tag-cache { background: rgba(167,139,250,0.15); color: var(--purple); }
+  .hex { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 6px; font-family: 'SF Mono', monospace; font-size: 0.55rem; color: var(--dim); word-break: break-all; max-height: 64px; overflow-y: auto; line-height: 1.3; }
+  .answer-box { background: var(--bg); border: 2px solid var(--green); border-radius: 6px; padding: 10px; font-size: 0.8rem; line-height: 1.5; min-height: 48px; max-height: 180px; overflow-y: auto; }
+  .answer-box.waiting { border-color: var(--border); color: var(--dim); }
+  .meta { font-size: 0.55rem; color: var(--dim); margin-top: 4px; }
+
+  .sec-bar { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; align-items: center; }
+  .sec-chip { font-size: 0.55rem; padding: 2px 7px; border-radius: 3px; font-weight: 500; display: flex; align-items: center; gap: 4px; }
+  .sec-chip .dot { width: 5px; height: 5px; }
+  .sec-toggle { font-size: 0.6rem; color: var(--accent); cursor: pointer; margin-left: auto; text-decoration: underline; }
+  .cert-panel { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-size: 0.65rem; }
+  .cert-panel.open { display: block; }
+  .cert-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .cert-section h4 { font-size: 0.7rem; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .cert-section table { width: 100%; border-collapse: collapse; }
+  .cert-section td { padding: 2px 0; vertical-align: top; }
+  .cert-section td:first-child { color: var(--dim); width: 90px; }
+  .cert-section td:last-child { font-family: 'SF Mono', monospace; word-break: break-all; }
+  .cert-list { list-style: none; padding: 0; }
+  .cert-list li { padding: 1px 0; color: var(--dim); }
+  .cert-list li::before { content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+  .sec-intel { background: rgba(79,143,247,0.1); color: var(--accent); border: 1px solid rgba(79,143,247,0.2); }
+  .sec-nvidia { background: rgba(34,197,94,0.1); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
+  .sec-crypto { background: rgba(167,139,250,0.1); color: var(--purple); border: 1px solid rgba(167,139,250,0.2); }
+  .sec-net { background: rgba(234,179,8,0.1); color: var(--yellow); border: 1px solid rgba(234,179,8,0.2); }
+
+  .history-title { font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .history-title span { font-size: 0.6rem; color: var(--dim); font-weight: 400; }
+  .history { flex: 1; overflow-y: auto; }
+  .h-item { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-bottom: 6px; }
+  .h-item .h-head { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--dim); margin-bottom: 4px; }
+  .h-item .h-text { font-size: 0.78rem; line-height: 1.4; }
+  .h-item .h-stats { font-size: 0.55rem; color: var(--dim); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>SAFE-TEE Private AI</h1>
+  <div class="badges">
+    <span class="badge badge-on" title="Intel TDX: CPU memory encrypted, hardware-attested trusted domain. NVIDIA H100 CC: GPU memory encrypted via SPDM secure channel, firmware-attested.">Intel TDX + NVIDIA H100 CC:ON</span>
+    <span class="badge badge-on" id="statusBadge">Ready</span>
+  </div>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div class="row">
+      <button class="btn btn-primary" id="startCam" onclick="startCamera()">Start Camera</button>
+      <button class="btn btn-green" id="streamBtn" onclick="toggleStream()" disabled>Continuous</button>
+    </div>
+
+    <div>
+      <label>Encryption Nonce (identity label)</label>
+      <div class="row" style="gap:4px">
+        <div class="nonce-box" id="nonceDisplay" style="flex:1">-</div>
+        <button class="btn btn-outline" onclick="newNonce()" style="white-space:nowrap">New Nonce</button>
+      </div>
+      <div class="meta" style="margin-top:2px">Same nonce = cached inference on sidecar</div>
+    </div>
+
+    <div class="row">
+      <div style="flex:1"><label>Server</label><input id="safeteeUrl" value="https://34.94.69.96:7777" /></div>
+      <div style="flex:1"><label>Sidecar</label><input id="sidecarUrl" value="https://34.9.216.6:3001" /></div>
+    </div>
+    <div class="row">
+      <div style="flex:1"><label>Interval (ms)</label><input id="interval" type="number" value="5000" min="1000" step="500" /></div>
+      <div style="flex:1"><label>JPEG quality</label><input id="quality" type="number" value="0.6" min="0.1" max="1.0" step="0.1" /></div>
+    </div>
+
+    <div class="stats">
+      <div>Encrypt: <span id="tEnc">-</span></div>
+      <div>Sidecar: <span id="tInfer">-</span></div>
+      <div>Decrypt: <span id="tDec">-</span></div>
+      <div>Total: <span id="tTotal">-</span></div>
+      <div>Frames: <span id="frameCount">0</span></div>
+      <div>Avg: <span id="avgTime">-</span></div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="flow">
+      <div class="card">
+        <h3>Payload <span class="tag tag-plain">plaintext</span></h3>
+        <div class="hex" id="payloadHex">Waiting for capture...</div>
+        <div class="meta" id="payloadMeta"></div>
+      </div>
+      <div class="card">
+        <h3>Encrypted Payload <span class="tag tag-enc">IBE encrypted</span></h3>
+        <div class="hex" id="encPayloadHex">Waiting...</div>
+        <div class="meta" id="encPayloadMeta"></div>
+      </div>
+      <div class="card">
+        <h3>Encrypted Answer <span class="tag tag-enc" id="encAnswerTag">IBE encrypted</span> <span class="tag" id="attestTag" style="display:none">attested</span></h3>
+        <div class="hex" id="encAnswerHex">Waiting...</div>
+        <div class="meta" id="encAnswerMeta"></div>
+      </div>
+      <div class="card">
+        <h3>Decrypted Answer <span class="tag tag-dec">decrypted via tsk</span></h3>
+        <div class="answer-box waiting" id="answerText">Waiting for inference...</div>
+        <div class="meta" id="answerMeta"></div>
+      </div>
+    </div>
+
+    <div class="sec-bar" id="secBar">
+      <div class="sec-chip sec-intel" id="chipTdx"><span class="dot" style="background:var(--accent)"></span> Intel TDX: waiting...</div>
+      <div class="sec-chip sec-nvidia" id="chipGpu"><span class="dot" style="background:var(--green)"></span> NVIDIA CC: waiting...</div>
+      <div class="sec-chip sec-crypto"><span class="dot" style="background:var(--purple)"></span> vetKeys IBE: BLS12-381 (n=10, t=7)</div>
+      <div class="sec-chip sec-net"><span class="dot" style="background:var(--yellow)"></span> Return: X25519 + AES-256-GCM</div>
+      <span class="sec-toggle" onclick="toggleCerts()">View Certificates</span>
+    </div>
+    <div class="cert-panel" id="certPanel">
+      <div class="cert-grid">
+        <div class="cert-section">
+          <h4><span class="dot" style="background:var(--accent);width:7px;height:7px;border-radius:50%;display:inline-block"></span> Intel TDX</h4>
+          <table>
+            <tr><td>Status</td><td id="certTdxActive">-</td></tr>
+            <tr><td>Device</td><td id="certTdxDevice">-</td></tr>
+          </table>
+          <div style="margin-top:6px;font-size:0.6rem;color:var(--dim)">Secure Boot Certificates:</div>
+          <ul class="cert-list" id="certTdxCerts"><li>Waiting for first inference...</li></ul>
+        </div>
+        <div class="cert-section">
+          <h4><span class="dot" style="background:var(--green);width:7px;height:7px;border-radius:50%;display:inline-block"></span> NVIDIA H100 CC</h4>
+          <table>
+            <tr><td>CC Status</td><td id="certGpuCc">-</td></tr>
+            <tr><td>GPU</td><td id="certGpuName">-</td></tr>
+            <tr><td>UUID</td><td id="certGpuUuid">-</td></tr>
+            <tr><td>Driver</td><td id="certGpuDriver">-</td></tr>
+            <tr><td>vBIOS</td><td id="certGpuVbios">-</td></tr>
+            <tr><td>Serial</td><td id="certGpuSerial">-</td></tr>
+            <tr><td>GSP FW</td><td id="certGpuGsp">-</td></tr>
+          </table>
+        </div>
+        <div class="cert-section">
+          <h4><span class="dot" style="background:var(--yellow);width:7px;height:7px;border-radius:50%;display:inline-block"></span> GCP Instance</h4>
+          <table>
+            <tr><td>Project</td><td id="certGcpProject">-</td></tr>
+            <tr><td>Zone</td><td id="certGcpZone">-</td></tr>
+            <tr><td>Instance</td><td id="certGcpInstance">-</td></tr>
+            <tr><td>Machine</td><td id="certGcpMachine">-</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="history-title">History <span id="historyCount"></span></div>
+    <div class="history" id="history"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let stream = null;
+let clientReturnKeyPair = null; // { publicKey, privateKey } from Web Crypto X25519
+let clientReturnPubHex = null;
+let streaming = false, streamTimer = null, frameNum = 0, totalTime = 0;
+let currentNonce = null;
+const safeteeUrl = () => $('safeteeUrl').value.replace(/\/$/, '');
+const sidecarUrl = () => $('sidecarUrl').value.replace(/\/$/, '');
+
+// Hex helpers
+function hexToBytes(h) { return new Uint8Array(h.match(/.{2}/g).map(b => parseInt(b, 16))); }
+function bytesToHex(b) { return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join(''); }
+
+function toggleCerts() {
+  const p = $('certPanel');
+  p.classList.toggle('open');
+}
+
+function updateCertPanel(att) {
+  if (!att) return;
+  // TDX
+  if (att.tdx_evidence) {
+    const t = att.tdx_evidence;
+    $('chipTdx').innerHTML = '<span class="dot" style="background:var(--accent)"></span> Intel TDX: ' + (t.tdx_active ? 'ACTIVE' : 'inactive');
+    $('certTdxActive').textContent = t.tdx_active ? 'Memory Encryption Active' : 'Not detected';
+    $('certTdxDevice').textContent = t.tdx_device || 'N/A';
+    const ul = $('certTdxCerts');
+    ul.innerHTML = '';
+    (t.secure_boot_certs || []).forEach(c => {
+      const li = document.createElement('li');
+      li.style.cssText = 'padding:1px 0';
+      li.textContent = c;
+      ul.appendChild(li);
+    });
+    if (!t.secure_boot_certs || t.secure_boot_certs.length === 0) {
+      ul.innerHTML = '<li>No Secure Boot certs found</li>';
+    }
+  }
+  // GPU
+  if (att.gpu_evidence) {
+    const g = att.gpu_evidence;
+    $('chipGpu').innerHTML = '<span class="dot" style="background:var(--green)"></span> NVIDIA CC: ' + g.cc_status + ' (' + g.gpu_name + ')';
+    $('certGpuCc').textContent = g.cc_status;
+    $('certGpuCc').style.color = g.cc_status === 'ON' ? 'var(--green)' : 'var(--red)';
+    $('certGpuName').textContent = g.gpu_name;
+    $('certGpuUuid').textContent = g.gpu_uuid;
+    $('certGpuDriver').textContent = g.driver_version;
+    $('certGpuVbios').textContent = g.vbios_version || '-';
+    $('certGpuSerial').textContent = g.serial || '-';
+    $('certGpuGsp').textContent = g.gsp_firmware || '-';
+  }
+  // GCP
+  if (att.gcp_info) {
+    const gc = att.gcp_info;
+    $('certGcpProject').textContent = gc.project;
+    $('certGcpZone').textContent = gc.zone;
+    $('certGcpInstance').textContent = gc.instance;
+    $('certGcpMachine').textContent = gc.machine_type;
+  }
+}
+
+function generateNonce() {
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+async function newNonce() {
+  currentNonce = generateNonce();
+  // Generate a fresh X25519 key pair for this nonce session
+  clientReturnKeyPair = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
+  const rawPub = await crypto.subtle.exportKey('raw', clientReturnKeyPair.publicKey);
+  clientReturnPubHex = bytesToHex(new Uint8Array(rawPub));
+  $('nonceDisplay').textContent = currentNonce;
+}
+
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+    $('video').srcObject = stream;
+    $('startCam').disabled = true;
+    $('streamBtn').disabled = false;
+    $('statusBadge').textContent = 'Initializing...';
+    await fetch(safeteeUrl() + '/mpk');
+    await newNonce();
+    $('statusBadge').textContent = 'Ready';
+  } catch (e) {
+    $('statusBadge').textContent = 'Error'; $('statusBadge').className = 'badge badge-off';
+    alert('Error: ' + e.message);
+  }
+}
+
+function toggleStream() {
+  if (streaming) {
+    streaming = false;
+    if (streamTimer) clearTimeout(streamTimer);
+    $('streamBtn').textContent = 'Continuous';
+    $('streamBtn').className = 'btn btn-green';
+    $('statusBadge').textContent = 'Paused';
+  } else {
+    streaming = true;
+    $('streamBtn').textContent = 'Stop';
+    $('streamBtn').className = 'btn btn-red';
+    runOnce();
+  }
+}
+
+function captureFrame() {
+  const v = $('video'), c = $('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  return c.toDataURL('image/jpeg', parseFloat($('quality').value) || 0.6).split(',')[1];
+}
+
+async function runOnce() {
+  if (!streaming) return;
+  const t0 = performance.now();
+  $('statusBadge').textContent = 'Processing...';
+  $('statusBadge').className = 'badge badge-warn';
+
+  try {
+    const frameB64 = captureFrame();
+    const frameKB = (frameB64.length * 0.75 / 1024).toFixed(1);
+    $('payloadHex').textContent = frameB64.substring(0, 300) + '...';
+    $('payloadMeta').textContent = frameKB + ' KB | base64 JPEG';
+
+    // Encrypt with current nonce
+    const tE0 = performance.now();
+    const enc = await (await fetch(safeteeUrl() + '/encrypt', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identity_hex: currentNonce, message_base64: frameB64 })
+    })).json();
+    const tE = performance.now() - tE0;
+    $('tEnc').textContent = tE.toFixed(0) + 'ms';
+    const encAll = enc.ciphertext_u_hex + enc.ciphertext_v_hex + enc.ciphertext_w_hex;
+    $('encPayloadHex').textContent = encAll.substring(0, 300) + '...';
+    $('encPayloadMeta').textContent = (encAll.length / 2 / 1024).toFixed(1) + ' KB | nonce: ' + currentNonce.substring(0, 16) + '...';
+
+    // Send to sidecar (with X25519 return pubkey, not IBE transport key)
+    const tI0 = performance.now();
+    const infer = await (await fetch(sidecarUrl() + '/infer', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ciphertext_u_hex: enc.ciphertext_u_hex, ciphertext_v_hex: enc.ciphertext_v_hex,
+        ciphertext_w_hex: enc.ciphertext_w_hex, nonce_hex: currentNonce,
+        safetee_url: safeteeUrl(), client_return_pubkey_hex: clientReturnPubHex
+      })
+    })).json();
+    const tI = performance.now() - tI0;
+    $('tInfer').textContent = tI.toFixed(0) + 'ms';
+    if (!infer.success) throw new Error(infer.error || 'Inference failed');
+
+    $('encAnswerHex').textContent = infer.encrypted_response_hex.substring(0, 300) + '...';
+    $('encAnswerMeta').textContent = (infer.encrypted_response_hex.length / 2) + ' B | X25519+AES-256-GCM';
+    $('encAnswerTag').textContent = infer.cached ? 'key cached' : 'fresh vetKey';
+    $('encAnswerTag').className = infer.cached ? 'tag tag-cache' : 'tag tag-enc';
+    $('attestTag').style.display = 'inline';
+    if (infer.attestation_verified) {
+      $('attestTag').textContent = 'TDX+CC attested';
+      $('attestTag').className = 'tag tag-dec';
+    } else {
+      $('attestTag').textContent = 'unattested';
+      $('attestTag').className = 'tag tag-plain';
+    }
+    updateCertPanel(infer.tee_attestation);
+
+    // Decrypt response locally using X25519 ECDH + AES-256-GCM (no server calls!)
+    const tD0 = performance.now();
+    const sidecarPkBytes = hexToBytes(infer.sidecar_pubkey_hex);
+    const sidecarPk = await crypto.subtle.importKey('raw', sidecarPkBytes, { name: 'X25519' }, false, []);
+    const sharedBits = await crypto.subtle.deriveBits(
+      { name: 'X25519', public: sidecarPk }, clientReturnKeyPair.privateKey, 256
+    );
+    const aesKey = await crypto.subtle.importKey(
+      'raw', await crypto.subtle.digest('SHA-256', sharedBits), { name: 'AES-GCM' }, false, ['decrypt']
+    );
+    const packed = hexToBytes(infer.encrypted_response_hex);
+    const iv = packed.slice(0, 12);
+    const ciphertext = packed.slice(12);
+    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ciphertext);
+    const answer = new TextDecoder().decode(plainBuf);
+    const tD = performance.now() - tD0;
+    $('tDec').textContent = tD.toFixed(0) + 'ms';
+
+    $('answerText').textContent = answer;
+    $('answerText').className = 'answer-box';
+    const total = performance.now() - t0;
+    $('tTotal').textContent = total.toFixed(0) + 'ms';
+    $('answerMeta').textContent = answer.length + ' chars | ' + total.toFixed(0) + 'ms' +
+      (infer.cached ? ' | vetKey cached' : ' | fresh vetKey') +
+      (infer.attestation_verified ? ' | attested' : '');
+
+    frameNum++; totalTime += total;
+    $('frameCount').textContent = frameNum;
+    $('avgTime').textContent = (totalTime / frameNum).toFixed(0) + 'ms';
+
+    const ts = new Date().toLocaleTimeString();
+    const item = document.createElement('div');
+    item.className = 'h-item';
+    item.innerHTML = '<div class="h-head"><span>#' + frameNum + ' ' + ts + '</span><span>' +
+      (infer.attestation_verified ? '<span style="color:var(--green)">attested</span> | ' : '') +
+      (infer.cached ? '<span style="color:var(--purple)">key cached</span> | ' : '') +
+      'enc ' + tE.toFixed(0) + 'ms | sidecar ' + tI.toFixed(0) + 'ms | dec ' + tD.toFixed(0) + 'ms | total ' + total.toFixed(0) + 'ms</span></div>' +
+      '<div class="h-text">' + answer.replace(/</g, '&lt;') + '</div>';
+    $('history').prepend(item);
+    $('historyCount').textContent = frameNum + ' frames';
+
+    $('statusBadge').textContent = 'Streaming';
+    $('statusBadge').className = 'badge badge-on';
+
+  } catch (e) {
+    $('answerText').textContent = 'Error: ' + e.message;
+    $('answerText').className = 'answer-box waiting';
+    $('statusBadge').textContent = 'Error';
+    $('statusBadge').className = 'badge badge-off';
+  }
+
+  if (streaming) {
+    streamTimer = setTimeout(runOnce, parseInt($('interval').value) || 5000);
+  }
+}
+</script>
+</body>
+</html>
