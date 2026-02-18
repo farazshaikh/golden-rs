@@ -104,7 +104,7 @@
         <div class="nonce-box" id="nonceDisplay" style="flex:1">-</div>
         <button class="btn btn-outline" onclick="newNonce()" style="white-space:nowrap">New Nonce</button>
       </div>
-      <div class="meta" style="margin-top:2px">Same nonce = cached inference on sidecar</div>
+      <div class="meta" style="margin-top:2px">Same nonce = cached vetKey (decryption key)</div>
     </div>
 
     <div class="row">
@@ -112,17 +112,18 @@
       <div style="flex:1"><label>Sidecar</label><input id="sidecarUrl" value="https://34.9.216.6:3001" /></div>
     </div>
     <div class="row">
-      <div style="flex:1"><label>Interval (ms)</label><input id="interval" type="number" value="5000" min="1000" step="500" /></div>
+      <div style="flex:1"><label>Interval (ms)</label><input id="interval" type="number" value="2000" min="500" step="500" />
+      </div>
       <div style="flex:1"><label>JPEG quality</label><input id="quality" type="number" value="0.6" min="0.1" max="1.0" step="0.1" /></div>
     </div>
 
     <div class="stats">
       <div>Encrypt: <span id="tEnc">-</span></div>
-      <div>Sidecar: <span id="tInfer">-</span></div>
       <div>Decrypt: <span id="tDec">-</span></div>
       <div>Total: <span id="tTotal">-</span></div>
-      <div>Frames: <span id="frameCount">0</span></div>
       <div>Avg: <span id="avgTime">-</span></div>
+      <div>Frames sent: <span id="frameCount">0</span></div>
+      <div>Answers: <span id="answerCount">0</span></div>
     </div>
   </div>
 
@@ -139,12 +140,13 @@
         <div class="meta" id="encPayloadMeta"></div>
       </div>
       <div class="card">
-        <h3>Encrypted Answer <span class="tag tag-enc" id="encAnswerTag">IBE encrypted</span> <span class="tag" id="attestTag" style="display:none">attested</span></h3>
+        <h3>Encrypted Answer <span class="tag tag-enc" id="encAnswerTag">X25519+AES-GCM</span> <span class="tag" id="attestTag"
+            style="display:none">attested</span></h3>
         <div class="hex" id="encAnswerHex">Waiting...</div>
         <div class="meta" id="encAnswerMeta"></div>
       </div>
       <div class="card">
-        <h3>Decrypted Answer <span class="tag tag-dec">decrypted via tsk</span></h3>
+        <h3>Decrypted Answer <span class="tag tag-dec">X25519 ECDH local</span></h3>
         <div class="answer-box waiting" id="answerText">Waiting for inference...</div>
         <div class="meta" id="answerMeta"></div>
       </div>
@@ -200,74 +202,52 @@
 <script>
 const $ = id => document.getElementById(id);
 let stream = null;
-let clientReturnKeyPair = null; // { publicKey, privateKey } from Web Crypto X25519
+        let clientReturnKeyPair = null;
 let clientReturnPubHex = null;
-let streaming = false, streamTimer = null, frameNum = 0, totalTime = 0;
+        let streaming = false, sendTimer = null, pollTimer = null;
+        let frameNum = 0, lastResultFrame = 0, totalTime = 0, answerCount = 0;
 let currentNonce = null;
 const safeteeUrl = () => $('safeteeUrl').value.replace(/\/$/, '');
 const sidecarUrl = () => $('sidecarUrl').value.replace(/\/$/, '');
 
-// Hex helpers
 function hexToBytes(h) { return new Uint8Array(h.match(/.{2}/g).map(b => parseInt(b, 16))); }
 function bytesToHex(b) { return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join(''); }
 
-function toggleCerts() {
-  const p = $('certPanel');
-  p.classList.toggle('open');
-}
+        function toggleCerts() { $('certPanel').classList.toggle('open'); }
 
 function updateCertPanel(att) {
   if (!att) return;
-  // TDX
   if (att.tdx_evidence) {
     const t = att.tdx_evidence;
     $('chipTdx').innerHTML = '<span class="dot" style="background:var(--accent)"></span> Intel TDX: ' + (t.tdx_active ? 'ACTIVE' : 'inactive');
     $('certTdxActive').textContent = t.tdx_active ? 'Memory Encryption Active' : 'Not detected';
     $('certTdxDevice').textContent = t.tdx_device || 'N/A';
-    const ul = $('certTdxCerts');
-    ul.innerHTML = '';
-    (t.secure_boot_certs || []).forEach(c => {
-      const li = document.createElement('li');
-      li.style.cssText = 'padding:1px 0';
-      li.textContent = c;
-      ul.appendChild(li);
-    });
-    if (!t.secure_boot_certs || t.secure_boot_certs.length === 0) {
-      ul.innerHTML = '<li>No Secure Boot certs found</li>';
-    }
+    const ul = $('certTdxCerts'); ul.innerHTML = '';
+    (t.secure_boot_certs || []).forEach(c => { const li = document.createElement('li'); li.style.cssText = 'padding:1px 0'; li.textContent = c; ul.appendChild(li); });
+    if (!t.secure_boot_certs || t.secure_boot_certs.length === 0) ul.innerHTML = '<li>No Secure Boot certs found</li>';
   }
-  // GPU
   if (att.gpu_evidence) {
     const g = att.gpu_evidence;
     $('chipGpu').innerHTML = '<span class="dot" style="background:var(--green)"></span> NVIDIA CC: ' + g.cc_status + ' (' + g.gpu_name + ')';
-    $('certGpuCc').textContent = g.cc_status;
-    $('certGpuCc').style.color = g.cc_status === 'ON' ? 'var(--green)' : 'var(--red)';
-    $('certGpuName').textContent = g.gpu_name;
-    $('certGpuUuid').textContent = g.gpu_uuid;
-    $('certGpuDriver').textContent = g.driver_version;
-    $('certGpuVbios').textContent = g.vbios_version || '-';
-    $('certGpuSerial').textContent = g.serial || '-';
-    $('certGpuGsp').textContent = g.gsp_firmware || '-';
+    $('certGpuCc').textContent = g.cc_status; $('certGpuCc').style.color = g.cc_status === 'ON' ? 'var(--green)' : 'var(--red)';
+    $('certGpuName').textContent = g.gpu_name; $('certGpuUuid').textContent = g.gpu_uuid;
+    $('certGpuDriver').textContent = g.driver_version; $('certGpuVbios').textContent = g.vbios_version || '-';
+    $('certGpuSerial').textContent = g.serial || '-'; $('certGpuGsp').textContent = g.gsp_firmware || '-';
   }
-  // GCP
   if (att.gcp_info) {
     const gc = att.gcp_info;
-    $('certGcpProject').textContent = '(redacted)';
-    $('certGcpZone').textContent = gc.zone;
-    $('certGcpInstance').textContent = gc.instance;
-    $('certGcpMachine').textContent = gc.machine_type;
+    $('certGcpProject').textContent = '(redacted)'; $('certGcpZone').textContent = gc.zone;
+    $('certGcpInstance').textContent = gc.instance; $('certGcpMachine').textContent = gc.machine_type;
   }
 }
 
 function generateNonce() {
-  const b = new Uint8Array(16);
-  crypto.getRandomValues(b);
+  const b = new Uint8Array(16); crypto.getRandomValues(b);
   return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
 async function newNonce() {
   currentNonce = generateNonce();
-  // Generate a fresh X25519 key pair for this nonce session
   clientReturnKeyPair = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
   const rawPub = await crypto.subtle.exportKey('raw', clientReturnKeyPair.publicKey);
   clientReturnPubHex = bytesToHex(new Uint8Array(rawPub));
@@ -277,9 +257,9 @@ async function newNonce() {
     async function toggleCamera() {
       if (streaming) {
         streaming = false;
-        if (streamTimer) clearTimeout(streamTimer);
-        $('startBtn').textContent = 'Start';
-        $('startBtn').className = 'btn btn-green';
+        if (sendTimer) clearInterval(sendTimer);
+        if (pollTimer) clearInterval(pollTimer);
+        $('startBtn').textContent = 'Start'; $('startBtn').className = 'btn btn-green';
         $('statusBadge').textContent = 'Paused';
         return;
       }
@@ -289,12 +269,22 @@ async function newNonce() {
       $('video').srcObject = stream;
       $('statusBadge').textContent = 'Initializing...';
       await fetch(safeteeUrl() + '/mpk');
+    }
+    if (!clientReturnPubHex) {
       await newNonce();
     }
     streaming = true;
-    $('startBtn').textContent = 'Stop';
-    $('startBtn').className = 'btn btn-red';
-    runOnce();
+    frameNum = 0; lastResultFrame = 0; answerCount = 0; totalTime = 0;
+    $('startBtn').textContent = 'Stop'; $('startBtn').className = 'btn btn-red';
+    $('statusBadge').textContent = 'Streaming'; $('statusBadge').className = 'badge badge-on';
+
+    // Fire-and-forget frame sending loop
+    sendFrame();
+    sendTimer = setInterval(sendFrame, parseInt($('interval').value) || 2000);
+
+    // Poll for results loop
+    pollResult();
+    pollTimer = setInterval(pollResult, 500);
   } catch (e) {
     $('statusBadge').textContent = 'Error'; $('statusBadge').className = 'badge badge-off';
     alert('Error: ' + e.message);
@@ -308,19 +298,18 @@ function captureFrame() {
   return c.toDataURL('image/jpeg', parseFloat($('quality').value) || 0.6).split(',')[1];
 }
 
-async function runOnce() {
+        // Fire-and-forget: encrypt + POST /frame, don't wait for inference
+        async function sendFrame() {
   if (!streaming) return;
-  const t0 = performance.now();
-  $('statusBadge').textContent = 'Processing...';
-  $('statusBadge').className = 'badge badge-warn';
-
+        const t0 = performance.now();
   try {
+    frameNum++;
+    const fid = frameNum;
     const frameB64 = captureFrame();
     const frameKB = (frameB64.length * 0.75 / 1024).toFixed(1);
     $('payloadHex').textContent = frameB64.substring(0, 300) + '...';
-    $('payloadMeta').textContent = frameKB + ' KB | base64 JPEG';
+    $('payloadMeta').textContent = 'Frame #' + fid + ' | ' + frameKB + ' KB | base64 JPEG';
 
-    // Encrypt with current nonce
     const tE0 = performance.now();
     const enc = await (await fetch(safeteeUrl() + '/encrypt', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -330,89 +319,78 @@ async function runOnce() {
     $('tEnc').textContent = tE.toFixed(0) + 'ms';
     const encAll = enc.ciphertext_u_hex + enc.ciphertext_v_hex + enc.ciphertext_w_hex;
     $('encPayloadHex').textContent = encAll.substring(0, 300) + '...';
-    $('encPayloadMeta').textContent = (encAll.length / 2 / 1024).toFixed(1) + ' KB | nonce: ' + currentNonce.substring(0, 16) + '...';
+    $('encPayloadMeta').textContent = 'Frame #' + fid + ' | ' + (encAll.length / 2 / 1024).toFixed(1) + ' KB | nonce: ' + currentNonce.substring(0, 16) + '...';
 
-    // Send to sidecar (with X25519 return pubkey, not IBE transport key)
-    const tI0 = performance.now();
-    const infer = await (await fetch(sidecarUrl() + '/infer', {
+    // Fire and forget -- POST /frame, don't await body
+    fetch(sidecarUrl() + '/frame', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ciphertext_u_hex: enc.ciphertext_u_hex, ciphertext_v_hex: enc.ciphertext_v_hex,
         ciphertext_w_hex: enc.ciphertext_w_hex, nonce_hex: currentNonce,
-        safetee_url: safeteeUrl(), client_return_pubkey_hex: clientReturnPubHex
+        safetee_url: safeteeUrl(), client_return_pubkey_hex: clientReturnPubHex,
+        frame_id: fid
       })
-    })).json();
-    const tI = performance.now() - tI0;
-    $('tInfer').textContent = tI.toFixed(0) + 'ms';
-    if (!infer.success) throw new Error(infer.error || 'Inference failed');
+    }).catch(e => console.warn('frame send error:', e));
 
-    $('encAnswerHex').textContent = infer.encrypted_response_hex.substring(0, 300) + '...';
-    $('encAnswerMeta').textContent = (infer.encrypted_response_hex.length / 2) + ' B | X25519+AES-256-GCM';
-    $('encAnswerTag').textContent = infer.cached ? 'key cached' : 'fresh vetKey';
-    $('encAnswerTag').className = infer.cached ? 'tag tag-cache' : 'tag tag-enc';
+          $('frameCount').textContent = frameNum;
+          $('statusBadge').textContent = 'Frame #' + fid + ' sent';
+        } catch (e) {
+          console.warn('sendFrame error:', e);
+        }
+      }
+
+      // Poll GET /result for the latest inference answer
+      async function pollResult() {
+        if (!streaming || !clientReturnPubHex) return;
+        try {
+          const resp = await (await fetch(sidecarUrl() + '/result?pk=' + clientReturnPubHex)).json();
+          if (!resp.ready || resp.frame_id <= lastResultFrame) return;
+
+          lastResultFrame = resp.frame_id;
+          const t0 = performance.now();
+
+          // Show encrypted answer
+          $('encAnswerHex').textContent = resp.encrypted_response_hex.substring(0, 300) + '...';
+          $('encAnswerMeta').textContent = 'Frame #' + resp.frame_id + ' | ' + (resp.encrypted_response_hex.length / 2) + ' B | X25519+AES-256-GCM';
     $('attestTag').style.display = 'inline';
-    if (infer.attestation_verified) {
-      $('attestTag').textContent = 'TDX+CC attested';
-      $('attestTag').className = 'tag tag-dec';
-    } else {
-      $('attestTag').textContent = 'unattested';
-      $('attestTag').className = 'tag tag-plain';
-    }
-    updateCertPanel(infer.tee_attestation);
+          if (resp.attestation_verified) { $('attestTag').textContent = 'TDX+CC attested'; $('attestTag').className = 'tag tag-dec'; }
+          else { $('attestTag').textContent = 'unattested'; $('attestTag').className = 'tag tag-plain'; }
+          updateCertPanel(resp.tee_attestation);
 
-    // Decrypt response locally using X25519 ECDH + AES-256-GCM (no server calls!)
-    const tD0 = performance.now();
-    const sidecarPkBytes = hexToBytes(infer.sidecar_pubkey_hex);
+          // Decrypt response locally using X25519 ECDH + AES-256-GCM
+          const sidecarPkBytes = hexToBytes(resp.sidecar_pubkey_hex);
     const sidecarPk = await crypto.subtle.importKey('raw', sidecarPkBytes, { name: 'X25519' }, false, []);
-    const sharedBits = await crypto.subtle.deriveBits(
-      { name: 'X25519', public: sidecarPk }, clientReturnKeyPair.privateKey, 256
-    );
-    const aesKey = await crypto.subtle.importKey(
-      'raw', await crypto.subtle.digest('SHA-256', sharedBits), { name: 'AES-GCM' }, false, ['decrypt']
-    );
-    const packed = hexToBytes(infer.encrypted_response_hex);
-    const iv = packed.slice(0, 12);
-    const ciphertext = packed.slice(12);
-    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ciphertext);
+          const sharedBits = await crypto.subtle.deriveBits({ name: 'X25519', public: sidecarPk }, clientReturnKeyPair.privateKey, 256);
+          const aesKey = await crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', sharedBits), { name: 'AES-GCM' }, false, ['decrypt']);
+          const packed = hexToBytes(resp.encrypted_response_hex);
+          const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: packed.slice(0, 12) }, aesKey, packed.slice(12));
     const answer = new TextDecoder().decode(plainBuf);
-    const tD = performance.now() - tD0;
+          const tD = performance.now() - t0;
     $('tDec').textContent = tD.toFixed(0) + 'ms';
 
-    $('answerText').textContent = answer;
-    $('answerText').className = 'answer-box';
-    const total = performance.now() - t0;
-    $('tTotal').textContent = total.toFixed(0) + 'ms';
-    $('answerMeta').textContent = answer.length + ' chars | ' + total.toFixed(0) + 'ms' +
-      (infer.cached ? ' | vetKey cached' : ' | fresh vetKey') +
-      (infer.attestation_verified ? ' | attested' : '');
+          $('answerText').textContent = answer; $('answerText').className = 'answer-box';
+          $('answerMeta').textContent = answer.length + ' chars | Frame #' + resp.frame_id +
+            (resp.attestation_verified ? ' | attested' : '');
+          $('tTotal').textContent = tD.toFixed(0) + 'ms (decrypt only)';
 
-    frameNum++; totalTime += total;
-    $('frameCount').textContent = frameNum;
-    $('avgTime').textContent = (totalTime / frameNum).toFixed(0) + 'ms';
+          answerCount++; totalTime += tD;
+          $('answerCount').textContent = answerCount;
+          $('avgTime').textContent = (totalTime / answerCount).toFixed(0) + 'ms';
 
     const ts = new Date().toLocaleTimeString();
     const item = document.createElement('div');
     item.className = 'h-item';
-    item.innerHTML = '<div class="h-head"><span>#' + frameNum + ' ' + ts + '</span><span>' +
-      (infer.attestation_verified ? '<span style="color:var(--green)">attested</span> | ' : '') +
-      (infer.cached ? '<span style="color:var(--purple)">key cached</span> | ' : '') +
-      'enc ' + tE.toFixed(0) + 'ms | sidecar ' + tI.toFixed(0) + 'ms | dec ' + tD.toFixed(0) + 'ms | total ' + total.toFixed(0) + 'ms</span></div>' +
+          item.innerHTML = '<div class="h-head"><span>Frame #' + resp.frame_id + ' ' + ts + '</span><span>' +
+            (resp.attestation_verified ? '<span style="color:var(--green)">attested</span> | ' : '') +
+            'dec ' + tD.toFixed(0) + 'ms</span></div>' +
       '<div class="h-text">' + answer.replace(/</g, '&lt;') + '</div>';
     $('history').prepend(item);
-    $('historyCount').textContent = frameNum + ' frames';
-
-    $('statusBadge').textContent = 'Streaming';
-    $('statusBadge').className = 'badge badge-on';
-
+          $('historyCount').textContent = answerCount + ' answers / ' + frameNum + ' frames sent';
+          $('statusBadge').textContent = 'Streaming'; $('statusBadge').className = 'badge badge-on';
   } catch (e) {
-    $('answerText').textContent = 'Error: ' + e.message;
-    $('answerText').className = 'answer-box waiting';
-    $('statusBadge').textContent = 'Error';
-    $('statusBadge').className = 'badge badge-off';
-  }
-
-  if (streaming) {
-    streamTimer = setTimeout(runOnce, parseInt($('interval').value) || 5000);
+          console.error('pollResult error:', e);
+          $('answerText').textContent = 'Poll error: ' + e.message;
+          $('answerText').className = 'answer-box waiting';
   }
 }
 </script>

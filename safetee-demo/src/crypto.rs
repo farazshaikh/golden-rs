@@ -165,39 +165,63 @@ pub struct DecryptResponse {
     pub success: bool,
 }
 
-/// Request to POST /infer on the sidecar.
+/// Request to POST /infer on the sidecar (synchronous, kept for backward compat).
 #[derive(Serialize, Deserialize, Debug)]
 pub struct InferRequest {
-    /// IBE-encrypted frame (using MPK + nonce)
     pub ciphertext_u_hex: String,
     pub ciphertext_v_hex: String,
     pub ciphertext_w_hex: String,
-    /// Nonce used as IBE identity for the encrypted frame
     pub nonce_hex: String,
-    /// SAFE-TEE server URL (for vetKey requests)
     pub safetee_url: String,
-    /// Client's X25519 public key (hex) for encrypting the return response.
-    /// NOT the IBE transport key -- this is a fast ECDH key for the return path.
     pub client_return_pubkey_hex: String,
 }
 
 /// Response from POST /infer on the sidecar.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct InferResponse {
-    /// X25519 ephemeral public key from the sidecar (hex, 32 bytes).
     pub sidecar_pubkey_hex: String,
-    /// AES-256-GCM encrypted response: nonce (12 bytes) || ciphertext || tag (16 bytes), hex-encoded.
     pub encrypted_response_hex: String,
     pub success: bool,
     pub error: Option<String>,
-    /// True if the vetKey was served from the sidecar's nonce cache.
     #[serde(default)]
     pub cached: bool,
-    /// True if TEE attestation was verified by the SAFE-TEE server.
     #[serde(default)]
     pub attestation_verified: bool,
-    /// Full TEE attestation evidence (sent with every response for UI display).
     #[serde(default)]
+    pub tee_attestation: Option<TeeAttestation>,
+}
+
+/// Request to POST /frame (fire-and-forget, latest-frame-wins).
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct FrameRequest {
+    pub ciphertext_u_hex: String,
+    pub ciphertext_v_hex: String,
+    pub ciphertext_w_hex: String,
+    pub nonce_hex: String,
+    pub safetee_url: String,
+    pub client_return_pubkey_hex: String,
+    pub frame_id: u64,
+}
+
+/// Response from GET /result (poll for latest inference result).
+/// Encrypted on-the-fly for each polling client's X25519 public key.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ResultResponse {
+    pub frame_id: u64,
+    pub sidecar_pubkey_hex: String,
+    pub encrypted_response_hex: String,
+    pub attestation_verified: bool,
+    #[serde(default)]
+    pub tee_attestation: Option<TeeAttestation>,
+    pub ready: bool,
+}
+
+/// Internal: plaintext result stored by the background loop (never serialized to clients).
+#[derive(Clone, Debug)]
+pub struct PlaintextResult {
+    pub frame_id: u64,
+    pub response_text: String,
+    pub attestation_verified: bool,
     pub tee_attestation: Option<TeeAttestation>,
 }
 
