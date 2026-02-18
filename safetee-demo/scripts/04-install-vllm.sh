@@ -6,7 +6,7 @@
 # This proves the H100 GPU is fully usable inside the TDX + CC environment
 # by serving a production vision-language model (Qwen3-VL-30B-A3B).
 #
-# The served model is compatible with the osrs .env VLM configuration:
+# The served model provides an OpenAI-compatible vision API:
 #   VLM_PROVIDER=vllm
 #   VLM_MODEL=Qwen/Qwen3-VL-30B-A3B-Instruct
 #   VLM_PROVIDER_URL=http://<VM_IP>:8000/v1
@@ -17,7 +17,7 @@
 #   - HuggingFace token (for gated models -- set HF_TOKEN env var)
 set -euo pipefail
 
-# Qwen3-VL-30B-A3B is the MoE vision model matching the osrs .env SVLM config.
+# Qwen3-VL-30B-A3B is the MoE vision model used by the SAFE-TEE demo.
 # For the full 235B model, change to Qwen/Qwen3-VL-235B-A22B-Instruct (needs more GPUs).
 MODEL="${MODEL:-Qwen/Qwen3-VL-30B-A3B-Instruct}"
 PORT="${PORT:-8000}"
@@ -96,7 +96,7 @@ echo "        }]"
 echo "      }]"
 echo "    }'"
 echo ""
-echo "  # osrs .env update (point VLM to this TEE):"
+echo "  # Point your VLM config to this TEE:"
 echo "  # VLM_PROVIDER=vllm"
 echo "  # VLM_MODEL=$MODEL"
 echo "  # VLM_PROVIDER_URL=http://<VM_EXTERNAL_IP>:$PORT/v1"

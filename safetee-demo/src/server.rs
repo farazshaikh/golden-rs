@@ -286,6 +286,7 @@ async fn main() {
     println!("  Static dir: {}", static_fallback.display());
 
     let app = Router::new()
+        .route("/", get(|| async { axum::response::Redirect::permanent("/setup.html") }))
         .route("/health", get(health))
         .route("/mpk", get(get_mpk))
         .route("/vetkey", post(post_vetkey))
