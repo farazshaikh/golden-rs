@@ -1,15 +1,16 @@
 //! SAFE-TEE Inference Sidecar: runs on the TDX VM next to vLLM.
 //!
-//! Session-based multi-user latest-frame-wins architecture:
+//! Session-based multi-user latest-frame-wins architecture with parallel batching:
 //!   POST /frame  -- store encrypted frame keyed by client pk (fire-and-forget)
 //!   GET  /result?pk=... -- poll for this session's latest inference result
-//!   Background loop round-robins across sessions, picks latest frame, infers.
+//!   Background loop collects up to --batch-size pending frames and sends them
+//!   to vLLM concurrently, leveraging vLLM's internal continuous batching.
 
 mod crypto;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 use tokio::sync::RwLock;
 
@@ -38,6 +39,8 @@ struct Cli {
     tls_cert: Option<String>,
     #[arg(long)]
     tls_key: Option<String>,
+    #[arg(short, long, default_value = "16")]
+    batch_size: usize,
 }
 
 // ---------------------------------------------------------------------------
@@ -151,7 +154,8 @@ struct AppState {
     vetkey_cache: Arc<RwLock<HashMap<String, CachedVetKey>>>,
     attestation: TeeAttestation,
     sessions: Arc<RwLock<HashMap<String, Session>>>,
-    inferring: Arc<AtomicBool>,
+    batch_size: usize,
+    inflight: Arc<AtomicU64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -346,75 +350,94 @@ async fn do_infer(state: &AppState, req: InferRequest) -> Result<InferResponse, 
 }
 
 // ---------------------------------------------------------------------------
-// Background inference loop -- round-robins across sessions
+// Background inference loop -- parallel batched across sessions
 // ---------------------------------------------------------------------------
 
+/// Process a single frame: decrypt, call vLLM, return result with session key.
+async fn process_one_frame(
+    state: &AppState,
+    session_pk: String,
+    frame: FrameRequest,
+) -> (String, Result<PlaintextResult, String>) {
+    let frame_id = frame.frame_id;
+    let t0 = Instant::now();
+
+    let result = async {
+        let (vk, _) = get_vetkey_material(state, &frame.nonce_hex, &frame.safetee_url).await?;
+        let cu = frame.ciphertext_u_hex;
+        let cv = frame.ciphertext_v_hex;
+        let cw = frame.ciphertext_w_hex;
+        let nh = frame.nonce_hex.clone();
+        let vk2 = vk.clone();
+        let frame_b64 = tokio::task::spawn_blocking(move || decrypt_frame(&vk2, &cu, &cv, &cw, &nh))
+            .await.map_err(|e| format!("{e}"))??;
+        let decrypt_ms = t0.elapsed().as_millis();
+        let resp = call_vllm(state, &frame_b64).await?;
+        eprintln!("[batch] #{frame_id} session {}... decrypt {decrypt_ms}ms vLLM {}ms",
+            &session_pk[..12.min(session_pk.len())], t0.elapsed().as_millis());
+        Ok::<PlaintextResult, String>(PlaintextResult {
+            frame_id,
+            response_text: resp,
+            attestation_verified: vk.attestation_verified,
+            tee_attestation: Some(state.attestation.clone()),
+        })
+    }.await;
+
+    (session_pk, result)
+}
+
 async fn inference_loop(state: AppState) {
-    eprintln!("[loop] Background inference loop started (session-based)");
+    let batch_size = state.batch_size;
+    eprintln!("[loop] Parallel batched inference loop started (batch_size={batch_size})");
     let mut last_cleanup = Instant::now();
 
     loop {
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
-        if state.inferring.load(Ordering::Relaxed) { continue; }
+        // How many slots are free?
+        let inflight = state.inflight.load(Ordering::Relaxed) as usize;
+        let available = batch_size.saturating_sub(inflight);
+        if available == 0 { continue; }
 
-        // Find a session with a pending frame (round-robin via iteration order)
-        let work = {
+        // Collect up to `available` pending frames from all sessions
+        let batch: Vec<(String, FrameRequest)> = {
             let mut sessions = state.sessions.write().await;
-            let mut found: Option<(String, FrameRequest)> = None;
+            let mut collected = Vec::new();
             for (pk, session) in sessions.iter_mut() {
+                if collected.len() >= available { break; }
                 if session.new_frame {
                     if let Some(frame) = session.latest_frame.clone() {
                         session.new_frame = false;
-                        found = Some((pk.clone(), frame));
-                        break;
+                        collected.push((pk.clone(), frame));
                     }
                 }
             }
-            found
+            collected
         };
 
-        let (session_pk, frame) = match work {
-            Some(w) => w,
-            None => continue,
-        };
+        if batch.is_empty() { continue; }
 
-        state.inferring.store(true, Ordering::Relaxed);
-        let frame_id = frame.frame_id;
-        eprintln!("[loop] Processing frame #{frame_id} for session {}...", &session_pk[..12]);
+        let n = batch.len();
+        eprintln!("[loop] Dispatching batch of {n} frames (inflight: {inflight} -> {})", inflight + n);
 
-        let s = state.clone();
-        let spk = session_pk.clone();
-        let result = async {
-            let t0 = Instant::now();
-            let (vk, _) = get_vetkey_material(&s, &frame.nonce_hex, &frame.safetee_url).await?;
-            let cu = frame.ciphertext_u_hex;
-            let cv = frame.ciphertext_v_hex;
-            let cw = frame.ciphertext_w_hex;
-            let nh = frame.nonce_hex.clone();
-            let vk2 = vk.clone();
-            let frame_b64 = tokio::task::spawn_blocking(move || decrypt_frame(&vk2, &cu, &cv, &cw, &nh)).await.map_err(|e| format!("{e}"))??;
-            eprintln!("[loop] #{frame_id} decrypted {}ms", t0.elapsed().as_millis());
-            let resp = call_vllm(&s, &frame_b64).await?;
-            eprintln!("[loop] #{frame_id} vLLM {}ms", t0.elapsed().as_millis());
-            Ok::<PlaintextResult, String>(PlaintextResult {
-                frame_id,
-                response_text: resp,
-                attestation_verified: vk.attestation_verified,
-                tee_attestation: Some(s.attestation.clone()),
-            })
-        }.await;
-
-        match result {
-            Ok(r) => {
-                let mut sessions = state.sessions.write().await;
-                if let Some(session) = sessions.get_mut(&spk) {
-                    session.latest_result = Some(r);
+        // Spawn all inferences concurrently
+        for (session_pk, frame) in batch {
+            state.inflight.fetch_add(1, Ordering::Relaxed);
+            let s = state.clone();
+            tokio::spawn(async move {
+                let (pk, result) = process_one_frame(&s, session_pk, frame).await;
+                match result {
+                    Ok(r) => {
+                        let mut sessions = s.sessions.write().await;
+                        if let Some(session) = sessions.get_mut(&pk) {
+                            session.latest_result = Some(r);
+                        }
+                    }
+                    Err(e) => { eprintln!("[batch] session {}... error: {e}", &pk[..12.min(pk.len())]); }
                 }
-            }
-            Err(e) => { eprintln!("[loop] #{frame_id} error: {e}"); }
+                s.inflight.fetch_sub(1, Ordering::Relaxed);
+            });
         }
-        state.inferring.store(false, Ordering::Relaxed);
 
         // Cleanup stale sessions every 60 seconds
         if last_cleanup.elapsed().as_secs() > 60 {
@@ -446,6 +469,7 @@ async fn main() {
     println!("  TDX:    {}", if attestation.tdx_quote_hex.is_some() { "available" } else { "N/A" });
     println!("  GPU CC: {}", attestation.gpu_evidence.as_ref().map(|g| format!("{} ({})", g.cc_status, g.gpu_name)).unwrap_or("N/A".into()));
 
+    let batch_size = cli.batch_size;
     let state = AppState {
         vllm_url: cli.vllm_url,
         model: cli.model,
@@ -453,7 +477,8 @@ async fn main() {
         vetkey_cache: Arc::new(RwLock::new(HashMap::new())),
         attestation,
         sessions: Arc::new(RwLock::new(HashMap::new())),
-        inferring: Arc::new(AtomicBool::new(false)),
+        batch_size,
+        inflight: Arc::new(AtomicU64::new(0)),
     };
 
     tokio::spawn(inference_loop(state.clone()));
@@ -469,6 +494,7 @@ async fn main() {
     let tls = cli.tls_cert.as_ref().zip(cli.tls_key.as_ref());
     let scheme = if tls.is_some() { "https" } else { "http" };
     println!("  {scheme}://{}", cli.listen);
+    println!("  Batch:  {batch_size} concurrent inferences");
     println!("  Endpoints: /frame (POST), /result (GET), /infer (POST), /health (GET)");
     println!("  Sessions:  per-client (keyed by X25519 pubkey)");
 
