@@ -95,8 +95,7 @@
     <canvas id="canvas"></canvas>
 
     <div class="row">
-      <button class="btn btn-primary" id="startCam" onclick="startCamera()">Start Camera</button>
-      <button class="btn btn-green" id="streamBtn" onclick="toggleStream()" disabled>Continuous</button>
+      <button class="btn btn-green" id="startBtn" onclick="toggleCamera()">Start</button>
     </div>
 
     <div>
@@ -253,7 +252,7 @@ function updateCertPanel(att) {
   // GCP
   if (att.gcp_info) {
     const gc = att.gcp_info;
-    $('certGcpProject').textContent = gc.project;
+    $('certGcpProject').textContent = '(redacted)';
     $('certGcpZone').textContent = gc.zone;
     $('certGcpInstance').textContent = gc.instance;
     $('certGcpMachine').textContent = gc.machine_type;
@@ -275,34 +274,30 @@ async function newNonce() {
   $('nonceDisplay').textContent = currentNonce;
 }
 
-async function startCamera() {
+    async function toggleCamera() {
+      if (streaming) {
+        streaming = false;
+        if (streamTimer) clearTimeout(streamTimer);
+        $('startBtn').textContent = 'Start';
+        $('startBtn').className = 'btn btn-green';
+        $('statusBadge').textContent = 'Paused';
+        return;
+      }
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
-    $('video').srcObject = stream;
-    $('startCam').disabled = true;
-    $('streamBtn').disabled = false;
-    $('statusBadge').textContent = 'Initializing...';
-    await fetch(safeteeUrl() + '/mpk');
-    await newNonce();
-    $('statusBadge').textContent = 'Ready';
+    if (!stream) {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+      $('video').srcObject = stream;
+      $('statusBadge').textContent = 'Initializing...';
+      await fetch(safeteeUrl() + '/mpk');
+      await newNonce();
+    }
+    streaming = true;
+    $('startBtn').textContent = 'Stop';
+    $('startBtn').className = 'btn btn-red';
+    runOnce();
   } catch (e) {
     $('statusBadge').textContent = 'Error'; $('statusBadge').className = 'badge badge-off';
     alert('Error: ' + e.message);
-  }
-}
-
-function toggleStream() {
-  if (streaming) {
-    streaming = false;
-    if (streamTimer) clearTimeout(streamTimer);
-    $('streamBtn').textContent = 'Continuous';
-    $('streamBtn').className = 'btn btn-green';
-    $('statusBadge').textContent = 'Paused';
-  } else {
-    streaming = true;
-    $('streamBtn').textContent = 'Stop';
-    $('streamBtn').className = 'btn btn-red';
-    runOnce();
   }
 }
 

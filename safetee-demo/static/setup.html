@@ -11,43 +11,35 @@
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px; max-width: 560px; width: 90%; }
   h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 8px; }
   .sub { color: var(--dim); font-size: 0.85rem; margin-bottom: 28px; }
-  .steps { list-style: none; counter-reset: step; }
-  .steps li { counter-increment: step; padding: 14px 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; }
+  .steps { list-style: none; }
+  .steps li { padding: 14px 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; }
   .steps li:last-child { border-bottom: none; }
-  .num { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; }
-  .num.pending { background: var(--border); color: var(--dim); }
-  .num.checking { background: rgba(234,179,8,0.2); color: #eab308; }
+  .num { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; background: var(--border); color: var(--dim); }
   .num.done { background: rgba(34,197,94,0.15); color: var(--green); }
-  .num.fail { background: rgba(239,68,68,0.15); color: var(--red); }
   .step-body { flex: 1; }
   .step-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 2px; }
   .step-detail { font-size: 0.75rem; color: var(--dim); }
   .step-action { margin-top: 6px; }
-  .btn { display: inline-block; padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.8rem; font-weight: 600; font-family: inherit; text-decoration: none; }
+  .btn { display: inline-block; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.8rem; font-weight: 600; font-family: inherit; text-decoration: none; }
   .btn-accent { background: var(--accent); color: #fff; }
   .btn-green { background: var(--green); color: #000; }
-  .btn-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
-  .btn:hover { opacity: 0.85; }
-  .btn:disabled { opacity: 0.3; cursor: not-allowed; }
-  .status { font-size: 0.7rem; font-weight: 600; margin-left: 8px; }
-  .status.ok { color: var(--green); }
-  .status.fail { color: var(--red); }
-  .status.wait { color: #eab308; }
-  .all-done { display: none; text-align: center; margin-top: 20px; }
-  .all-done.show { display: block; }
-  .all-done .btn { font-size: 1rem; padding: 12px 32px; }
+  .btn-done { background: transparent; color: var(--green); border: 1px solid var(--green); cursor: default; }
+  .btn-disabled { background: var(--border); color: var(--dim); cursor: not-allowed; }
+  .btn:hover:not(.btn-done):not(.btn-disabled) { opacity: 0.85; }
+  .status { font-size: 0.7rem; font-weight: 600; margin-left: 8px; color: var(--green); }
 </style>
 </head>
 <body>
 <div class="card">
   <h1>SAFE-TEE Private AI</h1>
-  <p class="sub">This demo uses self-signed TLS certificates. Accept them below to enable camera access and encrypted inference.</p>
+  <p class="sub">This demo uses self-signed TLS certificates. Click each button below to accept them, then launch the
+    demo.</p>
 
   <ol class="steps">
     <li>
-      <div class="num pending" id="n1">1</div>
+      <div class="num" id="n1">1</div>
       <div class="step-body">
-        <div class="step-title">Accept SAFE-TEE Server Certificate</div>
+        <div class="step-title">Accept Server Certificate</div>
         <div class="step-detail">Crypto API + Web UI</div>
         <div class="step-action">
           <a class="btn btn-accent" id="btn1" href="javascript:void(0)" onclick="acceptCert(1)">Accept Certificate</a>
@@ -56,10 +48,10 @@
       </div>
     </li>
     <li>
-      <div class="num pending" id="n2">2</div>
+      <div class="num" id="n2">2</div>
       <div class="step-body">
-        <div class="step-title">Accept Inference Sidecar Certificate</div>
-        <div class="step-detail">TDX + H100 CC encrypted inference endpoint</div>
+        <div class="step-title">Accept Sidecar Certificate</div>
+        <div class="step-detail">TDX + H100 CC encrypted inference</div>
         <div class="step-action">
           <a class="btn btn-accent" id="btn2" href="javascript:void(0)" onclick="acceptCert(2)">Accept Certificate</a>
           <span class="status" id="s2"></span>
@@ -67,103 +59,63 @@
       </div>
     </li>
     <li>
-      <div class="num pending" id="n3">3</div>
+      <div class="num" id="n3">3</div>
       <div class="step-body">
         <div class="step-title">Launch Demo</div>
         <div class="step-detail">Camera + encrypted vision inference</div>
         <div class="step-action">
-          <a class="btn btn-green" id="btn3" href="index.html" style="pointer-events:none;opacity:0.3">Launch SAFE-TEE Private AI</a>
+          <a class="btn btn-disabled" id="btn3" href="index.html" onclick="return state[1] && state[2]">Launch SAFE-TEE Private
+            AI</a>
         </div>
       </div>
     </li>
   </ol>
-
-  <div class="all-done" id="allDone">
-    <p style="color:var(--green);font-weight:600;margin-bottom:12px">All certificates accepted!</p>
-    <a class="btn btn-green" href="index.html">Launch SAFE-TEE Private AI</a>
-  </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-const serverUrl = new URL(window.location.href).origin;
-// Extract sidecar URL from the default in index.html or use convention
-const sidecarUrl = 'https://34.9.216.6:3001';
-
+    const serverUrl = location.origin;
+    const sidecarUrl = 'https://34.9.216.6:3001';
 const state = { 1: false, 2: false };
 
-function setStep(n, status, msg) {
-  $('n' + n).className = 'num ' + status;
-  if (msg) $('s' + n).textContent = msg;
-  $('s' + n).className = 'status ' + (status === 'done' ? 'ok' : status === 'fail' ? 'fail' : 'wait');
+    function markDone(n) {
+      state[n] = true;
+      $('n' + n).className = 'num done';
+      $('btn' + n).textContent = 'Accepted';
+      $('btn' + n).className = 'btn btn-done';
+      $('s' + n).textContent = 'ok';
+      if (state[1] && state[2]) {
+        $('n3').className = 'num done';
+        $('btn3').className = 'btn btn-green';
+      }
 }
 
-async function checkCert(url) {
+    async function checkHealth(url) {
   try {
-    const r = await fetch(url + '/health', { mode: 'cors' });
-    const t = await r.text();
-    return t.includes('ok');
+    const r = await fetch(url + '/health');
+    return (await r.text()).includes('ok');
   } catch { return false; }
 }
 
-async function acceptCert(n) {
+    function acceptCert(n) {
   const url = n === 1 ? serverUrl : sidecarUrl;
-  setStep(n, 'checking', 'checking...');
+    window.open(url + '/health', '_blank');
+    $('s' + n).textContent = 'accept in new tab, then come back';
+    $('s' + n).style.color = '#eab308';
 
-  // First check if already accepted
-  if (await checkCert(url)) {
-    state[n] = true;
-    setStep(n, 'done', 'accepted');
-    $('btn' + n).textContent = 'Accepted';
-    $('btn' + n).className = 'btn btn-outline';
-    checkAllDone();
-    return;
-  }
-
-  // Open the health endpoint in a new window for cert acceptance
-  const w = window.open(url + '/health', '_blank');
-  setStep(n, 'checking', 'accept in the new tab, then come back here');
-
-  // Poll until the cert is accepted
   const poll = setInterval(async () => {
-    if (await checkCert(url)) {
+    if (await checkHealth(url)) {
       clearInterval(poll);
-      state[n] = true;
-      setStep(n, 'done', 'accepted');
-      $('btn' + n).textContent = 'Accepted';
-      $('btn' + n).className = 'btn btn-outline';
-      checkAllDone();
+      markDone(n);
     }
   }, 2000);
-
-  // Stop polling after 60s
-  setTimeout(() => clearInterval(poll), 60000);
-}
-
-function checkAllDone() {
-  if (state[1] && state[2]) {
-    setStep(3, 'done', '');
-    $('btn3').style.pointerEvents = 'auto';
-    $('btn3').style.opacity = '1';
-    $('allDone').className = 'all-done show';
-  }
+    setTimeout(() => clearInterval(poll), 120000);
 }
 
 // Auto-check on load
 (async () => {
-  if (await checkCert(serverUrl)) {
-    state[1] = true;
-    setStep(1, 'done', 'already accepted');
-    $('btn1').textContent = 'Accepted';
-    $('btn1').className = 'btn btn-outline';
-  }
-  if (await checkCert(sidecarUrl)) {
-    state[2] = true;
-    setStep(2, 'done', 'already accepted');
-    $('btn2').textContent = 'Accepted';
-    $('btn2').className = 'btn btn-outline';
-  }
-  checkAllDone();
+  if (await checkHealth(serverUrl)) markDone(1);
+  if (await checkHealth(sidecarUrl)) markDone(2);
 })();
 </script>
 </body>

@@ -96,9 +96,15 @@ status:
 	@echo ""
 	@echo "  SAFE-TEE Private AI"
 	@echo ""
-	@curl -sfk --connect-timeout 3 $(SCHEME)://$(SAFETEE_SERVER_HOST):$(SAFETEE_SERVER_PORT)/health >/dev/null 2>&1 && echo "  Server:   UP" || echo "  Server:   DOWN"
-	@curl -sfk --connect-timeout 3 $(SCHEME)://$(INFERENCE_HOST):$(INFERENCE_SIDECAR_PORT)/health >/dev/null 2>&1 && echo "  Sidecar:  UP" || echo "  Sidecar:  DOWN"
-	@curl -sf --connect-timeout 3 http://$(INFERENCE_HOST):$(VLLM_PORT)/health >/dev/null 2>&1 && echo "  vLLM:     UP" || echo "  vLLM:     DOWN"
+	@curl -sfk --connect-timeout 3 $(SCHEME)://$(SAFETEE_SERVER_HOST):$(SAFETEE_SERVER_PORT)/health >/dev/null 2>&1 \
+		&& echo "  Server:   UP   $(SCHEME)://$(SAFETEE_SERVER_HOST):$(SAFETEE_SERVER_PORT)" \
+		|| echo "  Server:   DOWN $(SCHEME)://$(SAFETEE_SERVER_HOST):$(SAFETEE_SERVER_PORT)"
+	@curl -sfk --connect-timeout 3 $(SCHEME)://$(INFERENCE_HOST):$(INFERENCE_SIDECAR_PORT)/health >/dev/null 2>&1 \
+		&& echo "  Sidecar:  UP   $(SCHEME)://$(INFERENCE_HOST):$(INFERENCE_SIDECAR_PORT)" \
+		|| echo "  Sidecar:  DOWN $(SCHEME)://$(INFERENCE_HOST):$(INFERENCE_SIDECAR_PORT)"
+	@curl -sf --connect-timeout 3 http://$(INFERENCE_HOST):$(VLLM_PORT)/health >/dev/null 2>&1 \
+		&& echo "  vLLM:     UP   http://$(INFERENCE_HOST):$(VLLM_PORT)" \
+		|| echo "  vLLM:     DOWN http://$(INFERENCE_HOST):$(VLLM_PORT)"
 	@echo ""
 
 clean:
