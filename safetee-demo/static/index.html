@@ -108,8 +108,8 @@
     </div>
 
     <div class="row">
-      <div style="flex:1"><label>Server</label><input id="safeteeUrl" value="https://34.94.69.96:7777" /></div>
-      <div style="flex:1"><label>Sidecar</label><input id="sidecarUrl" value="https://34.9.216.6:3001" /></div>
+      <div style="flex:1"><label>Server</label><input id="safeteeUrl" /></div>
+      <div style="flex:1"><label>Sidecar</label><input id="sidecarUrl" value="https://34.71.174.88:3001" /></div>
     </div>
     <div class="row">
       <div style="flex:1"><label>Interval (ms)</label><input id="interval" type="number" value="2000" min="500" step="500" />
@@ -201,6 +201,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
+$('safeteeUrl').value = location.origin;
 let stream = null;
         let clientReturnKeyPair = null;
 let clientReturnPubHex = null;
