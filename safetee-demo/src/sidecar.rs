@@ -192,7 +192,7 @@ async fn get_result(
 ) -> axum::Json<ResultResponse> {
     let empty = ResultResponse {
         frame_id: 0, sidecar_pubkey_hex: String::new(), encrypted_response_hex: String::new(),
-        attestation_verified: false, tee_attestation: None, ready: false,
+        attestation_verified: false, tee_attestation: None, crypto_log: None, ready: false,
     };
 
     let pk = match params.get("pk") {
@@ -215,15 +215,24 @@ async fn get_result(
 
     let rt = pt.response_text.clone();
     let cpk = pk.clone();
+    let enc_t0 = Instant::now();
     match tokio::task::spawn_blocking(move || encrypt_response(&rt, &cpk)).await {
-        Ok(Ok((spk, enc))) => axum::Json(ResultResponse {
-            frame_id: pt.frame_id,
-            sidecar_pubkey_hex: spk,
-            encrypted_response_hex: enc,
-            attestation_verified: pt.attestation_verified,
-            tee_attestation: pt.tee_attestation,
-            ready: true,
-        }),
+        Ok(Ok((spk, enc))) => {
+            let return_encrypt_ms = enc_t0.elapsed().as_millis() as u64;
+            let crypto_log = pt.crypto_log.map(|mut cl| {
+                cl.return_encrypt_ms = Some(return_encrypt_ms);
+                cl
+            });
+            axum::Json(ResultResponse {
+                frame_id: pt.frame_id,
+                sidecar_pubkey_hex: spk,
+                encrypted_response_hex: enc,
+                attestation_verified: pt.attestation_verified,
+                tee_attestation: pt.tee_attestation,
+                crypto_log,
+                ready: true,
+            })
+        },
         _ => axum::Json(empty),
     }
 }
@@ -251,22 +260,42 @@ fn err_resp(e: String) -> InferResponse {
 // Crypto + inference helpers
 // ---------------------------------------------------------------------------
 
-async fn get_vetkey_material(state: &AppState, nonce_hex: &str, safetee_url: &str) -> Result<(CachedVetKey, bool), String> {
+struct VetKeyResult {
+    vk: CachedVetKey,
+    cached: bool,
+    transport_keygen_ms: Option<u64>,
+    vetkey_request_ms: Option<u64>,
+    vetkey_valid: Option<bool>,
+    tpk_hex: Option<String>,
+}
+
+async fn get_vetkey_material(state: &AppState, nonce_hex: &str, safetee_url: &str) -> Result<VetKeyResult, String> {
     {
         let c = state.vetkey_cache.read().await;
-        if let Some(v) = c.get(nonce_hex) { return Ok((v.clone(), true)); }
+        if let Some(v) = c.get(nonce_hex) {
+            return Ok(VetKeyResult {
+                vk: v.clone(), cached: true,
+                transport_keygen_ms: None, vetkey_request_ms: None,
+                vetkey_valid: None, tpk_hex: None,
+            });
+        }
     }
+
+    let tkg_t0 = Instant::now();
     let keys = tokio::task::spawn_blocking(|| {
         let mut r = rand::thread_rng();
         let (tpk, tsk) = ibe::transport_keygen(&mut r);
         (serialize_point(&tpk.0), serialize_point(&tsk.0))
     }).await.map_err(|e| format!("{e}"))?;
+    let transport_keygen_ms = tkg_t0.elapsed().as_millis() as u64;
 
+    let vk_t0 = Instant::now();
     let vr: VetKeyResponse = state.http
         .post(format!("{safetee_url}/vetkey"))
         .json(&VetKeyRequest { identity_hex: nonce_hex.into(), tpk_hex: keys.0.clone(), attestation: Some(state.attestation.clone()) })
         .send().await.map_err(|e| format!("{e}"))?
         .json().await.map_err(|e| format!("{e}"))?;
+    let vetkey_request_ms = vk_t0.elapsed().as_millis() as u64;
     if !vr.valid { return Err("invalid vetKey".into()); }
 
     let mpk: MpkResponse = state.http
@@ -279,8 +308,15 @@ async fn get_vetkey_material(state: &AppState, nonce_hex: &str, safetee_url: &st
         evk_c1_hex: vr.encrypted_vetkey_c1_hex, evk_c2_hex: vr.encrypted_vetkey_c2_hex, evk_c3_hex: vr.encrypted_vetkey_c3_hex,
         mpk_hex: mpk.group_pk_hex, attestation_verified: vr.attestation_verified,
     };
+    let tpk_hex = Some(keys.0);
     state.vetkey_cache.write().await.insert(nonce_hex.to_string(), cached.clone());
-    Ok((cached, false))
+    Ok(VetKeyResult {
+        vk: cached, cached: false,
+        transport_keygen_ms: Some(transport_keygen_ms),
+        vetkey_request_ms: Some(vetkey_request_ms),
+        vetkey_valid: Some(vr.valid),
+        tpk_hex,
+    })
 }
 
 fn decrypt_frame(vk: &CachedVetKey, ct_u: &str, ct_v: &str, ct_w: &str, nonce_hex: &str) -> Result<String, String> {
@@ -331,7 +367,9 @@ async fn call_vllm(state: &AppState, frame_b64: &str) -> Result<String, String> 
 /// Synchronous single-shot inference (for POST /infer backward compat)
 async fn do_infer(state: &AppState, req: InferRequest) -> Result<InferResponse, String> {
     let t0 = Instant::now();
-    let (vk, cached) = get_vetkey_material(state, &req.nonce_hex, &req.safetee_url).await?;
+    let vkr = get_vetkey_material(state, &req.nonce_hex, &req.safetee_url).await?;
+    let vk = vkr.vk;
+    let cached = vkr.cached;
     let cu = req.ciphertext_u_hex.clone(); let cv = req.ciphertext_v_hex.clone();
     let cw = req.ciphertext_w_hex.clone(); let nh = req.nonce_hex.clone();
     let vk2 = vk.clone();
@@ -363,7 +401,10 @@ async fn process_one_frame(
     let t0 = Instant::now();
 
     let result = async {
-        let (vk, _) = get_vetkey_material(state, &frame.nonce_hex, &frame.safetee_url).await?;
+        let vkr = get_vetkey_material(state, &frame.nonce_hex, &frame.safetee_url).await?;
+        let vk = vkr.vk;
+
+        let ibe_t0 = Instant::now();
         let cu = frame.ciphertext_u_hex;
         let cv = frame.ciphertext_v_hex;
         let cw = frame.ciphertext_w_hex;
@@ -371,15 +412,40 @@ async fn process_one_frame(
         let vk2 = vk.clone();
         let frame_b64 = tokio::task::spawn_blocking(move || decrypt_frame(&vk2, &cu, &cv, &cw, &nh))
             .await.map_err(|e| format!("{e}"))??;
-        let decrypt_ms = t0.elapsed().as_millis();
+        let ibe_decrypt_ms = ibe_t0.elapsed().as_millis() as u64;
+
+        let vllm_t0 = Instant::now();
         let resp = call_vllm(state, &frame_b64).await?;
-        eprintln!("[batch] #{frame_id} session {}... decrypt {decrypt_ms}ms vLLM {}ms",
-            &session_pk[..12.min(session_pk.len())], t0.elapsed().as_millis());
+        let vllm_ms = vllm_t0.elapsed().as_millis() as u64;
+
+        let total_ms = t0.elapsed().as_millis() as u64;
+        eprintln!("[batch] #{frame_id} session {}... decrypt {ibe_decrypt_ms}ms vLLM {vllm_ms}ms total {total_ms}ms",
+            &session_pk[..12.min(session_pk.len())]);
+
+        let crypto_log = CryptoLog {
+            vetkey_cached: vkr.cached,
+            transport_keygen_ms: vkr.transport_keygen_ms,
+            vetkey_request_ms: vkr.vetkey_request_ms,
+            vetkey_valid: vkr.vetkey_valid,
+            attestation_verified: vk.attestation_verified,
+            attestation_checks: if vk.attestation_verified { Some("3/3 checks passed".into()) } else { Some("unverified".into()) },
+            ibe_decrypt_ms: Some(ibe_decrypt_ms),
+            vllm_ms: Some(vllm_ms),
+            return_encrypt_ms: None,
+            total_ms,
+            tpk_hex: vkr.tpk_hex,
+            evk_c1_hex: Some(vk.evk_c1_hex.clone()),
+            evk_c2_hex: Some(vk.evk_c2_hex.clone()),
+            evk_c3_hex: Some(vk.evk_c3_hex.clone()),
+            mpk_hex: Some(vk.mpk_hex.clone()),
+        };
+
         Ok::<PlaintextResult, String>(PlaintextResult {
             frame_id,
             response_text: resp,
             attestation_verified: vk.attestation_verified,
             tee_attestation: Some(state.attestation.clone()),
+            crypto_log: Some(crypto_log),
         })
     }.await;
 

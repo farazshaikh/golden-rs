@@ -70,6 +70,25 @@
   .sec-crypto { background: rgba(167,139,250,0.1); color: var(--purple); border: 1px solid rgba(167,139,250,0.2); }
   .sec-net { background: rgba(234,179,8,0.1); color: var(--yellow); border: 1px solid rgba(234,179,8,0.2); }
 
+  .crypto-panel { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-size: 0.65rem; }
+  .crypto-panel.open { display: block; }
+  .crypto-toggle { font-size: 0.6rem; color: var(--purple); cursor: pointer; text-decoration: underline; margin-left: 8px; }
+  .crypto-step { display: flex; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .crypto-step:last-child { border-bottom: none; }
+  .crypto-step-num { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.55rem; flex-shrink: 0; background: var(--border); color: var(--dim); }
+  .crypto-step-body { flex: 1; }
+  .crypto-step-head { display: flex; justify-content: space-between; align-items: center; }
+  .crypto-step-title { font-weight: 600; font-size: 0.65rem; }
+  .crypto-step-time { font-family: 'SF Mono', monospace; font-size: 0.6rem; color: var(--yellow); }
+  .crypto-step-detail { font-family: 'SF Mono', monospace; font-size: 0.55rem; color: var(--dim); word-break: break-all; margin-top: 2px; line-height: 1.4; }
+  .crypto-step-detail .key-label { color: var(--purple); }
+  .crypto-step-detail .key-value { color: var(--text); }
+  .crypto-step-detail .cached-badge { background: rgba(167,139,250,0.15); color: var(--purple); padding: 0 4px; border-radius: 2px; font-weight: 600; }
+  .dkg-card table { width: 100%; border-collapse: collapse; }
+  .dkg-card td { padding: 3px 0; vertical-align: top; font-size: 0.65rem; }
+  .dkg-card td:first-child { color: var(--dim); width: 120px; }
+  .dkg-card td:last-child { font-family: 'SF Mono', monospace; word-break: break-all; }
+
   .history-title { font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
   .history-title span { font-size: 0.6rem; color: var(--dim); font-weight: 400; }
   .history { flex: 1; overflow-y: auto; }
@@ -152,12 +171,23 @@
       </div>
     </div>
 
+    <div class="card dkg-card" id="dkgCard" style="display:none">
+      <h3>DKG Network <span class="tag tag-cache">BLS12-381</span></h3>
+      <table>
+        <tr><td>Master Public Key</td><td class="hex" id="dkgMpk" style="max-height:24px">-</td></tr>
+        <tr><td>Curve / Scheme</td><td>BLS12-381 / vetKeys IBE</td></tr>
+        <tr><td>Nodes (n)</td><td id="dkgNodes">-</td></tr>
+        <tr><td>Threshold (t)</td><td id="dkgThreshold">-</td></tr>
+      </table>
+    </div>
+
     <div class="sec-bar" id="secBar">
       <div class="sec-chip sec-intel" id="chipTdx"><span class="dot" style="background:var(--accent)"></span> Intel TDX: waiting...</div>
       <div class="sec-chip sec-nvidia" id="chipGpu"><span class="dot" style="background:var(--green)"></span> NVIDIA CC: waiting...</div>
       <div class="sec-chip sec-crypto"><span class="dot" style="background:var(--purple)"></span> vetKeys IBE: BLS12-381 (n=10, t=7)</div>
       <div class="sec-chip sec-net"><span class="dot" style="background:var(--yellow)"></span> Return: X25519 + AES-256-GCM</div>
       <span class="sec-toggle" onclick="toggleCerts()">View Certificates</span>
+      <span class="crypto-toggle" onclick="toggleCryptoPanel()">Crypto Internals</span>
     </div>
     <div class="cert-panel" id="certPanel">
       <div class="cert-grid">
@@ -194,6 +224,12 @@
       </div>
     </div>
 
+    <div class="crypto-panel" id="cryptoPanel">
+      <div id="cryptoSteps">
+        <div style="color:var(--dim)">Waiting for first inference round...</div>
+      </div>
+    </div>
+
     <div class="history-title">History <span id="historyCount"></span></div>
     <div class="history" id="history"></div>
   </div>
@@ -208,6 +244,7 @@ let clientReturnPubHex = null;
         let streaming = false, sendTimer = null, pollTimer = null;
         let frameNum = 0, lastResultFrame = 0, totalTime = 0, answerCount = 0;
 let currentNonce = null;
+let lastEncryptMs = 0;
 const safeteeUrl = () => $('safeteeUrl').value.replace(/\/$/, '');
 const sidecarUrl = () => $('sidecarUrl').value.replace(/\/$/, '');
 
@@ -215,6 +252,58 @@ function hexToBytes(h) { return new Uint8Array(h.match(/.{2}/g).map(b => parseIn
 function bytesToHex(b) { return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join(''); }
 
         function toggleCerts() { $('certPanel').classList.toggle('open'); }
+        function toggleCryptoPanel() { $('cryptoPanel').classList.toggle('open'); }
+
+function truncHex(h, n) { return h && h.length > n ? h.substring(0, n) + '...' : (h || '-'); }
+
+function renderCryptoLog(cl, encMs, decMs, sidecarPkHex) {
+  if (!cl) return;
+  const s = (ms) => ms != null ? ms + 'ms' : '-';
+  const step = (num, title, time, detail) =>
+    '<div class="crypto-step"><div class="crypto-step-num">' + num + '</div><div class="crypto-step-body">' +
+    '<div class="crypto-step-head"><span class="crypto-step-title">' + title + '</span>' +
+    (time ? '<span class="crypto-step-time">' + time + '</span>' : '') + '</div>' +
+    (detail ? '<div class="crypto-step-detail">' + detail + '</div>' : '') + '</div></div>';
+
+  let html = '';
+  html += step(1, 'IBE Encrypt (browser)', s(encMs),
+    '<span class="key-label">identity:</span> <span class="key-value">' + truncHex(currentNonce, 24) + '</span>');
+
+  const cachedBadge = cl.vetkey_cached ? ' <span class="cached-badge">cached</span>' : '';
+  html += step(2, 'Transport Keygen (TEE)' + cachedBadge, cl.vetkey_cached ? 'cached' : s(cl.transport_keygen_ms),
+    cl.tpk_hex ? '<span class="key-label">tpk (G2):</span> <span class="key-value">' + truncHex(cl.tpk_hex, 32) + '</span>' : null);
+
+  html += step(3, 'VetKey Request → Server' + cachedBadge, cl.vetkey_cached ? 'cached' : s(cl.vetkey_request_ms),
+    '<span class="key-label">attestation:</span> <span class="key-value">' + (cl.attestation_checks || '-') + '</span>');
+
+  html += step(4, 'VetKey Derived', '',
+    '<span class="key-label">evk_c1 (G1):</span> <span class="key-value">' + truncHex(cl.evk_c1_hex, 20) + '</span> | ' +
+    '<span class="key-label">evk_c2 (G2):</span> <span class="key-value">' + truncHex(cl.evk_c2_hex, 20) + '</span> | ' +
+    '<span class="key-label">evk_c3 (G2):</span> <span class="key-value">' + truncHex(cl.evk_c3_hex, 20) + '</span><br>' +
+    '<span class="key-label">valid:</span> <span class="key-value">' + (cl.vetkey_valid != null ? cl.vetkey_valid : 'cached') + '</span>');
+
+  html += step(5, 'IBE Decrypt (TEE)', s(cl.ibe_decrypt_ms),
+    '<span class="key-label">vetKey derived + ciphertext decrypted</span>');
+
+  html += step(6, 'vLLM Inference', s(cl.vllm_ms),
+    '<span class="key-label">model:</span> <span class="key-value">' + ($('sidecarUrl').value.includes('3001') ? 'Qwen/Qwen3-VL-30B-A3B-Instruct' : '-') + '</span>');
+
+  html += step(7, 'Return Encrypt (TEE)', s(cl.return_encrypt_ms),
+    '<span class="key-label">X25519 ephemeral →</span> ECDH → SHA-256 → AES-256-GCM' +
+    (sidecarPkHex ? '<br><span class="key-label">sidecar pk:</span> <span class="key-value">' + truncHex(sidecarPkHex, 32) + '</span>' : ''));
+
+  html += step(8, 'ECDH Decrypt (browser)', s(decMs),
+    '<span class="key-label">shared secret derived, plaintext answer recovered</span>');
+
+  $('cryptoSteps').innerHTML = html;
+}
+
+function populateDkgCard(mpk) {
+  $('dkgMpk').textContent = mpk.group_pk_hex;
+  $('dkgNodes').textContent = mpk.num_nodes;
+  $('dkgThreshold').textContent = mpk.threshold;
+  $('dkgCard').style.display = '';
+}
 
 function updateCertPanel(att) {
   if (!att) return;
@@ -269,7 +358,8 @@ async function newNonce() {
       stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
       $('video').srcObject = stream;
       $('statusBadge').textContent = 'Initializing...';
-      await fetch(safeteeUrl() + '/mpk');
+      const mpkResp = await (await fetch(safeteeUrl() + '/mpk')).json();
+      populateDkgCard(mpkResp);
     }
     if (!clientReturnPubHex) {
       await newNonce();
@@ -317,6 +407,7 @@ function captureFrame() {
       body: JSON.stringify({ identity_hex: currentNonce, message_base64: frameB64 })
     })).json();
     const tE = performance.now() - tE0;
+    lastEncryptMs = Math.round(tE);
     $('tEnc').textContent = tE.toFixed(0) + 'ms';
     const encAll = enc.ciphertext_u_hex + enc.ciphertext_v_hex + enc.ciphertext_w_hex;
     $('encPayloadHex').textContent = encAll.substring(0, 300) + '...';
@@ -373,6 +464,7 @@ function captureFrame() {
           $('answerMeta').textContent = answer.length + ' chars | Frame #' + resp.frame_id +
             (resp.attestation_verified ? ' | attested' : '');
           $('tTotal').textContent = tD.toFixed(0) + 'ms (decrypt only)';
+          renderCryptoLog(resp.crypto_log, lastEncryptMs, Math.round(tD), resp.sidecar_pubkey_hex);
 
           answerCount++; totalTime += tD;
           $('answerCount').textContent = answerCount;

@@ -203,6 +203,26 @@ pub struct FrameRequest {
     pub frame_id: u64,
 }
 
+/// Per-inference crypto operation log surfaced to the UI for demo purposes.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct CryptoLog {
+    pub vetkey_cached: bool,
+    pub transport_keygen_ms: Option<u64>,
+    pub vetkey_request_ms: Option<u64>,
+    pub vetkey_valid: Option<bool>,
+    pub attestation_verified: bool,
+    pub attestation_checks: Option<String>,
+    pub ibe_decrypt_ms: Option<u64>,
+    pub vllm_ms: Option<u64>,
+    pub return_encrypt_ms: Option<u64>,
+    pub total_ms: u64,
+    pub tpk_hex: Option<String>,
+    pub evk_c1_hex: Option<String>,
+    pub evk_c2_hex: Option<String>,
+    pub evk_c3_hex: Option<String>,
+    pub mpk_hex: Option<String>,
+}
+
 /// Response from GET /result (poll for latest inference result).
 /// Encrypted on-the-fly for each polling client's X25519 public key.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -213,6 +233,8 @@ pub struct ResultResponse {
     pub attestation_verified: bool,
     #[serde(default)]
     pub tee_attestation: Option<TeeAttestation>,
+    #[serde(default)]
+    pub crypto_log: Option<CryptoLog>,
     pub ready: bool,
 }
 
@@ -223,6 +245,7 @@ pub struct PlaintextResult {
     pub response_text: String,
     pub attestation_verified: bool,
     pub tee_attestation: Option<TeeAttestation>,
+    pub crypto_log: Option<CryptoLog>,
 }
 
 // ---------------------------------------------------------------------------
